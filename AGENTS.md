@@ -6,9 +6,9 @@
 ---
 
 ## 1. Project Reference Docs
-- [project-summary.md](project-summary.md) — Product vision, core use cases, reliability rules, and scope boundaries.
-- [architecture.md](architecture.md) — System architecture, SQLite WAL single-writer model, schema, API contracts, and project directory layout.
-- [roadmap.md](roadmap.md) — Phased delivery plan (Phase 1: Core Outbound & Storage, Phase 2: Inbound Webhooks & Security, Phase 3: Embedded UI & Maintenance).
+- [project-summary.md](docs/project-summary.md) — Product vision, core use cases, reliability rules, and scope boundaries.
+- [architecture.md](docs/architecture.md) — System architecture, SQLite WAL single-writer model, schema, API contracts, and project directory layout.
+- [roadmap.md](docs/roadmap.md) — Phased delivery plan (Phase 1: Core Outbound & Storage, Phase 2: Inbound Webhooks & Security, Phase 3: Embedded UI & Maintenance).
 
 ---
 
@@ -37,7 +37,7 @@
 - **YAGNI & Minimalism:** Implement only what is explicitly requested. Keep logic concrete until reuse is proven.
 - **Surgical Execution:** Minimal diff. Touch only the files and lines directly relevant to the task. Do not perform drive-by refactorings.
 - **Idiomatic Go:** Follow standard Go idioms, clear error handling, structured logging via `log/slog`, and clean separation of concerns.
-- **Directory Layout:** Adhere strictly to the Go layout defined in [architecture.md](file:///workspace/simple-relay/architecture.md#L302-L331) (`cmd/relay`, `internal/api`, `internal/engine`, `internal/model`, `internal/signature`, `internal/storage`, `ui`).
+- **Directory Layout:** Adhere strictly to the Go layout defined in [architecture.md](docs/architecture.md#L302-L335) (`cmd/relay`, `internal/api`, `internal/engine`, `internal/model`, `internal/signature`, `internal/storage`, `ui`).
 
 ---
 
@@ -59,11 +59,11 @@
 ---
 
 ## 7. How to Start a Task
-1. Review relevant specifications in [architecture.md](file:///workspace/simple-relay/architecture.md) and [roadmap.md](file:///workspace/simple-relay/roadmap.md).
+1. Review relevant specifications in [architecture.md](docs/architecture.md) and [roadmap.md](docs/roadmap.md).
 2. Propose a **Surgical Plan** with clear verification steps.
 3. Execute only after plan approval.
 4. Verify with `go test -race ./...`.
-5. Summarize changes and update project documentation (`roadmap.md`, `architecture.md`) if architecture or milestones change.
+5. Summarize changes and update project documentation (`docs/roadmap.md`, `docs/architecture.md`) if architecture or milestones change.
 
 ---
 
