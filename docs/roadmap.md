@@ -10,15 +10,15 @@
 ### Execution Snapshot
 | Phase | Focus Area | Status | Progress |
 | :--- | :--- | :--- | :--- |
-| **Phase 1** | Outbound Relay & Core Storage Engine | **In Progress** | ~65% Completed |
+| **Phase 1** | Outbound Relay & Core Storage Engine | **Completed** | 100% Completed |
 | **Phase 2** | Inbound Webhooks & Security Pipeline | Planned | 0% |
 | **Phase 3** | Embedded Web UI & Storage Retention | Planned | 0% |
 | **v0.3** | CLI, Observability & Alerting | Backlog | 0% |
 | **v1.0** | Enterprise Clustering & PostgreSQL | Backlog | 0% |
 
 ### Active Execution Pointer
-- **Current Milestone:** Phase 1 — Milestone 1.3: Asynchronous Outbound Durable Jobs & Background Delivery
-- **Next Immediate Task:** `Task 1.3.2` — Single-Writer Ingestion Batch Worker (`internal/engine/batch_writer.go`).
+- **Current Milestone:** Phase 2 — Milestone 2.1: Cryptographic Ingestion & Signature Adapters
+- **Next Immediate Task:** `Task 2.1.1` — Raw Byte Body Preserving Receiver.
 
 ---
 
@@ -90,24 +90,24 @@
   - Support `X-Relay-Timeout` header to override default route timeout for the request.
 
 #### Milestone 1.3: Asynchronous Outbound Durable Jobs & Background Delivery
-- [ ] **Task 1.3.1: Requests Storage Repository (`internal/storage/sqlite/request_repo.go`)**
+- [x] **Task 1.3.1: Requests Storage Repository (`internal/storage/sqlite/request_repo.go`)**
   - Implement `storage.RequestRepository` for durable request storage.
   - Fetch pending jobs (`status IN ('pending', 'failed') AND next_attempt_at <= ?`).
   - Atomic status transitions (`pending` $\rightarrow$ `processing` $\rightarrow$ `success` / `failed` / `dlq`).
-- [ ] **Task 1.3.2: Single-Writer Ingestion Batch Worker (`internal/engine/batch_writer.go`)**
+- [x] **Task 1.3.2: Single-Writer Ingestion Batch Worker (`internal/engine/batch_writer.go`)**
   - In-memory buffered ingestion channel (`chan ingestionItem`).
   - Single-writer goroutine micro-batching writes (up to 50 items or 10ms timeout).
   - Durability guarantee: caller goroutine blocks until batch transaction is committed to SQLite WAL.
-- [ ] **Task 1.3.3: Asynchronous Job Ingestion API (`POST /api/v1/jobs/{route_name}`)**
+- [x] **Task 1.3.3: Asynchronous Job Ingestion API (`POST /api/v1/jobs/{route_name}`)**
   - Accept request body and headers.
   - Push through batch writer to durably persist in SQLite.
   - Return `202 Accepted` with `{"job_id": "<ulid>", "status": "queued"}`.
-- [ ] **Task 1.3.4: Job Inspection API (`GET /api/v1/jobs/{job_id}`)**
+- [x] **Task 1.3.4: Job Inspection API (`GET /api/v1/jobs/{job_id}`)**
   - Return job status, attempt count, last error, timestamps, and full attempt history.
-- [ ] **Task 1.3.5: Delivery Dispatcher (`internal/engine/dispatcher.go`)**
+- [x] **Task 1.3.5: Delivery Dispatcher (`internal/engine/dispatcher.go`)**
   - Polling loop + instant channel wakeup for pending jobs due for execution.
   - Claim due records and dispatch to Worker Pool.
-- [ ] **Task 1.3.6: Worker Pool (`internal/engine/worker_pool.go`)**
+- [x] **Task 1.3.6: Worker Pool (`internal/engine/worker_pool.go`)**
   - Fixed pool of worker goroutines (`RELAY_WORKER_CONCURRENCY`, default 20).
   - Forward request to `destination_url` with per-attempt timeout.
   - Transition status to `success` on 2xx/acceptable code, or schedule next retry timestamp via backoff + jitter.

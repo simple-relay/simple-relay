@@ -8,17 +8,24 @@ import (
 
 	"github.com/simple-relay/simple-relay/internal/config"
 	"github.com/simple-relay/simple-relay/internal/engine"
+	"github.com/simple-relay/simple-relay/internal/storage"
 )
 
 // RouterOptions specifies optional subsystem dependencies for the router.
 type RouterOptions struct {
 	RouteRegistry *engine.RouteRegistry
 	RelayEngine   *engine.RelayEngine
+	BatchWriter   *engine.BatchWriter
+	RequestRepo   storage.RequestRepository
+	AttemptRepo   storage.AttemptRepository
 	MaxBodyBytes  int64
 }
 
 // NewRouter creates and configures the HTTP routing using Go 1.22+ standard library ServeMux.
 func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) http.Handler {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	mux := http.NewServeMux()
 
 	// Health check endpoint for container orchestrators and monitoring
@@ -36,6 +43,14 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 		if opt.RouteRegistry != nil && opt.RelayEngine != nil {
 			relayHandler := NewRelayHandler(opt.RouteRegistry, opt.RelayEngine, logger, opt.MaxBodyBytes)
 			mux.HandleFunc("/api/v1/relay/{route_name}", relayHandler)
+		}
+		if opt.RouteRegistry != nil && opt.BatchWriter != nil {
+			ingestHandler := NewJobIngestHandler(opt.RouteRegistry, opt.BatchWriter, logger, opt.MaxBodyBytes)
+			mux.HandleFunc("POST /api/v1/jobs/{route_name}", ingestHandler)
+		}
+		if opt.RequestRepo != nil && opt.AttemptRepo != nil {
+			inspectHandler := NewJobInspectHandler(opt.RequestRepo, opt.AttemptRepo, logger)
+			mux.HandleFunc("GET /api/v1/jobs/{job_id}", inspectHandler)
 		}
 	}
 

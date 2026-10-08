@@ -175,3 +175,127 @@ func TestRequestRepo_BatchAndPending(t *testing.T) {
 		t.Errorf("expected req1 due, got %s", pending[0].ID)
 	}
 }
+
+func TestRequestRepo_ClaimPendingRequests(t *testing.T) {
+	db, _, reqRepo, route := setupTestDBWithRoute(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+	past1 := now.Add(-2 * time.Minute)
+	past2 := now.Add(-1 * time.Minute)
+	future := now.Add(5 * time.Minute)
+
+	req1 := &model.Request{
+		RouteID:       route.ID,
+		Method:        "POST",
+		URL:           "https://api.payment.internal/claim1",
+		Headers:       map[string]string{"Content-Type": "application/json"},
+		Body:          []byte(`{"claim": 1}`),
+		Status:        model.RequestStatusPending,
+		NextAttemptAt: &past1,
+	}
+	req2 := &model.Request{
+		RouteID:       route.ID,
+		Method:        "POST",
+		URL:           "https://api.payment.internal/claim2",
+		Headers:       map[string]string{"Content-Type": "application/json"},
+		Body:          []byte(`{"claim": 2}`),
+		Status:        model.RequestStatusFailed,
+		NextAttemptAt: &past2,
+	}
+	req3 := &model.Request{
+		RouteID:       route.ID,
+		Method:        "POST",
+		URL:           "https://api.payment.internal/claim3",
+		Headers:       map[string]string{"Content-Type": "application/json"},
+		Body:          []byte(`{"claim": 3}`),
+		Status:        model.RequestStatusPending,
+		NextAttemptAt: &future,
+	}
+
+	if err := reqRepo.CreateRequestsBatch(ctx, []*model.Request{req1, req2, req3}); err != nil {
+		t.Fatalf("batch insert failed: %v", err)
+	}
+
+	// Claim with limit 1
+	claimed, err := reqRepo.ClaimPendingRequests(ctx, 1, now)
+	if err != nil {
+		t.Fatalf("ClaimPendingRequests failed: %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("expected 1 claimed job, got %d", len(claimed))
+	}
+	if claimed[0].ID != req1.ID {
+		t.Errorf("expected oldest due job %s, got %s", req1.ID, claimed[0].ID)
+	}
+	if claimed[0].Status != model.RequestStatusProcessing {
+		t.Errorf("expected status 'processing', got %s", claimed[0].Status)
+	}
+
+	// Verify in DB that req1 is actually marked as processing
+	inDB, err := reqRepo.GetRequestByID(ctx, req1.ID)
+	if err != nil {
+		t.Fatalf("GetRequestByID failed: %v", err)
+	}
+	if inDB.Status != model.RequestStatusProcessing {
+		t.Errorf("expected req1 in DB to be 'processing', got %s", inDB.Status)
+	}
+
+	// Claim remaining due (should be req2)
+	claimed2, err := reqRepo.ClaimPendingRequests(ctx, 10, now)
+	if err != nil {
+		t.Fatalf("ClaimPendingRequests second round failed: %v", err)
+	}
+	if len(claimed2) != 1 {
+		t.Fatalf("expected 1 claimed job, got %d", len(claimed2))
+	}
+	if claimed2[0].ID != req2.ID {
+		t.Errorf("expected req2 claimed, got %s", claimed2[0].ID)
+	}
+
+	// Third claim should return 0 (req3 is in future)
+	claimed3, err := reqRepo.ClaimPendingRequests(ctx, 10, now)
+	if err != nil {
+		t.Fatalf("ClaimPendingRequests third round failed: %v", err)
+	}
+	if len(claimed3) != 0 {
+		t.Errorf("expected 0 claimed jobs, got %d", len(claimed3))
+	}
+}
+
+func TestRequestRepo_RecoverStuckRequests(t *testing.T) {
+	db, _, reqRepo, route := setupTestDBWithRoute(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	req := &model.Request{
+		RouteID: route.ID,
+		Method:  "POST",
+		URL:     "https://api.payment.internal/stuck",
+		Headers: map[string]string{"Content-Type": "application/json"},
+		Body:    []byte(`{"stuck": true}`),
+		Status:  model.RequestStatusProcessing,
+	}
+	if err := reqRepo.CreateRequest(ctx, req); err != nil {
+		t.Fatalf("CreateRequest failed: %v", err)
+	}
+
+	// Recover with stuckBefore in future -> should recover req
+	future := time.Now().UTC().Add(10 * time.Minute)
+	recovered, err := reqRepo.RecoverStuckRequests(ctx, future)
+	if err != nil {
+		t.Fatalf("RecoverStuckRequests failed: %v", err)
+	}
+	if recovered != 1 {
+		t.Fatalf("expected 1 recovered request, got %d", recovered)
+	}
+
+	inDB, err := reqRepo.GetRequestByID(ctx, req.ID)
+	if err != nil {
+		t.Fatalf("GetRequestByID failed: %v", err)
+	}
+	if inDB.Status != model.RequestStatusPending {
+		t.Errorf("expected recovered request status to be 'pending', got %s", inDB.Status)
+	}
+}

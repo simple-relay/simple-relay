@@ -289,3 +289,119 @@ func (r *RequestRepo) UpdateRequestStatus(ctx context.Context, id string, status
 
 	return nil
 }
+
+// ClaimPendingRequests atomically queries due requests and transitions their status to 'processing'.
+func (r *RequestRepo) ClaimPendingRequests(ctx context.Context, limit int, dueBefore time.Time) ([]*model.Request, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	tx, err := r.db.Writer().BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin claim transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	selectQuery := `
+		SELECT id, route_id, method, url, headers, body,
+		       status, attempts_count, next_attempt_at, last_error,
+		       created_at, updated_at
+		FROM requests
+		WHERE status IN ('pending', 'failed') AND next_attempt_at <= ?
+		ORDER BY next_attempt_at ASC
+		LIMIT ?;
+	`
+
+	rows, err := tx.QueryContext(ctx, selectQuery, dueBefore, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to select pending requests for claim: %w", err)
+	}
+	defer rows.Close()
+
+	var results []*model.Request
+	var ids []string
+	for rows.Next() {
+		var req model.Request
+		var headersStr string
+		var statusStr string
+
+		err := rows.Scan(
+			&req.ID,
+			&req.RouteID,
+			&req.Method,
+			&req.URL,
+			&headersStr,
+			&req.Body,
+			&statusStr,
+			&req.AttemptsCount,
+			&req.NextAttemptAt,
+			&req.LastError,
+			&req.CreatedAt,
+			&req.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan request during claim: %w", err)
+		}
+
+		req.Status = model.RequestStatusProcessing
+		if headersStr != "" {
+			if err := json.Unmarshal([]byte(headersStr), &req.Headers); err != nil {
+				return nil, fmt.Errorf("failed to deserialize headers for %s during claim: %w", req.ID, err)
+			}
+		} else {
+			req.Headers = make(map[string]string)
+		}
+
+		results = append(results, &req)
+		ids = append(ids, req.ID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error during claim: %w", err)
+	}
+	rows.Close()
+
+	if len(ids) == 0 {
+		return results, nil
+	}
+
+	now := time.Now().UTC()
+	updateStmt, err := tx.PrepareContext(ctx, `UPDATE requests SET status = 'processing', updated_at = ? WHERE id = ?;`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare claim update statement: %w", err)
+	}
+	defer updateStmt.Close()
+
+	for _, id := range ids {
+		if _, err := updateStmt.ExecContext(ctx, now, id); err != nil {
+			return nil, fmt.Errorf("failed to mark request %s as processing: %w", id, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit claim transaction: %w", err)
+	}
+
+	return results, nil
+}
+
+// RecoverStuckRequests transitions requests stuck in 'processing' state before stuckBefore back to 'pending'.
+func (r *RequestRepo) RecoverStuckRequests(ctx context.Context, stuckBefore time.Time) (int64, error) {
+	now := time.Now().UTC()
+	query := `
+		UPDATE requests
+		SET status = 'pending', updated_at = ?
+		WHERE status = 'processing' AND updated_at <= ?;
+	`
+
+	res, err := r.db.Writer().ExecContext(ctx, query, now, stuckBefore)
+	if err != nil {
+		return 0, fmt.Errorf("failed to recover stuck requests: %w", err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected during stuck request recovery: %w", err)
+	}
+
+	return rowsAffected, nil
+}
