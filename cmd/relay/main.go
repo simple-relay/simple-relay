@@ -14,6 +14,7 @@ import (
 	"github.com/simple-relay/simple-relay/internal/api"
 	"github.com/simple-relay/simple-relay/internal/config"
 	"github.com/simple-relay/simple-relay/internal/engine"
+	"github.com/simple-relay/simple-relay/internal/model"
 	"github.com/simple-relay/simple-relay/internal/storage/sqlite"
 )
 
@@ -67,9 +68,29 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 		logger,
 	)
 
+	// Initialize asynchronous durable delivery pipeline
+	jobsCh := make(chan *model.Request, 40)
+	dispatcher := engine.NewDispatcher(db.RequestRepo, jobsCh, engine.DispatcherConfig{})
+	workerPool := engine.NewWorkerPool(jobsCh, registry, db.RequestRepo, db.AttemptRepo, retryEngine, engine.WorkerPoolConfig{})
+	batchWriter := engine.NewBatchWriter(db.RequestRepo, engine.BatchWriterConfig{
+		WakeFn: dispatcher.Wake,
+	})
+
+	batchWriter.Start(ctx)
+	defer batchWriter.Close()
+
+	dispatcher.Start(ctx)
+	defer dispatcher.Close()
+
+	workerPool.Start(ctx)
+	defer workerPool.Close()
+
 	handler := api.NewRouter(cfg, logger, api.RouterOptions{
 		RouteRegistry: registry,
 		RelayEngine:   relayEngine,
+		BatchWriter:   batchWriter,
+		RequestRepo:   db.RequestRepo,
+		AttemptRepo:   db.AttemptRepo,
 	})
 
 	srv := &http.Server{

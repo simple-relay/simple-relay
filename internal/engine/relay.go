@@ -223,9 +223,12 @@ func (e *RelayEngine) RelaySync(
 				case <-time.After(delay):
 					continue
 				case <-ctx.Done():
-					lastErr = ctx.Err()
 					break
 				}
+			}
+			if ctx.Err() != nil {
+				lastErr = ctx.Err()
+				break
 			}
 			// Exhausted attempts on retryable status
 			lastErr = fmt.Errorf("upstream returned status %d", resp.StatusCode)

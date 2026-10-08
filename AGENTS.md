@@ -70,4 +70,5 @@
 ## 8. Language & Documentation Policy
 - **Flexible Interaction Language:** Conversations and discussions with the user may be conducted in any preferred language (e.g., Vietnamese, English).
 - **Strict English for Project Artifacts:** All codebase contents, source code, Go comments, docstrings, variable/function identifiers, error messages, log messages, Makefiles, tests, and documentation (`.md` files) MUST be written in English.
+- **Design Specifications Location:** When completing brainstorming or design sessions, store all design specification documents in `docs/specs/YYYY-MM-DD-<topic>-design.md`.
 

@@ -33,6 +33,8 @@ type RequestRepository interface {
 	GetRequestByID(ctx context.Context, id string) (*model.Request, error)
 	ListPendingRequests(ctx context.Context, limit int, dueBefore time.Time) ([]*model.Request, error)
 	UpdateRequestStatus(ctx context.Context, id string, status model.RequestStatus, attemptsCount int, nextAttemptAt *time.Time, lastError *string) error
+	ClaimPendingRequests(ctx context.Context, limit int, dueBefore time.Time) ([]*model.Request, error)
+	RecoverStuckRequests(ctx context.Context, stuckBefore time.Time) (int64, error)
 }
 
 // AttemptRepository defines the storage operations for attempt audit logs.

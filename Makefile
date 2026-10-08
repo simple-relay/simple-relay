@@ -22,7 +22,7 @@ check-tidy: ## Check go.mod and go.sum are tidy and committed
 	git diff --exit-code go.mod go.sum
 
 lint: ## Run golangci-lint
-	golangci-lint run ./...
+	@PATH="$$(go env GOPATH)/bin:$$PATH" golangci-lint run ./...
 
 build: ## Build static binary without CGO (CGO_ENABLED=0)
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_SRC)
@@ -33,7 +33,7 @@ test: ## Run all test suites
 race: ## Run test suites with data race detector
 	go test -race ./...
 
-check: check-tidy check-fmt race build ## Run all quality checks locally before opening a PR
+check: check-tidy check-fmt lint race build ## Run all quality checks locally before opening a PR
 
 run: ## Run relay service directly
 	go run $(MAIN_SRC)
