@@ -26,7 +26,7 @@
 
 * **Phase 1 — Outbound Relay & Core Storage Engine:** Build the foundational single-writer SQLite storage engine (WAL mode), route configuration handling with in-memory caching and hot-reloading, synchronous outbound HTTP proxy with client-disconnect context cancellation, durable asynchronous job ingestion, and background worker delivery pool.
 * **Phase 2 — Inbound Webhook & Security:** Establish durable inbound webhook ingestion with raw-byte cryptographic preservation, HMAC signature adapters (Stripe, GitHub, Generic HMAC-SHA256), burst-protective micro-batch persistence, DLQ state machine, and replay APIs.
-* **Phase 3 — UI & Lifecycle Finalization:** Deliver embedded zero-dependency Web UI (`go:embed`, Alpine.js, Tailwind CSS), admin authentication with CSRF protection, scheduled retention pruning with incremental SQLite vacuuming, and Litestream replication guide.
+* **Phase 3 — UI, Maintenance & Release Automation:** Deliver embedded zero-dependency Web UI (`go:embed`, Alpine.js, Tailwind CSS), admin authentication with CSRF protection, scheduled retention pruning with incremental SQLite vacuuming, Litestream replication guide, and automated multi-platform release pipeline (release-please + GoReleaser).
 * **v0.3 — Utility & Extension:** Provide CLI inspection binary, Slack/Discord/Email alerting on DLQ threshold breaches, API key management, and Prometheus metrics (`/metrics`).
 * **v1.0 — Enterprise Edition:** Add PostgreSQL pluggable storage adapter, distributed multi-node worker clustering, Single Sign-On (SSO / OIDC), and Role-Based Access Control (RBAC).
 
@@ -175,6 +175,16 @@
 - [ ] **Task 3.2.3: Litestream Disaster Recovery Integration**
   - Provide production configuration guide and Docker compose setup for Litestream S3 streaming replication.
   - Zero-SPOF SQLite durability verification.
+
+#### Milestone 3.3: Automated Multi-Platform Release Pipeline
+- [ ] **Task 3.3.1: Multi-Platform Build Configuration (`.goreleaser.yaml`)**
+  - Zero-CGO static compilation (`CGO_ENABLED=0`) across Linux (`amd64`, `arm64`), macOS (`amd64`, `arm64`), and Windows (`amd64`).
+  - Automated archive packaging (`.tar.gz`, `.zip`) with SHA-256 checksum generation (`checksums.txt`).
+  - Multi-architecture Docker image build and push configuration.
+- [ ] **Task 3.3.2: Automated Versioning & Release Workflow (`.github/workflows/release.yml`)**
+  - Integrate `release-please` to parse Conventional Commits and maintain `CHANGELOG.md`.
+  - Automatically manage SemVer release pull requests on `main`.
+  - Trigger GoReleaser upon Release PR merge to attach cross-platform binaries to GitHub Releases.
 
 ---
 
