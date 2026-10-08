@@ -1,0 +1,28 @@
+# Binaries
+bin/
+relay
+*.exe
+*.test
+
+# SQLite databases & WAL files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Test and coverage artifacts
+coverage.out
+coverage.html
+*.prof
+
+# IDE and Editor files
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS artifacts
+.DS_Store
+Thumbs.db
