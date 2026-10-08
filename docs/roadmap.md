@@ -10,15 +10,15 @@
 ### Execution Snapshot
 | Phase | Focus Area | Status | Progress |
 | :--- | :--- | :--- | :--- |
-| **Phase 1** | Outbound Relay & Core Storage Engine | **In Progress** | ~35% Completed |
+| **Phase 1** | Outbound Relay & Core Storage Engine | **In Progress** | ~65% Completed |
 | **Phase 2** | Inbound Webhooks & Security Pipeline | Planned | 0% |
 | **Phase 3** | Embedded Web UI & Storage Retention | Planned | 0% |
 | **v0.3** | CLI, Observability & Alerting | Backlog | 0% |
 | **v1.0** | Enterprise Clustering & PostgreSQL | Backlog | 0% |
 
 ### Active Execution Pointer
-- **Current Milestone:** Phase 1 — Milestone 1.2: Outbound Retry Logic & Sync Proxy
-- **Next Immediate Task:** `Task 1.2.1` — Implement Retry Engine with Exponential Backoff, Full Jitter, and `Retry-After` parsing (`internal/engine/retry.go`).
+- **Current Milestone:** Phase 1 — Milestone 1.3: Asynchronous Outbound Durable Jobs & Background Delivery
+- **Next Immediate Task:** `Task 1.3.2` — Single-Writer Ingestion Batch Worker (`internal/engine/batch_writer.go`).
 
 ---
 
@@ -67,24 +67,24 @@
   - Immediate cache invalidation and atomic hot-reload on route mutations without service restart.
 
 #### Milestone 1.2: Outbound Retry Logic & Synchronous HTTP Proxy
-- [ ] **Task 1.2.1: Retry Engine (`internal/engine/retry.go`)**
+- [x] **Task 1.2.1: Retry Engine (`internal/engine/retry.go`)**
   - Calculate exponential backoff: $T_{\text{wait}} = \text{base} \times 2^{\text{attempt}}$.
   - Implement Full Jitter algorithm: sleep duration uniformly distributed in $[0, T_{\text{wait}}]$ to prevent thundering herds.
   - Parse `Retry-After` header (seconds and HTTP-date) on HTTP 429 responses.
   - Support retryable condition checks (status 429, 500, 502, 503, 504, and network/connection errors).
-- [ ] **Task 1.2.2: Attempts Audit Storage (`internal/storage/sqlite/attempt_repo.go`)**
+- [x] **Task 1.2.2: Attempts Audit Storage (`internal/storage/sqlite/attempt_repo.go`)**
   - Implement `storage.AttemptRepository` for recording delivery attempts.
   - Store execution duration in milliseconds, status code, error message, and truncated response body (32 KB limit).
   - Query attempt logs by `request_id`.
-- [ ] **Task 1.2.3: Synchronous Relay Handler (`internal/api/handler_relay.go`)**
+- [x] **Task 1.2.3: Synchronous Relay Handler (`internal/api/handler_relay.go`)**
   - Mount endpoint `POST /api/v1/relay/{route_name}`.
   - Resolve route from `RouteRegistry` in memory ($O(1)$).
   - Execute HTTP forwarding to route `destination_url` with synchronous retry loop.
   - Return final upstream response body, status code, and response headers to the client.
-- [ ] **Task 1.2.4: Client-Disconnect Context Cancellation**
+- [x] **Task 1.2.4: Client-Disconnect Context Cancellation**
   - Bind upstream `http.Request` context directly to incoming client request context (`r.Context()`).
   - Immediately abort upstream flight and terminate retry loop if the caller disconnects or aborts.
-- [ ] **Task 1.2.5: Header Propagation & Idempotency**
+- [x] **Task 1.2.5: Header Propagation & Idempotency**
   - Generate and inject unique `X-Relay-Request-ID` (lowercase ULID).
   - Propagate downstream `Idempotency-Key` or `X-Relay-Idempotency-Key`.
   - Support `X-Relay-Timeout` header to override default route timeout for the request.

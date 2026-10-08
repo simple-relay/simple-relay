@@ -7,14 +7,22 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/simple-relay/simple-relay/internal/storage"
 	_ "modernc.org/sqlite" // Pure Go SQLite driver (CGO_ENABLED=0 compatible)
 )
 
-// DB encapsulates isolated reader and writer SQLite connection pools.
+// DB encapsulates isolated reader and writer SQLite connection pools and
+// implements storage.Storage interface.
 type DB struct {
 	writer *sql.DB
 	reader *sql.DB
+
+	*RouteRepo
+	*RequestRepo
+	*AttemptRepo
 }
+
+var _ storage.Storage = (*DB)(nil)
 
 // Open initializes SQLite in WAL mode with connection isolation:
 // - Writer pool: 1 connection (SetMaxOpenConns(1)) to prevent lock contention.
@@ -47,6 +55,9 @@ func Open(dsn string) (*DB, error) {
 		writer: writer,
 		reader: reader,
 	}
+	db.RouteRepo = NewRouteRepo(db)
+	db.RequestRepo = NewRequestRepo(db)
+	db.AttemptRepo = NewAttemptRepo(db)
 
 	// Apply WAL and performance pragmas on writer
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

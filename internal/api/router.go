@@ -7,10 +7,18 @@ import (
 	"time"
 
 	"github.com/simple-relay/simple-relay/internal/config"
+	"github.com/simple-relay/simple-relay/internal/engine"
 )
 
-// Router creates and configures the HTTP routing using Go 1.22+ standard library ServeMux.
-func NewRouter(cfg *config.Config, logger *slog.Logger) http.Handler {
+// RouterOptions specifies optional subsystem dependencies for the router.
+type RouterOptions struct {
+	RouteRegistry *engine.RouteRegistry
+	RelayEngine   *engine.RelayEngine
+	MaxBodyBytes  int64
+}
+
+// NewRouter creates and configures the HTTP routing using Go 1.22+ standard library ServeMux.
+func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) http.Handler {
 	mux := http.NewServeMux()
 
 	// Health check endpoint for container orchestrators and monitoring
@@ -22,6 +30,14 @@ func NewRouter(cfg *config.Config, logger *slog.Logger) http.Handler {
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 		})
 	})
+
+	if len(opts) > 0 {
+		opt := opts[0]
+		if opt.RouteRegistry != nil && opt.RelayEngine != nil {
+			relayHandler := NewRelayHandler(opt.RouteRegistry, opt.RelayEngine, logger, opt.MaxBodyBytes)
+			mux.HandleFunc("/api/v1/relay/{route_name}", relayHandler)
+		}
+	}
 
 	// Wrap mux with standard logging & panic recovery middleware
 	return loggingMiddleware(logger, recoveryMiddleware(logger, mux))

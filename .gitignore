@@ -1,6 +1,6 @@
 # Binaries
 bin/
-relay
+/relay
 *.exe
 *.test
 
