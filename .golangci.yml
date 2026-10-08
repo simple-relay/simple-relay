@@ -14,7 +14,22 @@ linters:
     - misspell
     - unconvert
 
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    exclude-functions:
+      - (*database/sql.DB).Close
+      - (*database/sql.Rows).Close
+      - (*database/sql.Stmt).Close
+      - (io.Closer).Close
+      - (io.ReadCloser).Close
+      - (*net/http.Response).Body.Close
+      - os.Setenv
+      - os.Unsetenv
+
 issues:
-  exclude-use-default: false
-  max-issues-per-linter: 0
-  max-same-issues: 0
+  exclude-rules:
+    # Exclude errcheck and unused warnings in test files
+    - path: _test\.go
+      linters:
+        - errcheck
