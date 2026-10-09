@@ -11,14 +11,14 @@
 | Phase | Focus Area | Status | Progress |
 | :--- | :--- | :--- | :--- |
 | **Phase 1** | Outbound Relay & Core Storage Engine | **Completed** | 100% Completed |
-| **Phase 2** | Inbound Webhooks & Security Pipeline | Planned | 0% |
+| **Phase 2** | Inbound Webhooks & Security Pipeline | In Progress | 50% |
 | **Phase 3** | Embedded Web UI & Storage Retention | Planned | 0% |
 | **v0.3** | CLI, Observability & Alerting | Backlog | 0% |
 | **v1.0** | Enterprise Clustering & PostgreSQL | Backlog | 0% |
 
 ### Active Execution Pointer
-- **Current Milestone:** Phase 2 — Milestone 2.1: Cryptographic Ingestion & Signature Adapters
-- **Next Immediate Task:** `Task 2.1.1` — Raw Byte Body Preserving Receiver.
+- **Current Milestone:** Phase 2 — Milestone 2.2: Inbound Async Delivery & DLQ Replay
+- **Next Immediate Task:** `Task 2.2.3` — DLQ Replay Management API.
 
 ---
 
@@ -118,25 +118,26 @@
 ### Phase 2 — Inbound Webhook & Security Pipeline
 
 #### Milestone 2.1: Cryptographic Ingestion & Signature Adapters
-- [ ] **Task 2.1.1: Raw Byte Body Preserving Receiver**
+- [x] **Task 2.1.1: Raw Byte Body Preserving Receiver**
   - Ensure zero payload mutation: capture exact bytes into memory/disk.
   - Enforce maximum body size (`RELAY_MAX_BODY_SIZE_MB`, default 10MB) with `http.MaxBytesReader`.
-- [ ] **Task 2.1.2: Signature Verification Adapters (`internal/signature`)**
+- [ ] **Task 2.1.2: Signature Verification Adapters (`internal/signature`)** *(Deferred to Security Milestone)*
   - Define `Verifier` interface: `Verify(header string, secret string, rawBody []byte) error`.
   - Stripe HMAC adapter: parse `t=timestamp,v1=signature`, verify HMAC-SHA256 with timestamp tolerance.
   - GitHub HMAC adapter: verify `sha256=<hex>` against `X-Hub-Signature-256`.
   - Generic HMAC-SHA256 adapter: verify standard hex/base64 signatures.
-- [ ] **Task 2.1.3: Inbound Webhook Endpoint (`POST /api/v1/webhook/{route_name}`)**
-  - Match route from `RouteRegistry`.
-  - Validate HMAC signature against raw payload before persistence.
+- [x] **Task 2.1.3: Inbound Webhook Endpoint (`POST /api/v1/webhook/{route_name}`)**
+  - Match route from `RouteRegistry` (`route.Type == "inbound"`).
+  - Support `POST`, `PUT`, `PATCH` methods (returns 405 for other methods).
+  - Preserve provider signature headers intact for destination verification.
   - Durability Golden Rule: write to SQLite WAL via Batch Worker before returning `200 OK`.
   - Return `200 OK` with `{"relay_id": "<ulid>", "status": "persisted"}`.
 
 #### Milestone 2.2: Inbound Async Delivery & DLQ Replay
-- [ ] **Task 2.2.1: Internal Webhook Forwarding Dispatch**
+- [x] **Task 2.2.1: Internal Webhook Forwarding Dispatch**
   - Dispatch persisted inbound webhooks to internal destination URL via Worker Pool.
   - Exponential backoff with jitter on internal destination failures.
-- [ ] **Task 2.2.2: Dead Letter Queue (DLQ) State Machine**
+- [x] **Task 2.2.2: Dead Letter Queue (DLQ) State Machine**
   - Mark requests as `dlq` upon reaching `max_attempts`.
   - Record complete diagnostic history in `attempts`.
 - [ ] **Task 2.2.3: DLQ Replay Management API**
