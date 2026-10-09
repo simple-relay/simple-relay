@@ -3,7 +3,11 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -251,5 +255,213 @@ func TestWebhookIngest_HeaderAndPayloadPreservation(t *testing.T) {
 	}
 	if _, exists := storedReq.Headers["Connection"]; exists {
 		t.Errorf("hop-by-hop Connection header should have been stripped")
+	}
+}
+
+func TestWebhookIngest_SignatureVerification_Stripe(t *testing.T) {
+	db, registry, bw, handler, _, _ := setupTestWebhookServer(t, 1024*1024)
+	defer db.Close()
+	defer bw.Close()
+
+	ctx := context.Background()
+	secret := "whsec_stripe_test_key_123"
+	route := &model.Route{
+		Name:                 "stripe-secured",
+		Type:                 model.RouteTypeInbound,
+		Mode:                 model.RouteModeAsync,
+		Path:                 "/api/v1/webhook/stripe-secured",
+		DestinationURL:       "https://internal.service/stripe",
+		SignatureProvider:    model.SignatureProviderStripe,
+		SignatureSecret:      secret,
+		MaxAttempts:          3,
+		TimeoutMS:            5000,
+		RetryBackoffStrategy: model.RetryStrategyExponential,
+	}
+	if err := registry.Create(ctx, route); err != nil {
+		t.Fatalf("failed to create route: %v", err)
+	}
+
+	payload := `{"id":"evt_stripe_1","type":"invoice.paid"}`
+	timestamp := "1690000000"
+
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(timestamp))
+	mac.Write([]byte("."))
+	mac.Write([]byte(payload))
+	validSig := hex.EncodeToString(mac.Sum(nil))
+
+	t.Run("Valid Stripe signature passes and persists", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/"+route.Name, bytes.NewBufferString(payload))
+		req.Header.Set("Stripe-Signature", fmt.Sprintf("t=%s,v1=%s", timestamp, validSig))
+
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("Invalid Stripe signature rejected with 401 and NOT persisted", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/"+route.Name, bytes.NewBufferString(payload))
+		req.Header.Set("Stripe-Signature", fmt.Sprintf("t=%s,v1=deadbeefdeadbeef", timestamp))
+
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "invalid webhook signature") {
+			t.Fatalf("expected invalid webhook signature message, got: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("Missing Stripe signature header rejected with 401", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/"+route.Name, bytes.NewBufferString(payload))
+
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestWebhookIngest_SignatureVerification_GitHub(t *testing.T) {
+	db, registry, bw, handler, _, _ := setupTestWebhookServer(t, 1024*1024)
+	defer db.Close()
+	defer bw.Close()
+
+	ctx := context.Background()
+	secret := "gh_webhook_secret_xyz"
+	route := &model.Route{
+		Name:                 "github-secured",
+		Type:                 model.RouteTypeInbound,
+		Mode:                 model.RouteModeAsync,
+		Path:                 "/api/v1/webhook/github-secured",
+		DestinationURL:       "https://internal.service/github",
+		SignatureProvider:    model.SignatureProviderGitHub,
+		SignatureSecret:      secret,
+		MaxAttempts:          3,
+		TimeoutMS:            5000,
+		RetryBackoffStrategy: model.RetryStrategyExponential,
+	}
+	if err := registry.Create(ctx, route); err != nil {
+		t.Fatalf("failed to create route: %v", err)
+	}
+
+	payload := `{"ref":"refs/heads/main","after":"abc123"}`
+
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(payload))
+	validSig := hex.EncodeToString(mac.Sum(nil))
+
+	t.Run("Valid GitHub signature passes and persists", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/"+route.Name, bytes.NewBufferString(payload))
+		req.Header.Set("X-Hub-Signature-256", "sha256="+validSig)
+
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("Invalid GitHub signature rejected with 401", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/"+route.Name, bytes.NewBufferString(payload))
+		req.Header.Set("X-Hub-Signature-256", "sha256=0000000000000000000000000000000000000000000000000000000000000000")
+
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestWebhookIngest_SignatureVerification_GenericHMAC(t *testing.T) {
+	db, registry, bw, handler, _, _ := setupTestWebhookServer(t, 1024*1024)
+	defer db.Close()
+	defer bw.Close()
+
+	ctx := context.Background()
+	secret := "generic_secret_key"
+	route := &model.Route{
+		Name:                 "generic-secured",
+		Type:                 model.RouteTypeInbound,
+		Mode:                 model.RouteModeAsync,
+		Path:                 "/api/v1/webhook/generic-secured",
+		DestinationURL:       "https://internal.service/generic",
+		SignatureProvider:    model.SignatureProviderHMACSHA256,
+		SignatureSecret:      secret,
+		MaxAttempts:          3,
+		TimeoutMS:            5000,
+		RetryBackoffStrategy: model.RetryStrategyExponential,
+	}
+	if err := registry.Create(ctx, route); err != nil {
+		t.Fatalf("failed to create route: %v", err)
+	}
+
+	payload := `{"event":"order.completed"}`
+
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(payload))
+	validSig := hex.EncodeToString(mac.Sum(nil))
+
+	t.Run("Valid Generic HMAC with X-Signature passes", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/"+route.Name, bytes.NewBufferString(payload))
+		req.Header.Set("X-Signature", validSig)
+
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("Invalid Generic HMAC rejected with 401", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/"+route.Name, bytes.NewBufferString(payload))
+		req.Header.Set("X-Signature", "invalid")
+
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestWebhookIngest_SignatureVerification_EmptySecretReturns500(t *testing.T) {
+	db, registry, bw, handler, _, _ := setupTestWebhookServer(t, 1024*1024)
+	defer db.Close()
+	defer bw.Close()
+
+	// Bypass Route.Validate() by inserting raw SQL directly to test runtime handler defense
+	ctx := context.Background()
+	routeID := model.NewULID()
+	routeName := "misconfigured-route"
+	_, err := db.Writer().ExecContext(ctx, `
+		INSERT INTO routes (id, name, type, mode, path, destination_url, signature_provider, signature_secret, max_attempts, timeout_ms, retry_backoff_strategy)
+		VALUES (?, ?, 'inbound', 'async', '/api/v1/webhook/misconfigured-route', 'https://internal.service/misconfigured', 'stripe', '', 3, 5000, 'exp')
+	`, routeID, routeName)
+	if err != nil {
+		t.Fatalf("failed to insert corrupt route: %v", err)
+	}
+	if err := registry.Reload(ctx); err != nil {
+		t.Fatalf("failed to reload registry: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/"+routeName, bytes.NewBufferString(`{}`))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 Internal Server Error, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

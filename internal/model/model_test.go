@@ -33,6 +33,28 @@ func TestRoute_Validate(t *testing.T) {
 	if err := invalidAttemptsRoute.Validate(); err != ErrRouteInvalidMaxAttempts {
 		t.Fatalf("expected ErrRouteInvalidMaxAttempts, got: %v", err)
 	}
+
+	// Signature provider validation tests
+	missingSecretRoute := validRoute
+	missingSecretRoute.SignatureProvider = SignatureProviderStripe
+	missingSecretRoute.SignatureSecret = ""
+	if err := missingSecretRoute.Validate(); err != ErrRouteSignatureSecretRequired {
+		t.Fatalf("expected ErrRouteSignatureSecretRequired, got: %v", err)
+	}
+
+	invalidProviderRoute := validRoute
+	invalidProviderRoute.SignatureProvider = "unsupported_provider"
+	invalidProviderRoute.SignatureSecret = "secret123"
+	if err := invalidProviderRoute.Validate(); err != ErrRouteInvalidSignatureProvider {
+		t.Fatalf("expected ErrRouteInvalidSignatureProvider, got: %v", err)
+	}
+
+	validSecuredRoute := validRoute
+	validSecuredRoute.SignatureProvider = SignatureProviderGitHub
+	validSecuredRoute.SignatureSecret = "gh_secret_xyz"
+	if err := validSecuredRoute.Validate(); err != nil {
+		t.Fatalf("expected valid secured route, got: %v", err)
+	}
 }
 
 func TestRequest_Validate(t *testing.T) {

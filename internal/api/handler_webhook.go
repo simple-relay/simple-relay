@@ -12,6 +12,7 @@ import (
 
 	"github.com/simple-relay/simple-relay/internal/engine"
 	"github.com/simple-relay/simple-relay/internal/model"
+	"github.com/simple-relay/simple-relay/internal/signature"
 )
 
 // NewWebhookHandler handles inbound webhook ingestion for ANY /api/v1/webhook/{route_name}.
@@ -62,6 +63,34 @@ func NewWebhookHandler(
 			}
 			writeJSONError(w, http.StatusBadRequest, "failed to read request body")
 			return
+		}
+
+		// Verify signature if required by route configuration
+		if route.SignatureProvider != model.SignatureProviderNone && route.SignatureProvider != "" {
+			if strings.TrimSpace(route.SignatureSecret) == "" {
+				logger.Error("route misconfiguration: signature_secret is empty", "route", routeName, "provider", route.SignatureProvider)
+				writeJSONError(w, http.StatusInternalServerError, "route signature misconfiguration")
+				return
+			}
+
+			verifier, err := signature.ForProvider(route.SignatureProvider)
+			if err != nil {
+				logger.Error("unsupported signature provider configured on route", "provider", route.SignatureProvider, "route", routeName)
+				writeJSONError(w, http.StatusInternalServerError, "unsupported signature provider")
+				return
+			}
+
+			if verifier != nil {
+				if err := verifier.Verify(r.Header, route.SignatureSecret, bodyBytes); err != nil {
+					logger.Warn("inbound webhook signature verification failed",
+						"route", routeName,
+						"provider", route.SignatureProvider,
+						"error", err,
+					)
+					writeJSONError(w, http.StatusUnauthorized, "invalid webhook signature")
+					return
+				}
+			}
 		}
 
 		headers := make(map[string]string)
