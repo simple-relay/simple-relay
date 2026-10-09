@@ -234,7 +234,10 @@ CREATE INDEX idx_attempts_request_id ON attempts (request_id);
 * **Outbound Relay (Async Job):**
   * `POST /api/v1/jobs/{route_name}`
   * Accepts request asynchronously, returns `202 Accepted` with `{"job_id": "...", "status": "queued"}`.
-  * `GET /api/v1/jobs/{job_id}`: Query status, attempt count, and execution outcome.
+* **DLQ Management & Replay:**
+  * `GET /api/v1/dlq`: Filterable (by `route_name`) and paginated (`limit`, `offset`) inspection of failed requests in DLQ.
+  * `POST /api/v1/dlq/{request_id}/replay`: Resets attempts count to 0, transitions status to `pending`, and triggers immediate dispatcher wakeup.
+  * `POST /api/v1/dlq/replay-all`: Batch replay of dead-lettered requests (optional `route_name` and `limit`).
 * **Special Request Headers:**
   * `X-Relay-Timeout`: Overrides route default timeout for specific call.
   * `X-Relay-Idempotency-Key` / `Idempotency-Key`: Propagated downstream to ensure safe upstream execution.

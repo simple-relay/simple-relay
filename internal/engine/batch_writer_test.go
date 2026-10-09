@@ -56,6 +56,18 @@ func (m *mockRequestRepo) RecoverStuckRequests(ctx context.Context, stuckBefore 
 	return 0, nil
 }
 
+func (m *mockRequestRepo) ListDLQRequests(ctx context.Context, routeID string, limit, offset int) ([]*model.Request, int64, error) {
+	return nil, 0, nil
+}
+
+func (m *mockRequestRepo) ReplayDLQRequest(ctx context.Context, id string) (*model.Request, error) {
+	return nil, nil
+}
+
+func (m *mockRequestRepo) ReplayAllDLQRequests(ctx context.Context, routeID string, limit int) ([]string, error) {
+	return nil, nil
+}
+
 func TestBatchWriter_BatchSizeFlush(t *testing.T) {
 	repo := &mockRequestRepo{}
 	var wakeCalled int32

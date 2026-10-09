@@ -60,6 +60,18 @@ func (m *mockDispatcherRepo) RecoverStuckRequests(ctx context.Context, stuckBefo
 	return c, nil
 }
 
+func (m *mockDispatcherRepo) ListDLQRequests(ctx context.Context, routeID string, limit, offset int) ([]*model.Request, int64, error) {
+	return nil, 0, nil
+}
+
+func (m *mockDispatcherRepo) ReplayDLQRequest(ctx context.Context, id string) (*model.Request, error) {
+	return nil, nil
+}
+
+func (m *mockDispatcherRepo) ReplayAllDLQRequests(ctx context.Context, routeID string, limit int) ([]string, error) {
+	return nil, nil
+}
+
 func TestDispatcher_WakeupSignal(t *testing.T) {
 	repo := &mockDispatcherRepo{
 		pending: []*model.Request{

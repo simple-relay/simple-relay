@@ -99,6 +99,15 @@ func (m *mockWorkerRepo) ClaimPendingRequests(ctx context.Context, limit int, du
 func (m *mockWorkerRepo) RecoverStuckRequests(ctx context.Context, stuckBefore time.Time) (int64, error) {
 	return 0, nil
 }
+func (m *mockWorkerRepo) ListDLQRequests(ctx context.Context, routeID string, limit, offset int) ([]*model.Request, int64, error) {
+	return nil, 0, nil
+}
+func (m *mockWorkerRepo) ReplayDLQRequest(ctx context.Context, id string) (*model.Request, error) {
+	return nil, nil
+}
+func (m *mockWorkerRepo) ReplayAllDLQRequests(ctx context.Context, routeID string, limit int) ([]string, error) {
+	return nil, nil
+}
 
 func (m *mockWorkerRepo) UpdateRequestStatus(ctx context.Context, id string, status model.RequestStatus, attemptsCount int, nextAttemptAt *time.Time, lastError *string) error {
 	m.mu.Lock()
