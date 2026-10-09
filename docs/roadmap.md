@@ -11,14 +11,14 @@
 | Phase | Focus Area | Status | Progress |
 | :--- | :--- | :--- | :--- |
 | **Phase 1** | Outbound Relay & Core Storage Engine | **Completed** | 100% Completed |
-| **Phase 2** | Inbound Webhooks & Security Pipeline | In Progress | 50% |
+| **Phase 2** | Inbound Webhooks & Security Pipeline | In Progress | 80% |
 | **Phase 3** | Embedded Web UI & Storage Retention | Planned | 0% |
 | **v0.3** | CLI, Observability & Alerting | Backlog | 0% |
 | **v1.0** | Enterprise Clustering & PostgreSQL | Backlog | 0% |
 
 ### Active Execution Pointer
-- **Current Milestone:** Phase 2 — Milestone 2.2: Inbound Async Delivery & DLQ Replay
-- **Next Immediate Task:** `Task 2.2.3` — DLQ Replay Management API.
+- **Current Milestone:** Phase 2 — Milestone 2.1: Cryptographic Ingestion & Signature Adapters
+- **Next Immediate Task:** `Task 2.1.2` — Signature Verification Adapters (`internal/signature`).
 
 ---
 
@@ -26,7 +26,7 @@
 
 * **Phase 1 — Outbound Relay & Core Storage Engine:** Build the foundational single-writer SQLite storage engine (WAL mode), route configuration handling with in-memory caching and hot-reloading, synchronous outbound HTTP proxy with client-disconnect context cancellation, durable asynchronous job ingestion, and background worker delivery pool.
 * **Phase 2 — Inbound Webhook & Security:** Establish durable inbound webhook ingestion with raw-byte cryptographic preservation, HMAC signature adapters (Stripe, GitHub, Generic HMAC-SHA256), burst-protective micro-batch persistence, DLQ state machine, and replay APIs.
-* **Phase 3 — UI, Maintenance & Release Automation:** Deliver embedded zero-dependency Web UI (`go:embed`, Alpine.js, Tailwind CSS), admin authentication with CSRF protection, scheduled retention pruning with incremental SQLite vacuuming, Litestream replication guide, and automated multi-platform release pipeline (release-please + GoReleaser).
+* **Phase 3 — UI, Maintenance & Release Automation:** Deliver embedded zero-dependency Web UI (`go:embed`, Alpine.js, Tailwind CSS), admin authentication with CSRF protection, scheduled retention pruning with incremental SQLite vacuuming, Litestream replication guide, automated multi-platform release pipeline (release-please + GoReleaser), and in-app upstream version update checker.
 * **v0.3 — Utility & Extension:** Provide CLI inspection binary, Slack/Discord/Email alerting on DLQ threshold breaches, API key management, and Prometheus metrics (`/metrics`).
 * **v1.0 — Enterprise Edition:** Add PostgreSQL pluggable storage adapter, distributed multi-node worker clustering, Single Sign-On (SSO / OIDC), and Role-Based Access Control (RBAC).
 
@@ -140,9 +140,10 @@
 - [x] **Task 2.2.2: Dead Letter Queue (DLQ) State Machine**
   - Mark requests as `dlq` upon reaching `max_attempts`.
   - Record complete diagnostic history in `attempts`.
-- [ ] **Task 2.2.3: DLQ Replay Management API**
+- [x] **Task 2.2.3: DLQ Replay Management API**
   - Endpoint `POST /api/v1/dlq/{request_id}/replay`: Reset attempts count, set status to `pending`, set `next_attempt_at = NOW()`, trigger dispatcher wakeup.
   - Endpoint `POST /api/v1/dlq/replay-all`: Batch replay all filtered DLQ records.
+  - Endpoint `GET /api/v1/dlq`: Filterable and paginated DLQ inspection API.
 
 ---
 
@@ -186,6 +187,13 @@
   - Integrate `release-please` to parse Conventional Commits and maintain `CHANGELOG.md`.
   - Automatically manage SemVer release pull requests on `main`.
   - Trigger GoReleaser upon Release PR merge to attach cross-platform binaries to GitHub Releases.
+- [ ] **Task 3.3.3: In-App Version Update Checker (`internal/version`)**
+  - Background non-blocking version checker querying upstream GitHub Releases (`simple-relay/simple-relay`) created by Release Please.
+  - Dual discovery strategy: GitHub REST API with seamless fallback to rate-limit-free HTTP HEAD redirect trick.
+  - Robust SemVer comparison using standard `golang.org/x/mod/semver`.
+  - In-memory cache and configurable opt-out (`RELAY_CHECK_UPDATES=false`) for air-gapped deployments.
+  - Expose version metadata via `GET /api/v1/system/version` and Web UI notification badge.
+  - See design specification: [2026-10-09-version-check-design.md](specs/2026-10-09-version-check-design.md).
 
 ---
 

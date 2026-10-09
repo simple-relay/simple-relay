@@ -299,3 +299,246 @@ func TestRequestRepo_RecoverStuckRequests(t *testing.T) {
 		t.Errorf("expected recovered request status to be 'pending', got %s", inDB.Status)
 	}
 }
+
+func TestRequestRepo_ListDLQRequests(t *testing.T) {
+	db, routeRepo, reqRepo, route1 := setupTestDBWithRoute(t)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	// Create route2
+	route2 := &model.Route{
+		Name:                 "route-two",
+		Type:                 model.RouteTypeInbound,
+		Mode:                 model.RouteModeAsync,
+		Path:                 "/api/v1/webhook/route-two",
+		DestinationURL:       "https://api.internal/webhook",
+		MaxAttempts:          3,
+		TimeoutMS:            5000,
+		RetryBackoffStrategy: model.RetryStrategyExponential,
+	}
+	if err := routeRepo.CreateRoute(ctx, route2); err != nil {
+		t.Fatalf("failed to create route2: %v", err)
+	}
+
+	// Create requests: 2 for route1 in DLQ, 1 for route2 in DLQ, 1 for route1 in success
+	req1 := &model.Request{
+		RouteID:       route1.ID,
+		Method:        "POST",
+		URL:           "https://dest1",
+		Headers:       map[string]string{},
+		Body:          []byte("body1"),
+		Status:        model.RequestStatusDLQ,
+		AttemptsCount: 3,
+	}
+	req2 := &model.Request{
+		RouteID:       route1.ID,
+		Method:        "POST",
+		URL:           "https://dest1",
+		Headers:       map[string]string{},
+		Body:          []byte("body2"),
+		Status:        model.RequestStatusDLQ,
+		AttemptsCount: 3,
+	}
+	req3 := &model.Request{
+		RouteID:       route2.ID,
+		Method:        "POST",
+		URL:           "https://dest2",
+		Headers:       map[string]string{},
+		Body:          []byte("body3"),
+		Status:        model.RequestStatusDLQ,
+		AttemptsCount: 3,
+	}
+	reqSuccess := &model.Request{
+		RouteID:       route1.ID,
+		Method:        "POST",
+		URL:           "https://dest1",
+		Headers:       map[string]string{},
+		Body:          []byte("body4"),
+		Status:        model.RequestStatusSuccess,
+		AttemptsCount: 1,
+	}
+
+	for _, r := range []*model.Request{req1, req2, req3, reqSuccess} {
+		if err := reqRepo.CreateRequest(ctx, r); err != nil {
+			t.Fatalf("failed to create request: %v", err)
+		}
+	}
+
+	// 1. List all DLQ (no route filter)
+	items, total, err := reqRepo.ListDLQRequests(ctx, "", 10, 0)
+	if err != nil {
+		t.Fatalf("ListDLQRequests failed: %v", err)
+	}
+	if total != 3 {
+		t.Errorf("expected total 3 DLQ records, got %d", total)
+	}
+	if len(items) != 3 {
+		t.Errorf("expected 3 items returned, got %d", len(items))
+	}
+
+	// 2. Filter by route1
+	itemsR1, totalR1, err := reqRepo.ListDLQRequests(ctx, route1.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("ListDLQRequests with route1 filter failed: %v", err)
+	}
+	if totalR1 != 2 {
+		t.Errorf("expected total 2 DLQ records for route1, got %d", totalR1)
+	}
+	if len(itemsR1) != 2 {
+		t.Errorf("expected 2 items for route1, got %d", len(itemsR1))
+	}
+
+	// 3. Pagination limit and offset
+	pagedItems, pagedTotal, err := reqRepo.ListDLQRequests(ctx, "", 1, 1)
+	if err != nil {
+		t.Fatalf("ListDLQRequests paged failed: %v", err)
+	}
+	if pagedTotal != 3 {
+		t.Errorf("expected total 3, got %d", pagedTotal)
+	}
+	if len(pagedItems) != 1 {
+		t.Errorf("expected 1 item, got %d", len(pagedItems))
+	}
+}
+
+func TestRequestRepo_ReplayDLQRequest(t *testing.T) {
+	db, _, reqRepo, route := setupTestDBWithRoute(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	errMsg := "failed after 3 attempts"
+	reqDLQ := &model.Request{
+		RouteID:       route.ID,
+		Method:        "POST",
+		URL:           "https://dest",
+		Headers:       map[string]string{"Content-Type": "application/json"},
+		Body:          []byte("payload"),
+		Status:        model.RequestStatusDLQ,
+		AttemptsCount: 3,
+		LastError:     &errMsg,
+	}
+	if err := reqRepo.CreateRequest(ctx, reqDLQ); err != nil {
+		t.Fatalf("CreateRequest failed: %v", err)
+	}
+
+	reqSuccess := &model.Request{
+		RouteID:       route.ID,
+		Method:        "POST",
+		URL:           "https://dest",
+		Headers:       map[string]string{},
+		Body:          []byte("payload2"),
+		Status:        model.RequestStatusSuccess,
+		AttemptsCount: 1,
+	}
+	if err := reqRepo.CreateRequest(ctx, reqSuccess); err != nil {
+		t.Fatalf("CreateRequest failed: %v", err)
+	}
+
+	// 1. Replay DLQ request successfully
+	replayed, err := reqRepo.ReplayDLQRequest(ctx, reqDLQ.ID)
+	if err != nil {
+		t.Fatalf("ReplayDLQRequest failed: %v", err)
+	}
+	if replayed.Status != model.RequestStatusPending {
+		t.Errorf("expected status 'pending', got %s", replayed.Status)
+	}
+	if replayed.AttemptsCount != 0 {
+		t.Errorf("expected attempts_count 0, got %d", replayed.AttemptsCount)
+	}
+	if replayed.LastError != nil {
+		t.Errorf("expected last_error to be nil, got %v", *replayed.LastError)
+	}
+	if replayed.NextAttemptAt == nil || replayed.NextAttemptAt.IsZero() {
+		t.Errorf("expected next_attempt_at to be set, got %v", replayed.NextAttemptAt)
+	}
+
+	// 2. Replay non-DLQ request should return ErrConflict
+	_, err = reqRepo.ReplayDLQRequest(ctx, reqSuccess.ID)
+	if !errors.Is(err, storage.ErrConflict) {
+		t.Errorf("expected ErrConflict for non-DLQ request, got %v", err)
+	}
+
+	// 3. Replay non-existent request should return ErrNotFound
+	_, err = reqRepo.ReplayDLQRequest(ctx, "01nonexistentulid0000000000")
+	if !errors.Is(err, storage.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for non-existent request, got %v", err)
+	}
+}
+
+func TestRequestRepo_ReplayAllDLQRequests(t *testing.T) {
+	db, routeRepo, reqRepo, route1 := setupTestDBWithRoute(t)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	route2 := &model.Route{
+		Name:                 "route-bulk",
+		Type:                 model.RouteTypeInbound,
+		Mode:                 model.RouteModeAsync,
+		Path:                 "/api/v1/webhook/bulk",
+		DestinationURL:       "https://api.internal/webhook",
+		MaxAttempts:          3,
+		TimeoutMS:            5000,
+		RetryBackoffStrategy: model.RetryStrategyExponential,
+	}
+	if err := routeRepo.CreateRoute(ctx, route2); err != nil {
+		t.Fatalf("failed to create route2: %v", err)
+	}
+
+	for i := 0; i < 5; i++ {
+		rID := route1.ID
+		if i >= 3 {
+			rID = route2.ID
+		}
+		req := &model.Request{
+			RouteID:       rID,
+			Method:        "POST",
+			URL:           "https://dest",
+			Headers:       map[string]string{},
+			Body:          []byte("body"),
+			Status:        model.RequestStatusDLQ,
+			AttemptsCount: 3,
+		}
+		if err := reqRepo.CreateRequest(ctx, req); err != nil {
+			t.Fatalf("failed to create dlq req %d: %v", i, err)
+		}
+	}
+
+	// 1. Replay with route filter (route2 has 2 records)
+	replayedRoute2, err := reqRepo.ReplayAllDLQRequests(ctx, route2.ID, 10)
+	if err != nil {
+		t.Fatalf("ReplayAllDLQRequests for route2 failed: %v", err)
+	}
+	if len(replayedRoute2) != 2 {
+		t.Fatalf("expected 2 records replayed for route2, got %d", len(replayedRoute2))
+	}
+
+	// 2. Replay with limit = 1 for route1 (which currently has 3 records)
+	replayedRoute1Limited, err := reqRepo.ReplayAllDLQRequests(ctx, route1.ID, 1)
+	if err != nil {
+		t.Fatalf("ReplayAllDLQRequests limited failed: %v", err)
+	}
+	if len(replayedRoute1Limited) != 1 {
+		t.Fatalf("expected 1 record replayed with limit 1, got %d", len(replayedRoute1Limited))
+	}
+
+	// 3. Replay remaining (2 left in route1)
+	replayedRemaining, err := reqRepo.ReplayAllDLQRequests(ctx, "", 10)
+	if err != nil {
+		t.Fatalf("ReplayAllDLQRequests remaining failed: %v", err)
+	}
+	if len(replayedRemaining) != 2 {
+		t.Fatalf("expected 2 remaining records replayed, got %d", len(replayedRemaining))
+	}
+
+	// 4. Replay again when 0 DLQ left
+	replayedEmpty, err := reqRepo.ReplayAllDLQRequests(ctx, "", 10)
+	if err != nil {
+		t.Fatalf("ReplayAllDLQRequests empty failed: %v", err)
+	}
+	if len(replayedEmpty) != 0 {
+		t.Fatalf("expected 0 records replayed, got %d", len(replayedEmpty))
+	}
+}
+

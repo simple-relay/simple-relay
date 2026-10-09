@@ -91,6 +91,7 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 		BatchWriter:   batchWriter,
 		RequestRepo:   db.RequestRepo,
 		AttemptRepo:   db.AttemptRepo,
+		WakeFn:        dispatcher.Wake,
 	})
 
 	srv := &http.Server{

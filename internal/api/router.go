@@ -18,6 +18,7 @@ type RouterOptions struct {
 	BatchWriter   *engine.BatchWriter
 	RequestRepo   storage.RequestRepository
 	AttemptRepo   storage.AttemptRepository
+	WakeFn        func()
 	MaxBodyBytes  int64
 }
 
@@ -54,6 +55,12 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 		if opt.RequestRepo != nil && opt.AttemptRepo != nil {
 			inspectHandler := NewJobInspectHandler(opt.RequestRepo, opt.AttemptRepo, logger)
 			mux.HandleFunc("GET /api/v1/jobs/{job_id}", inspectHandler)
+		}
+		if opt.RequestRepo != nil {
+			dlqHandler := NewDLQHandler(opt.RequestRepo, opt.RouteRegistry, opt.WakeFn, logger)
+			mux.HandleFunc("GET /api/v1/dlq", dlqHandler.ListDLQ)
+			mux.HandleFunc("POST /api/v1/dlq/{request_id}/replay", dlqHandler.ReplaySingle)
+			mux.HandleFunc("POST /api/v1/dlq/replay-all", dlqHandler.ReplayAll)
 		}
 	}
 

@@ -35,6 +35,9 @@ type RequestRepository interface {
 	UpdateRequestStatus(ctx context.Context, id string, status model.RequestStatus, attemptsCount int, nextAttemptAt *time.Time, lastError *string) error
 	ClaimPendingRequests(ctx context.Context, limit int, dueBefore time.Time) ([]*model.Request, error)
 	RecoverStuckRequests(ctx context.Context, stuckBefore time.Time) (int64, error)
+	ListDLQRequests(ctx context.Context, routeID string, limit, offset int) ([]*model.Request, int64, error)
+	ReplayDLQRequest(ctx context.Context, id string) (*model.Request, error)
+	ReplayAllDLQRequests(ctx context.Context, routeID string, limit int) ([]string, error)
 }
 
 // AttemptRepository defines the storage operations for attempt audit logs.
