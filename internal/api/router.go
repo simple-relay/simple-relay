@@ -47,6 +47,9 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 		if opt.RouteRegistry != nil && opt.BatchWriter != nil {
 			ingestHandler := NewJobIngestHandler(opt.RouteRegistry, opt.BatchWriter, logger, opt.MaxBodyBytes)
 			mux.HandleFunc("POST /api/v1/jobs/{route_name}", ingestHandler)
+
+			webhookHandler := NewWebhookHandler(opt.RouteRegistry, opt.BatchWriter, logger, opt.MaxBodyBytes)
+			mux.HandleFunc("/api/v1/webhook/{route_name}", webhookHandler)
 		}
 		if opt.RequestRepo != nil && opt.AttemptRepo != nil {
 			inspectHandler := NewJobInspectHandler(opt.RequestRepo, opt.AttemptRepo, logger)
