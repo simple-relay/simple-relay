@@ -26,3 +26,5 @@ coverage.html
 # OS artifacts
 .DS_Store
 Thumbs.db
+*.loc.*
+
