@@ -3,6 +3,9 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -217,3 +220,151 @@ func TestE2E_InboundWebhookDeliveryPipeline(t *testing.T) {
 		t.Errorf("expected attempt status code 200, got %v", attempts[0].ResponseStatusCode)
 	}
 }
+
+func TestE2E_InboundWebhook_WithSignatureVerification(t *testing.T) {
+	var mu sync.Mutex
+	var receivedBody []byte
+	deliveredCh := make(chan struct{}, 1)
+
+	destServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		receivedBody = body
+		mu.Unlock()
+
+		w.WriteHeader(http.StatusOK)
+		select {
+		case deliveredCh <- struct{}{}:
+		default:
+		}
+	}))
+	defer destServer.Close()
+
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "e2e_webhook_sig.db")
+
+	db, err := sqlite.Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open sqlite: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := db.Migrate(ctx); err != nil {
+		t.Fatalf("failed to migrate db: %v", err)
+	}
+
+	routeRepo := sqlite.NewRouteRepo(db)
+	reqRepo := sqlite.NewRequestRepo(db)
+	attemptRepo := sqlite.NewAttemptRepo(db)
+
+	secret := "super-secure-github-token"
+	registry := engine.NewRouteRegistry(routeRepo)
+	route := &model.Route{
+		Name:                 "github-secured-e2e",
+		Type:                 model.RouteTypeInbound,
+		Mode:                 model.RouteModeAsync,
+		Path:                 "/api/v1/webhook/github-secured-e2e",
+		DestinationURL:       destServer.URL,
+		SignatureProvider:    model.SignatureProviderGitHub,
+		SignatureSecret:      secret,
+		MaxAttempts:          3,
+		TimeoutMS:            1000,
+		RetryBackoffStrategy: model.RetryStrategyExponential,
+	}
+	if err := registry.Create(ctx, route); err != nil {
+		t.Fatalf("failed to create route: %v", err)
+	}
+
+	jobsCh := make(chan *model.Request, 10)
+	dispatcher := engine.NewDispatcher(reqRepo, jobsCh, engine.DispatcherConfig{
+		PollInterval: 50 * time.Millisecond,
+		LeaseTimeout: 5 * time.Minute,
+	})
+	retryEngine := engine.NewRetryEngine(engine.RetryConfig{
+		BaseBackoff: 20 * time.Millisecond,
+		MaxBackoff:  100 * time.Millisecond,
+	})
+	workerPool := engine.NewWorkerPool(jobsCh, registry, reqRepo, attemptRepo, retryEngine, engine.WorkerPoolConfig{
+		Concurrency: 2,
+	})
+	batchWriter := engine.NewBatchWriter(reqRepo, engine.BatchWriterConfig{
+		BatchSize:     10,
+		FlushInterval: 10 * time.Millisecond,
+		QueueCapacity: 50,
+		WakeFn: func() {
+			dispatcher.Wake()
+		},
+	})
+
+	batchWriter.Start(ctx)
+	defer batchWriter.Close()
+	dispatcher.Start(ctx)
+	defer dispatcher.Close()
+	workerPool.Start(ctx)
+	defer workerPool.Close()
+
+	cfg := &config.Config{Port: 8080}
+	appHandler := NewRouter(cfg, nil, RouterOptions{
+		RouteRegistry: registry,
+		BatchWriter:   batchWriter,
+		RequestRepo:   reqRepo,
+		AttemptRepo:   attemptRepo,
+		MaxBodyBytes:  10 * 1024 * 1024,
+	})
+	relayServer := httptest.NewServer(appHandler)
+	defer relayServer.Close()
+
+	payload := []byte(`{"action":"push","ref":"refs/heads/feature"}`)
+
+	// Step 1: Send forged / invalid signature -> Must receive 401 Unauthorized
+	reqInvalid, _ := http.NewRequest(http.MethodPost, relayServer.URL+"/api/v1/webhook/"+route.Name, bytes.NewReader(payload))
+	reqInvalid.Header.Set("X-Hub-Signature-256", "sha256=1111111111111111111111111111111111111111111111111111111111111111")
+	respInvalid, err := http.DefaultClient.Do(reqInvalid)
+	if err != nil {
+		t.Fatalf("failed to execute invalid request: %v", err)
+	}
+	defer respInvalid.Body.Close()
+	if respInvalid.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized for forged signature, got %d", respInvalid.StatusCode)
+	}
+
+	// Verify no pending requests were persisted
+	pendingReqs, _ := reqRepo.ListPendingRequests(ctx, 10, time.Now())
+	if len(pendingReqs) != 0 {
+		t.Fatalf("forged request was persisted in SQLite! Expected 0 pending, got %d", len(pendingReqs))
+	}
+
+	// Step 2: Compute authentic signature and send -> Must receive 200 OK and deliver
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(payload)
+	validSig := hex.EncodeToString(mac.Sum(nil))
+
+	reqValid, _ := http.NewRequest(http.MethodPost, relayServer.URL+"/api/v1/webhook/"+route.Name, bytes.NewReader(payload))
+	reqValid.Header.Set("X-Hub-Signature-256", "sha256="+validSig)
+	respValid, err := http.DefaultClient.Do(reqValid)
+	if err != nil {
+		t.Fatalf("failed to execute valid request: %v", err)
+	}
+	defer respValid.Body.Close()
+	if respValid.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK for authentic signature, got %d", respValid.StatusCode)
+	}
+
+	// Wait for async delivery to destination
+	select {
+	case <-deliveredCh:
+		// Succeeded
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timed out waiting for authentic webhook delivery")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if !bytes.Equal(receivedBody, payload) {
+		t.Fatalf("expected destination to receive %s, got %s", payload, receivedBody)
+	}
+}
+

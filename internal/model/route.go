@@ -61,8 +61,10 @@ var (
 	ErrRouteInvalidURL          = errors.New("destination_url must be a valid absolute HTTP/HTTPS URL")
 	ErrRouteInvalidType         = errors.New("invalid route type; must be 'inbound' or 'outbound'")
 	ErrRouteInvalidMode         = errors.New("invalid route mode; must be 'sync' or 'async'")
-	ErrRouteInvalidMaxAttempts  = errors.New("max_attempts must be at least 1")
-	ErrRouteInvalidTimeout      = errors.New("timeout_ms must be greater than 0")
+	ErrRouteInvalidMaxAttempts         = errors.New("max_attempts must be at least 1")
+	ErrRouteInvalidTimeout             = errors.New("timeout_ms must be greater than 0")
+	ErrRouteSignatureSecretRequired    = errors.New("signature_secret is required when signature_provider is enabled")
+	ErrRouteInvalidSignatureProvider   = errors.New("invalid signature_provider")
 )
 
 // Validate checks the route's fields for logical correctness.
@@ -91,6 +93,18 @@ func (r *Route) Validate() error {
 	}
 	if r.TimeoutMS <= 0 {
 		return ErrRouteInvalidTimeout
+	}
+	if r.Type == RouteTypeInbound {
+		switch r.SignatureProvider {
+		case SignatureProviderNone, "":
+			// Valid: no signature verification required
+		case SignatureProviderStripe, SignatureProviderGitHub, SignatureProviderHMACSHA256:
+			if strings.TrimSpace(r.SignatureSecret) == "" {
+				return ErrRouteSignatureSecretRequired
+			}
+		default:
+			return ErrRouteInvalidSignatureProvider
+		}
 	}
 	return nil
 }

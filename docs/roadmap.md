@@ -11,14 +11,14 @@
 | Phase | Focus Area | Status | Progress |
 | :--- | :--- | :--- | :--- |
 | **Phase 1** | Outbound Relay & Core Storage Engine | **Completed** | 100% Completed |
-| **Phase 2** | Inbound Webhooks & Security Pipeline | In Progress | 80% |
+| **Phase 2** | Inbound Webhooks & Security Pipeline | **Completed** | 100% Completed |
 | **Phase 3** | Embedded Web UI & Storage Retention | Planned | 0% |
 | **v0.3** | CLI, Observability & Alerting | Backlog | 0% |
 | **v1.0** | Enterprise Clustering & PostgreSQL | Backlog | 0% |
 
 ### Active Execution Pointer
-- **Current Milestone:** Phase 2 — Milestone 2.1: Cryptographic Ingestion & Signature Adapters
-- **Next Immediate Task:** `Task 2.1.2` — Signature Verification Adapters (`internal/signature`).
+- **Current Milestone:** Phase 3 — Milestone 3.1: Embedded Dashboard Web UI
+- **Next Immediate Task:** `Task 3.1.1` — Embedded Assets & Base Layout (`ui/`).
 
 ---
 
@@ -121,11 +121,13 @@
 - [x] **Task 2.1.1: Raw Byte Body Preserving Receiver**
   - Ensure zero payload mutation: capture exact bytes into memory/disk.
   - Enforce maximum body size (`RELAY_MAX_BODY_SIZE_MB`, default 10MB) with `http.MaxBytesReader`.
-- [ ] **Task 2.1.2: Signature Verification Adapters (`internal/signature`)** *(Deferred to Security Milestone)*
-  - Define `Verifier` interface: `Verify(header string, secret string, rawBody []byte) error`.
-  - Stripe HMAC adapter: parse `t=timestamp,v1=signature`, verify HMAC-SHA256 with timestamp tolerance.
+- [x] **Task 2.1.2: Signature Verification Adapters (`internal/signature`)**
+  - Define `Verifier` interface: `Verify(header http.Header, secret string, rawBody []byte) error`.
+  - Stripe HMAC adapter: parse `t=timestamp,v1=signature`, verify HMAC-SHA256 across candidate signatures using constant-time comparison.
   - GitHub HMAC adapter: verify `sha256=<hex>` against `X-Hub-Signature-256`.
-  - Generic HMAC-SHA256 adapter: verify standard hex/base64 signatures.
+  - Generic HMAC-SHA256 adapter: auto-detect headers (`X-Signature`, `X-Hub-Signature-256`, `X-Signature-SHA256`), handle hex and base64 with constant-time comparison.
+  - Reject invalid signatures at the HTTP boundary with `401 Unauthorized` before SQLite persistence.
+  - See design specification: [2026-10-09-signature-verification-adapters-design.md](specs/2026-10-09-signature-verification-adapters-design.md).
 - [x] **Task 2.1.3: Inbound Webhook Endpoint (`POST /api/v1/webhook/{route_name}`)**
   - Match route from `RouteRegistry` (`route.Type == "inbound"`).
   - Support `POST`, `PUT`, `PATCH` methods (returns 405 for other methods).
@@ -202,6 +204,7 @@
 - [ ] **Task 0.3.2:** Webhook alert notifications (Slack / Discord / Email) when DLQ count exceeds configurable threshold.
 - [ ] **Task 0.3.3:** API Key authentication for programmatic API management.
 - [ ] **Task 0.3.4:** Prometheus metrics exporter endpoint (`GET /metrics`) tracking ingestion rate, retry counts, queue depth, and latency histograms.
+- [ ] **Task 0.3.5:** Extended Signature Verification Adapters (`Shopify` with base64 HMAC, `Slack` v0 signature, `Svix` / Standard Webhooks).
 
 ---
 
@@ -210,3 +213,4 @@
 - [ ] **Task 1.0.2:** Multi-node worker clustering with distributed leader election / advisory locks.
 - [ ] **Task 1.0.3:** Enterprise SSO integration (OIDC, OAuth2, SAML).
 - [ ] **Task 1.0.4:** Role-Based Access Control (RBAC) and security audit logs.
+- [ ] **Task 1.0.5:** Asymmetric Public-Key Webhook Verification (Ed25519 & RSA SHA-256 for AWS SNS, DocuSign).

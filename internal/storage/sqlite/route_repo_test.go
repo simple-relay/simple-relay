@@ -124,6 +124,7 @@ func TestRouteRepo_CRUD(t *testing.T) {
 		Path:                 "/api/v1/webhook/github",
 		DestinationURL:       "https://api.internal/github",
 		SignatureProvider:    model.SignatureProviderGitHub,
+		SignatureSecret:      "gh_secret_test_123",
 		MaxAttempts:          3,
 		TimeoutMS:            5000,
 		RetryBackoffStrategy: model.RetryStrategyLinear,
