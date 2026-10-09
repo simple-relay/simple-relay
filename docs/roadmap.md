@@ -26,7 +26,7 @@
 
 * **Phase 1 — Outbound Relay & Core Storage Engine:** Build the foundational single-writer SQLite storage engine (WAL mode), route configuration handling with in-memory caching and hot-reloading, synchronous outbound HTTP proxy with client-disconnect context cancellation, durable asynchronous job ingestion, and background worker delivery pool.
 * **Phase 2 — Inbound Webhook & Security:** Establish durable inbound webhook ingestion with raw-byte cryptographic preservation, HMAC signature adapters (Stripe, GitHub, Generic HMAC-SHA256), burst-protective micro-batch persistence, DLQ state machine, and replay APIs.
-* **Phase 3 — UI, Maintenance & Release Automation:** Deliver embedded zero-dependency Web UI (`go:embed`, Alpine.js, Tailwind CSS), admin authentication with CSRF protection, scheduled retention pruning with incremental SQLite vacuuming, Litestream replication guide, automated multi-platform release pipeline (release-please + GoReleaser), and in-app upstream version update checker.
+* **Phase 3 — UI, Maintenance & Release Automation:** Deliver embedded zero-dependency Web UI (`go:embed`, Alpine.js, Tailwind CSS), admin authentication with CSRF protection, scheduled retention pruning with incremental SQLite vacuuming, versioned database schema migration engine (`schema_migrations`), Litestream replication guide, automated multi-platform release pipeline (release-please + GoReleaser), and in-app upstream version update checker.
 * **v0.3 — Utility & Extension:** Provide CLI inspection binary, Slack/Discord/Email alerting on DLQ threshold breaches, API key management, and Prometheus metrics (`/metrics`).
 * **v1.0 — Enterprise Edition:** Add PostgreSQL pluggable storage adapter, distributed multi-node worker clustering, Single Sign-On (SSO / OIDC), and Role-Based Access Control (RBAC).
 
@@ -177,6 +177,13 @@
 - [ ] **Task 3.2.3: Litestream Disaster Recovery Integration**
   - Provide production configuration guide and Docker compose setup for Litestream S3 streaming replication.
   - Zero-SPOF SQLite durability verification.
+- [ ] **Task 3.2.4: Versioned Database Schema Migrations Engine (`schema_migrations`)**
+  - Embed migration SQL files directly into the static binary with `go:embed`.
+  - Maintain durable version history via `schema_migrations (version, name, applied_at)` table.
+  - Sequentially execute pending migrations on boot within atomic SQLite transactions (`BEGIN IMMEDIATE`).
+  - Implement fail-fast safety and automatic baseline migration for existing databases.
+  - Multi-database architecture ready for SQLite, PostgreSQL, and MySQL adapters.
+  - See design specification: [2026-10-09-database-migrations-engine-design.md](specs/2026-10-09-database-migrations-engine-design.md).
 
 #### Milestone 3.3: Automated Multi-Platform Release Pipeline
 - [ ] **Task 3.3.1: Multi-Platform Build Configuration (`.goreleaser.yaml`)**
