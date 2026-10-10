@@ -1,9 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "pull-request-footer": "",
   "packages": {
     ".": {
       "release-type": "go",
       "package-name": "simple-relay",
+      "pull-request-footer": "",
       "bump-minor-pre-major": true,
       "include-component-in-tag": false,
       "changelog-path": "CHANGELOG.md",
