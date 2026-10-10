@@ -318,7 +318,7 @@ Elevator pitch:
 - **Open Source First:** Full core capabilities (engine, SQLite storage, retry, DLQ, Web UI, Docker image) are 100% open source and free forever.
 - **No Artificial Feature Gating:** Core reliability features are never locked behind paywalls.
 - **Initial Revenue:** GitHub Sponsors, Open Collective, Ko-fi donations.
-- **Future Growth (Post-Traction):** Optional Managed Cloud (hosted version) and Enterprise support (SSO, Audit Logs).
+- **Future Growth (Post-Traction):** Optional Managed Cloud (hosted version) or community sponsorships.
 
 ---
 

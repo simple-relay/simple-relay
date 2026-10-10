@@ -208,7 +208,7 @@ The following providers are planned for upcoming milestones and are tracked in t
 1. **Shopify Adapter:** `X-Shopify-Hmac-Sha256` (Base64-encoded HMAC-SHA256).
 2. **Slack Adapter:** `X-Slack-Signature` (`v0=<hex>` over `v0:${timestamp}:${body}`).
 3. **Standard Webhooks / Svix Adapter:** `webhook-signature` specification.
-4. **Asymmetric Signatures (Enterprise v1.0):** Public key verification (Ed25519, RSA SHA-256) for AWS SNS and DocuSign.
+4. **Asymmetric Signatures (v1.0):** Public key verification (Ed25519, RSA SHA-256) for AWS SNS and DocuSign.
 
 ---
 

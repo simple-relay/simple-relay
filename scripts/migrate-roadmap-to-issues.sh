@@ -68,13 +68,8 @@ LABELS=(
     "help wanted|008672|Extra attention is needed"
 )
 
-# 2. Milestones Definition: title|description
-MILESTONES=(
-    "v0.2.0 - Inbound Webhooks & Security Pipeline|Phase 2: Inbound durable webhooks and HMAC security verification."
-    "v0.3.0 - Embedded Web UI & System Lifecycle|Phase 3: Embedded Web UI, database migrations, retention, and release pipeline."
-    "v0.4.0 - Utility & Observability Extensions|v0.3: CLI inspection tool, DLQ alerts, and Prometheus metrics."
-    "v1.0.0 - Enterprise Edition|v1.0: PostgreSQL adapter, multi-node clustering, and enterprise SSO/RBAC."
-)
+# 2. Milestones: Deprecated (project uses Phase-only structure)
+MILESTONES=()
 
 # 3. Tasks Definition: task_id|title|milestone|labels|body
 TASKS=(
@@ -277,7 +272,7 @@ for item in "${TASKS[@]}"; do
     for lbl in "${SPLIT_LABELS[@]}"; do
         LABEL_ARGS+=(--label "$lbl")
     done
-    ISSUE_URL=$(gh issue create --title "$title" --milestone "$milestone" "${LABEL_ARGS[@]}" --body "$body" 2>/dev/null || echo "")
+    ISSUE_URL=$(gh issue create --title "$title" "${LABEL_ARGS[@]}" --body "$body" 2>/dev/null || echo "")
     echo "Created: $ISSUE_URL"
     
     if [[ "$UPDATE_ROADMAP" == "true" && -n "$ISSUE_URL" ]]; then
