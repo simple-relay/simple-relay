@@ -187,35 +187,35 @@ Proactive failure alerting."
 ### Why & Context
 Secure programmatic access for external orchestration."
 
-    "Task 0.3.4|Task 0.3.4: Prometheus metrics exporter endpoint (/metrics)|v0.4.0 - Utility & Observability Extensions|type:feat,area:api,status:ready|### What needs to be done?
+    "Task 0.3.4|Prometheus metrics exporter endpoint (/metrics)||type:feat,area:api,status:ready|### What needs to be done?
 - Prometheus metrics exporter endpoint (\`GET /metrics\`) tracking ingestion rate, retry counts, queue depth, and latency histograms.
 
 ### Why & Context
-Enterprise metrics scraping."
+Production metrics scraping."
 
-    "Task 1.0.1|Task 1.0.1: Pluggable PostgreSQL storage adapter|v1.0.0 - Enterprise Edition|type:feat,area:storage,status:ready|### What needs to be done?
-- Pluggable PostgreSQL storage adapter (\`internal/storage/postgres\`) implementing \`storage.Storage\`.
+    "Built-in PostgreSQL storage backend|Built-in PostgreSQL storage backend||type:feat,area:storage,status:ready|### What needs to be done?
+- [ ] Built-in PostgreSQL storage backend (\`internal/storage/postgres\`) implementing \`storage.Storage\`.
+- [ ] Pure-Go driver support preserving zero-CGO static compilation (\`CGO_ENABLED=0\`).
+- [ ] Database configuration switch (\`RELAY_DB_DRIVER=postgres\` or connection URL \`RELAY_DATABASE_URL\`), keeping SQLite as zero-config default.
 
 ### Why & Context
-Enterprise scalable persistence."
+Centralized scalable persistence."
 
-    "Task 1.0.2|Task 1.0.2: Multi-node worker clustering with leader election|v1.0.0 - Enterprise Edition|type:feat,area:engine,status:ready|### What needs to be done?
+    "Multi-node worker clustering with leader election|Multi-node worker clustering with leader election||type:feat,area:engine,status:ready|### What needs to be done?
 - Multi-node worker clustering with distributed leader election / advisory locks.
 
 ### Why & Context
 High throughput horizontal scaling."
 
-    "Task 1.0.3|Task 1.0.3: Enterprise SSO integration (OIDC, OAuth2, SAML)|v1.0.0 - Enterprise Edition|type:feat,area:security,status:ready|### What needs to be done?
-- Enterprise SSO integration (OIDC, OAuth2, SAML).
+    "Asymmetric Public-Key Webhook Verification|Asymmetric Public-Key Webhook Verification (Ed25519 & RSA-SHA256)||type:feat,area:security,status:ready|### What needs to be done?
+- [ ] Implement Ed25519 public-key signature verification adapter for webhooks (e.g., DocuSign, Standard Webhooks).
+- [ ] Implement RSA-SHA256 signature verification adapter with certificate validation (e.g., AWS SNS).
+- [ ] In-memory caching for public keys and X.509 certificates with TTL to eliminate network latency overhead.
+- [ ] Integrate into \`internal/signature\` package adhering to \`Verifier\` interface.
+- [ ] Route configuration support for public key or certificate trust settings.
 
 ### Why & Context
-Enterprise identity federation."
-
-    "Task 1.0.4|Task 1.0.4: Role-Based Access Control (RBAC) and audit logs|v1.0.0 - Enterprise Edition|type:feat,area:security,status:ready|### What needs to be done?
-- Role-Based Access Control (RBAC) and security audit logs.
-
-### Why & Context
-Multi-tenant security compliance."
+Asymmetric cryptographic verification."
 )
 
 echo "Total Labels:     ${#LABELS[@]}"

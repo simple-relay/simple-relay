@@ -56,7 +56,7 @@ To balance rich release notes with resilience against GitHub API rate limits (60
 ### 2.4 Privacy & Air-Gapped Environments
 - Self-hosted environments may run in private intranets or air-gapped networks where outbound traffic is blocked or audited.
 - Configuration flag: `RELAY_CHECK_UPDATES` (default: `true`). When set to `false`, the background worker is completely disabled and zero outbound HTTP requests are emitted.
-- Configurable upstream URL: `RELAY_UPDATE_REPO_URL` (default: `https://github.com/simple-relay/simple-relay`) allowing enterprise mirrors or private forks.
+- Configurable upstream URL: `RELAY_UPDATE_REPO_URL` (default: `https://github.com/simple-relay/simple-relay`) allowing internal mirrors or private forks.
 
 ### 2.5 In-Memory State & Caching
 - Store the latest check result in an in-memory struct protected by `sync.RWMutex`.
