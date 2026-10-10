@@ -79,4 +79,3 @@ type Storage interface {
 	Ping(ctx context.Context) error
 	Close() error
 }
-
