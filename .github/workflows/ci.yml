@@ -43,6 +43,7 @@ jobs:
           version: latest
           install-mode: goinstall
           args: --timeout=5m
+          verify: false
 
       - name: Run tests with race detector
         run: go test -v -race ./...
