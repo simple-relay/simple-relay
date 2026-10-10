@@ -107,13 +107,13 @@ func (r *RouteRepo) GetRouteByPath(ctx context.Context, path string) (*model.Rou
 	return r.scanRoute(r.db.Reader().QueryRowContext(ctx, query, path))
 }
 
-// ListRoutes returns all configured routes sorted by created_at from the reader pool.
+// ListRoutes returns all configured routes sorted by created_at descending from the reader pool.
 func (r *RouteRepo) ListRoutes(ctx context.Context) ([]*model.Route, error) {
 	query := `
 		SELECT id, name, type, mode, path, destination_url,
 		       signature_provider, signature_secret, max_attempts,
 		       timeout_ms, retry_backoff_strategy, created_at, updated_at
-		FROM routes ORDER BY created_at ASC;
+		FROM routes ORDER BY created_at DESC, id DESC;
 	`
 
 	rows, err := r.db.Reader().QueryContext(ctx, query)

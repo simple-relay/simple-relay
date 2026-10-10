@@ -140,6 +140,9 @@ func TestRouteRepo_CRUD(t *testing.T) {
 	if len(allRoutes) != 2 {
 		t.Fatalf("expected 2 routes, got %d", len(allRoutes))
 	}
+	if allRoutes[0].ID != route2.ID {
+		t.Fatalf("expected newest route %s at index 0, got %s", route2.ID, allRoutes[0].ID)
+	}
 
 	// 9. Delete
 	if err := repo.DeleteRoute(ctx, route.ID); err != nil {
