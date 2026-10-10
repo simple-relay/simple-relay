@@ -85,6 +85,17 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 	workerPool.Start(ctx)
 	defer workerPool.Close()
 
+	// Initialize storage retention cleaner
+	cleaner := engine.NewCleaner(db.RetentionRepo, engine.CleanerConfig{
+		Interval:             cfg.CleanerInterval,
+		RetentionSuccessDays: cfg.RetentionSuccessDays,
+		RetentionFailedDays:  cfg.RetentionFailedDays,
+		BatchSize:            1000,
+		VacuumPages:          1000,
+	}, logger)
+	cleaner.Start(ctx)
+	defer cleaner.Close()
+
 	handler := api.NewRouter(cfg, logger, api.RouterOptions{
 		RouteRepo:     db.RouteRepo,
 		RouteRegistry: registry,

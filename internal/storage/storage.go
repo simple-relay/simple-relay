@@ -56,12 +56,27 @@ type AttemptRepository interface {
 	ListAttemptsByRequestID(ctx context.Context, requestID string) ([]*model.Attempt, error)
 }
 
+// RetentionRepository defines maintenance operations for storage lifecycle management.
+// Designed as an adapter interface to support SQLite, PostgreSQL, and MySQL backends.
+type RetentionRepository interface {
+	// PruneExpiredRequests removes expired requests matching retention policies in bounded batches.
+	// It cascades deletion to related attempts and returns the total number of requests purged.
+	PruneExpiredRequests(ctx context.Context, successCutoff, failedCutoff time.Time, batchSize int) (int64, error)
+
+	// ReclaimStorage performs dialect-specific disk page reclamation.
+	// In SQLite, this executes PRAGMA incremental_vacuum.
+	// In PostgreSQL/MySQL, this is a no-op (managed by database daemon autovacuum).
+	ReclaimStorage(ctx context.Context, maxPages int) error
+}
+
 // Storage encapsulates the complete storage engine interface.
 type Storage interface {
 	RouteRepository
 	RequestRepository
 	AttemptRepository
+	RetentionRepository
 
 	Ping(ctx context.Context) error
 	Close() error
 }
+
