@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Relay — Dashboard</title>
+  <link rel="stylesheet" href="/ui/static/css/tailwind.min.css">
+  <script defer src="/ui/static/js/alpine.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .bg-gray-950 { background-color: #0b0f19 !important; }
+    .bg-green-950 { background-color: #052e16 !important; }
+    .bg-red-950 { background-color: #450a0a !important; }
+    .bg-yellow-950 { background-color: #422006 !important; }
+    .bg-purple-950 { background-color: #3b0764 !important; }
+    .drawer-container { width: 100vw; }
+    @media (min-width: 768px) {
+      .drawer-container { width: 66.666667vw !important; }
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen antialiased flex flex-col" x-data="relayApp()" x-init="init()" x-cloak>
+
+  <!-- Top Toast Notifications -->
+  <div class="fixed top-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none">
+    <template x-for="toast in toasts" :key="toast.id">
+      <div class="pointer-events-auto px-4 py-3 rounded-lg shadow-xl text-sm font-medium flex items-center space-x-2 transition-all duration-300 transform translate-y-0"
+           :class="{
+             'bg-green-600 text-white': toast.type === 'success',
+             'bg-red-600 text-white': toast.type === 'error',
+             'bg-yellow-600 text-white': toast.type === 'warn',
+             'bg-blue-600 text-white': toast.type === 'info'
+           }">
+        <span x-text="toast.message"></span>
+      </div>
+    </template>
+  </div>
+
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Sidebar Navigation -->
+    <aside class="w-64 bg-gray-950 border-r border-gray-800 flex flex-col flex-shrink-0">
+      <!-- Brand Header -->
+      <div class="h-16 flex items-center px-6 border-b border-gray-800 space-x-3">
+        <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-md">
+          ⚡
+        </div>
+        <div>
+          <div class="font-bold text-sm tracking-wide text-white">Simple Relay</div>
+          <div class="flex items-center space-x-1.5 text-xs text-green-400">
+            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            <span>Running</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
+        <button @click="setTab('routes')"
+                :class="currentTab === 'routes' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:bg-gray-800 hover:text-white'"
+                class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors">
+          <div class="flex items-center space-x-3">
+            <span>⚡</span>
+            <span>Routes</span>
+          </div>
+          <span class="px-2 py-0.5 text-xs rounded-full bg-gray-800 text-gray-300"
+                :class="currentTab === 'routes' ? 'bg-indigo-700 text-white' : ''"
+                x-text="routes.length">0</span>
+        </button>
+
+        <button @click="setTab('requests')"
+                :class="currentTab === 'requests' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:bg-gray-800 hover:text-white'"
+                class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors">
+          <div class="flex items-center space-x-3">
+            <span>📋</span>
+            <span>Requests Explorer</span>
+          </div>
+        </button>
+
+        <button @click="setTab('dlq')"
+                :class="currentTab === 'dlq' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:bg-gray-800 hover:text-white'"
+                class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors">
+          <div class="flex items-center space-x-3">
+            <span>💀</span>
+            <span>Dead Letter Queue</span>
+          </div>
+          <span class="px-2 py-0.5 text-xs rounded-full font-semibold"
+                :class="dlqTotal > 0 ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-800 text-gray-400'"
+                x-text="dlqTotal">0</span>
+        </button>
+      </nav>
+
+      <!-- Sidebar Footer -->
+      <div class="p-4 border-t border-gray-800 text-xs text-gray-500 flex justify-between items-center">
+        <span>v0.2.0 • Embedded UI</span>
+        <a href="/healthz" target="_blank" class="hover:text-gray-300 underline">healthz</a>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col bg-gray-900 overflow-y-auto">
+
+      <!-- ========================================== -->
+      <!-- TAB 1: ROUTES MANAGEMENT -->
+      <!-- ========================================== -->
+      <section x-show="currentTab === 'routes'" class="p-8 space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-bold text-white tracking-tight">Routes Management</h1>
+            <p class="text-sm text-gray-400 mt-1">Configure durable inbound webhook endpoints and outbound proxy destinations.</p>
+          </div>
+          <button @click="openCreateRouteModal()"
+                  class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center space-x-2 shadow transition">
+            <span>+</span>
+            <span>Create Route</span>
+          </button>
+        </div>
+
+        <!-- Routes Table -->
+        <div class="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden shadow">
+          <table class="min-w-full divide-y divide-gray-800 text-left text-sm">
+            <thead class="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider font-semibold">
+              <tr>
+                <th class="px-6 py-3.5">Name</th>
+                <th class="px-6 py-3.5">Type & Mode</th>
+                <th class="px-6 py-3.5">Path</th>
+                <th class="px-6 py-3.5">Destination URL</th>
+                <th class="px-6 py-3.5">Signature</th>
+                <th class="px-6 py-3.5">Retries / Timeout</th>
+                <th class="px-6 py-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800 text-gray-300">
+              <template x-for="r in routes" :key="r.id">
+                <tr class="hover:bg-gray-900 transition-colors">
+                  <td class="px-6 py-4 font-semibold text-white" x-text="r.name"></td>
+                  <td class="px-6 py-4 space-x-1">
+                    <span class="px-2 py-0.5 rounded text-xs font-medium uppercase"
+                          :class="r.type === 'inbound' ? 'bg-green-900 text-green-300 border border-green-700' : 'bg-blue-900 text-blue-300 border border-blue-700'"
+                          x-text="r.type"></span>
+                    <span class="px-1.5 py-0.5 rounded text-xs bg-gray-800 text-gray-400" x-text="r.mode"></span>
+                  </td>
+                  <td class="px-6 py-4 font-mono text-xs text-indigo-400" x-text="r.path"></td>
+                  <td class="px-6 py-4 font-mono text-xs text-gray-400 truncate max-w-xs" :title="r.destination_url" x-text="r.destination_url"></td>
+                  <td class="px-6 py-4 text-xs">
+                    <span class="px-2 py-0.5 rounded bg-gray-800 text-gray-300" x-text="r.signature_provider"></span>
+                  </td>
+                  <td class="px-6 py-4 text-xs text-gray-400">
+                    <span x-text="r.max_attempts + ' max'"></span> • <span x-text="(r.timeout_ms / 1000) + 's'"></span>
+                  </td>
+                  <td class="px-6 py-4 text-right space-x-2">
+                    <button @click="openEditRouteModal(r)" class="text-indigo-400 hover:text-indigo-300 text-xs font-medium">Edit</button>
+                    <button @click="confirmDeleteRoute(r)" class="text-red-400 hover:text-red-300 text-xs font-medium">Delete</button>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="routes.length === 0">
+                <td colspan="7" class="px-6 py-10 text-center text-gray-500">
+                  No routes configured yet. Click "Create Route" to register your first endpoint.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 2: REQUESTS EXPLORER -->
+      <!-- ========================================== -->
+      <section x-show="currentTab === 'requests'" class="p-8 space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-bold text-white tracking-tight">Requests Explorer</h1>
+            <p class="text-sm text-gray-400 mt-1">Audit request payloads, status lifecycle, and execution attempts in real-time.</p>
+          </div>
+          <button @click="fetchRequests()"
+                  class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3.5 py-2 rounded-lg text-sm font-medium flex items-center space-x-1.5 transition">
+            <span>⟳</span>
+            <span>Refresh</span>
+          </button>
+        </div>
+
+        <!-- Filter Toolbar -->
+        <div class="bg-gray-950 p-4 border border-gray-800 rounded-xl flex flex-wrap items-center gap-4 text-sm">
+          <div class="flex items-center space-x-2">
+            <label class="text-xs text-gray-400">Status:</label>
+            <select x-model="reqFilter.status" @change="fetchRequests(0)" class="bg-gray-900 border border-gray-700 text-white rounded-lg px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-indigo-500">
+              <option value="">All Statuses</option>
+              <option value="success">Success</option>
+              <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
+              <option value="failed">Failed</option>
+              <option value="dlq">DLQ</option>
+            </select>
+          </div>
+
+          <div class="flex items-center space-x-2">
+            <label class="text-xs text-gray-400">Route:</label>
+            <select x-model="reqFilter.routeId" @change="fetchRequests(0)" class="bg-gray-900 border border-gray-700 text-white rounded-lg px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-indigo-500">
+              <option value="">All Routes</option>
+              <template x-for="rt in routes" :key="rt.id">
+                <option :value="rt.id" x-text="rt.name"></option>
+              </template>
+            </select>
+          </div>
+
+          <div class="flex-1 min-w-[200px]">
+            <input type="text" x-model="reqFilter.search" @input.debounce.400ms="fetchRequests(0)"
+                   placeholder="Search Request ID prefix..."
+                   class="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-xs focus:ring-1 focus:ring-indigo-500">
+          </div>
+        </div>
+
+        <!-- Requests Table -->
+        <div class="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden shadow">
+          <table class="min-w-full divide-y divide-gray-800 text-left text-sm">
+            <thead class="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider font-semibold">
+              <tr>
+                <th class="px-6 py-3.5">Request ID</th>
+                <th class="px-6 py-3.5">Route</th>
+                <th class="px-6 py-3.5">Method</th>
+                <th class="px-6 py-3.5">Status</th>
+                <th class="px-6 py-3.5">Attempts</th>
+                <th class="px-6 py-3.5">Created At</th>
+                <th class="px-6 py-3.5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800 text-gray-300">
+              <template x-for="item in requests" :key="item.id">
+                <tr class="hover:bg-gray-900 transition-colors cursor-pointer" @click="openRequestDrawer(item.id)">
+                  <td class="px-6 py-4 font-mono text-xs text-indigo-400 flex items-center space-x-1.5">
+                    <span x-text="item.id"></span>
+                  </td>
+                  <td class="px-6 py-4 font-medium text-white" x-text="item.route_name || item.route_id"></td>
+                  <td class="px-6 py-4 font-mono text-xs font-bold" x-text="item.method"></td>
+                  <td class="px-6 py-4">
+                    <span class="px-2 py-0.5 rounded text-xs font-semibold uppercase"
+                          :class="{
+                            'bg-green-950 text-green-400 border border-green-800': item.status === 'success',
+                            'bg-yellow-950 text-yellow-400 border border-yellow-800': item.status === 'processing',
+                            'bg-gray-800 text-gray-400 border border-gray-700': item.status === 'pending',
+                            'bg-red-950 text-red-400 border border-red-800': item.status === 'failed',
+                            'bg-purple-950 text-purple-400 border border-purple-800': item.status === 'dlq'
+                          }"
+                          x-text="item.status"></span>
+                  </td>
+                  <td class="px-6 py-4 text-xs text-gray-400" x-text="item.attempts_count"></td>
+                  <td class="px-6 py-4 text-xs text-gray-400" x-text="formatDate(item.created_at)"></td>
+                  <td class="px-6 py-4 text-right">
+                    <button class="text-indigo-400 hover:text-indigo-300 text-xs font-medium">Inspect →</button>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="requests.length === 0">
+                <td colspan="7" class="px-6 py-10 text-center text-gray-500">
+                  No requests found matching your filter criteria.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Pagination Footer -->
+          <div class="px-6 py-4 bg-gray-900 border-t border-gray-800 flex items-center justify-between text-xs text-gray-400">
+            <div>
+              Showing <span class="text-white font-medium" x-text="reqOffset + 1"></span> to
+              <span class="text-white font-medium" x-text="Math.min(reqOffset + reqLimit, reqTotal)"></span> of
+              <span class="text-white font-medium" x-text="reqTotal"></span> requests
+            </div>
+            <div class="space-x-2">
+              <button @click="fetchRequests(reqOffset - reqLimit)" :disabled="reqOffset === 0"
+                      class="px-3 py-1.5 rounded bg-gray-800 hover:bg-gray-700 text-white disabled:opacity-40 disabled:cursor-not-allowed">
+                Previous
+              </button>
+              <button @click="fetchRequests(reqOffset + reqLimit)" :disabled="reqOffset + reqLimit >= reqTotal"
+                      class="px-3 py-1.5 rounded bg-gray-800 hover:bg-gray-700 text-white disabled:opacity-40 disabled:cursor-not-allowed">
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 3: DEAD LETTER QUEUE (DLQ) -->
+      <!-- ========================================== -->
+      <section x-show="currentTab === 'dlq'" class="p-8 space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-bold text-white tracking-tight">Dead Letter Queue (DLQ)</h1>
+            <p class="text-sm text-gray-400 mt-1">Inspect and replay failed webhooks that exhausted maximum retry limits.</p>
+          </div>
+          <div class="space-x-3">
+            <button @click="fetchDLQ()"
+                    class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3.5 py-2 rounded-lg text-sm font-medium transition">
+              <span>⟳ Refresh</span>
+            </button>
+            <button @click="triggerReplayAll()" :disabled="dlqItems.length === 0"
+                    class="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium text-sm shadow transition">
+              <span>⚡ Replay All DLQ</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- DLQ Alert Banner -->
+        <div class="p-4 rounded-xl border flex items-center justify-between text-sm"
+             :class="dlqTotal > 0 ? 'bg-red-950 border-red-800 text-red-200' : 'bg-gray-950 border-gray-800 text-gray-400'">
+          <div class="flex items-center space-x-3">
+            <span class="text-lg">💀</span>
+            <div>
+              <span class="font-bold text-white" x-text="dlqTotal"></span> request(s) currently dead-lettered.
+            </div>
+          </div>
+        </div>
+
+        <!-- DLQ Table -->
+        <div class="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden shadow">
+          <table class="min-w-full divide-y divide-gray-800 text-left text-sm">
+            <thead class="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider font-semibold">
+              <tr>
+                <th class="px-6 py-3.5">Request ID</th>
+                <th class="px-6 py-3.5">Route</th>
+                <th class="px-6 py-3.5">Last Error</th>
+                <th class="px-6 py-3.5">Attempts</th>
+                <th class="px-6 py-3.5">Created At</th>
+                <th class="px-6 py-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800 text-gray-300">
+              <template x-for="dlq in dlqItems" :key="dlq.id">
+                <tr class="hover:bg-gray-900 transition-colors">
+                  <td class="px-6 py-4 font-mono text-xs text-indigo-400" x-text="dlq.id"></td>
+                  <td class="px-6 py-4 font-medium text-white" x-text="dlq.route_name || dlq.route_id"></td>
+                  <td class="px-6 py-4 text-xs text-red-400 font-mono max-w-sm truncate" :title="dlq.last_error" x-text="dlq.last_error || 'Unknown failure'"></td>
+                  <td class="px-6 py-4 text-xs text-gray-400" x-text="dlq.attempts_count"></td>
+                  <td class="px-6 py-4 text-xs text-gray-400" x-text="formatDate(dlq.created_at)"></td>
+                  <td class="px-6 py-4 text-right space-x-2">
+                    <button @click="openRequestDrawer(dlq.id)" class="text-gray-400 hover:text-white text-xs">Inspect</button>
+                    <button @click="triggerReplaySingle(dlq.id)" class="text-indigo-400 hover:text-indigo-300 font-bold text-xs">Replay ↺</button>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="dlqItems.length === 0">
+                <td colspan="6" class="px-6 py-10 text-center text-gray-500">
+                  🎉 DLQ is completely empty! All webhooks successfully delivered.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- SLIDE-OVER OFF-CANVAS DETAIL DRAWER -->
+  <!-- ========================================== -->
+  <div x-show="drawerOpen" class="fixed inset-0 z-50 overflow-hidden" x-cloak>
+    <div class="absolute inset-0 bg-black bg-opacity-75 backdrop-blur-sm transition-opacity" @click="closeDrawer()"></div>
+    <div class="fixed inset-y-0 right-0 max-w-full flex drawer-container">
+      <div class="w-full bg-gray-900 border-l border-gray-800 flex flex-col shadow-2xl relative z-10" style="background-color: #0b0f19;">
+        
+        <!-- Drawer Header -->
+        <div class="px-6 py-5 bg-gray-900 border-b border-gray-800 flex items-center justify-between">
+          <div>
+            <div class="text-xs text-gray-400 uppercase font-semibold">Request Inspection</div>
+            <div class="font-mono text-sm text-indigo-400 font-bold mt-0.5" x-text="requestDetail ? requestDetail.id : 'Loading...'"></div>
+          </div>
+          <button @click="closeDrawer()" class="text-gray-400 hover:text-white text-lg font-bold p-1">✕</button>
+        </div>
+
+        <!-- Drawer Body -->
+        <div class="flex-1 p-6 overflow-y-auto space-y-6 text-sm" x-show="requestDetail">
+          
+          <!-- Key Metadata Grid (4 columns on desktop) -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 bg-gray-900 p-4 rounded-xl border border-gray-800 text-xs">
+            <div>
+              <span class="text-gray-500 block">HTTP Method & URL:</span>
+              <span class="font-mono font-bold text-white break-all" x-text="(requestDetail?.method || '') + ' ' + (requestDetail?.url || '')"></span>
+            </div>
+            <div>
+              <span class="text-gray-500 block">Status:</span>
+              <span class="font-bold uppercase"
+                    :class="{
+                      'text-green-400': requestDetail?.status === 'success',
+                      'text-red-400': requestDetail?.status === 'failed',
+                      'text-purple-400': requestDetail?.status === 'dlq',
+                      'text-yellow-400': requestDetail?.status === 'processing'
+                    }"
+                    x-text="requestDetail?.status"></span>
+            </div>
+            <div>
+              <span class="text-gray-500 block">Created Timestamp:</span>
+              <span class="text-gray-300 font-mono" x-text="requestDetail?.created_at"></span>
+            </div>
+            <div>
+              <span class="text-gray-500 block">Attempts Recorded:</span>
+              <span class="text-gray-300 font-bold" x-text="requestDetail?.attempts_count"></span>
+            </div>
+          </div>
+
+          <!-- Request Headers & Body: Side-by-Side 2-column layout -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Request Headers -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">Request Headers</h3>
+                <button @click="copy(JSON.stringify(requestDetail?.headers, null, 2))" class="text-xs text-indigo-400 hover:text-indigo-300">Copy Headers</button>
+              </div>
+              <pre class="bg-gray-900 p-3 rounded-lg border border-gray-800 text-xs text-gray-300 overflow-x-auto h-64 overflow-y-auto"
+                   x-text="JSON.stringify(requestDetail?.headers, null, 2)"></pre>
+            </div>
+
+            <!-- Request Raw Body -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">Request Body Payload</h3>
+                <button @click="copy(requestDetail?.body)" class="text-xs text-indigo-400 hover:text-indigo-300">Copy Body</button>
+              </div>
+              <pre class="bg-gray-900 p-3 rounded-lg border border-gray-800 text-xs text-gray-300 overflow-x-auto h-64 overflow-y-auto whitespace-pre-wrap"
+                   x-text="requestDetail?.body || '(Empty body)'"></pre>
+            </div>
+          </div>
+
+          <!-- Delivery Attempts Timeline -->
+          <div>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Delivery Attempts History</h3>
+            <div class="space-y-3">
+              <template x-for="att in requestDetail?.attempts || []" :key="att.id">
+                <div class="bg-gray-900 p-4 rounded-xl border border-gray-800 space-y-2 text-xs">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-white">Attempt #<span x-text="att.attempt_number"></span></span>
+                    <span class="px-2 py-0.5 rounded font-mono font-bold"
+                          :class="att.response_status_code >= 200 && att.response_status_code < 300 ? 'bg-green-950 text-green-400 border border-green-800' : 'bg-red-950 text-red-400 border border-red-800'"
+                          x-text="'HTTP ' + (att.response_status_code || 'ERR')"></span>
+                  </div>
+                  <div class="text-gray-400 flex items-center space-x-3">
+                    <span>Duration: <strong class="text-white" x-text="att.duration_ms + ' ms'"></strong></span>
+                    <span>Executed: <strong class="text-gray-300" x-text="att.executed_at"></strong></span>
+                  </div>
+                  <template x-if="att.error_message">
+                    <div class="text-red-400 bg-red-950 bg-opacity-40 p-2 rounded border border-red-900 font-mono">
+                      Error: <span x-text="att.error_message"></span>
+                    </div>
+                  </template>
+                  <template x-if="att.response_body">
+                    <div class="mt-2">
+                      <div class="text-gray-500 text-[10px] uppercase font-semibold mb-1">Response Body Preview (Max 32KB):</div>
+                      <pre class="bg-gray-950 p-2 rounded text-[11px] text-gray-300 overflow-x-auto max-h-40" x-text="att.response_body"></pre>
+                    </div>
+                  </template>
+                </div>
+              </template>
+              <div x-show="!requestDetail?.attempts || requestDetail.attempts.length === 0" class="text-gray-500 text-xs italic">
+                No delivery attempts executed yet.
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: CREATE / EDIT ROUTE -->
+  <!-- ========================================== -->
+  <div x-show="routeModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4" x-cloak>
+    <div class="fixed inset-0 bg-black bg-opacity-75 backdrop-blur-sm" @click="routeModalOpen = false"></div>
+    <div class="relative bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-xl p-6 shadow-2xl space-y-5 z-10" style="background-color: #0b0f19;">
+      <h2 class="text-lg font-bold text-white" x-text="isEditingRoute ? 'Edit Route' : 'Create New Route'"></h2>
+
+      <form @submit.prevent="saveRoute()" class="space-y-4 text-xs">
+        <div>
+          <label class="block text-gray-400 mb-1 font-medium">Route Name (Unique Slug)</label>
+          <input type="text" x-model="routeForm.name" @input="onRouteNameInput()" required placeholder="e.g. stripe-payments"
+                 class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white focus:ring-1 focus:ring-indigo-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div :class="routeForm.type === 'inbound' ? 'col-span-2' : ''">
+            <label class="block text-gray-400 mb-1 font-medium">Type</label>
+            <select x-model="routeForm.type" @change="onRouteTypeChange()" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white">
+              <option value="inbound">Inbound (Webhook)</option>
+              <option value="outbound">Outbound (Relay)</option>
+            </select>
+          </div>
+          <div x-show="routeForm.type === 'outbound'">
+            <label class="block text-gray-400 mb-1 font-medium">Mode</label>
+            <select x-model="routeForm.mode" @change="onRouteModeChange()" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white">
+              <option value="async">Async (Durable Jobs: /api/v1/jobs/...)</option>
+              <option value="sync">Sync (Direct Proxy: /api/v1/relay/...)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-gray-400 font-medium">HTTP Endpoint Path</label>
+            <span class="text-[10px] text-indigo-400 font-mono" x-text="routeForm.type === 'inbound' ? 'Inbound Ingestion' : (routeForm.mode === 'sync' ? 'Sync Relay Proxy' : 'Async Job Ingestion')"></span>
+          </div>
+          <input type="text" x-model="routeForm.path" required
+                 :placeholder="routeForm.type === 'inbound' ? '/api/v1/webhook/{name}' : (routeForm.mode === 'sync' ? '/api/v1/relay/{name}' : '/api/v1/jobs/{name}')"
+                 class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono">
+          <p class="text-[11px] text-gray-500 mt-1"
+             x-text="routeForm.type === 'inbound' ? 'External providers (Stripe, GitHub) send webhooks to this endpoint.' : 'Your internal backend services call this endpoint to proxy requests outward.'"></p>
+        </div>
+
+        <div>
+          <label class="block text-gray-400 mb-1 font-medium">Destination Target URL</label>
+          <input type="url" x-model="routeForm.destination_url" required
+                 :placeholder="routeForm.type === 'inbound' ? 'e.g. https://api.internal.corp/webhooks' : 'e.g. https://api.stripe.com/v1/charges'"
+                 class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono">
+          <p class="text-[11px] text-gray-500 mt-1"
+             x-text="routeForm.type === 'inbound' ? 'Target internal service where webhook payloads are forwarded.' : 'Target external upstream API.'"></p>
+        </div>
+
+        <!-- Signature Verification: ONLY for Inbound Webhooks -->
+        <div x-show="routeForm.type === 'inbound'" class="grid grid-cols-2 gap-3 p-3 bg-gray-950 rounded-xl border border-gray-800">
+          <div>
+            <label class="block text-gray-400 mb-1 font-medium">Signature Provider</label>
+            <select x-model="routeForm.signature_provider" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white">
+              <option value="none">None (No verification)</option>
+              <option value="stripe">Stripe</option>
+              <option value="github">GitHub</option>
+              <option value="hmac_sha256">Generic HMAC-SHA256</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-gray-400 mb-1 font-medium">Signature Secret</label>
+            <input type="text" x-model="routeForm.signature_secret" placeholder="Optional secret key"
+                   class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 mb-1 font-medium">Max Attempts</label>
+            <input type="number" x-model.number="routeForm.max_attempts" min="1" max="50" required
+                   class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white">
+          </div>
+          <div>
+            <label class="block text-gray-400 mb-1 font-medium">Timeout (ms)</label>
+            <input type="number" x-model.number="routeForm.timeout_ms" min="100" step="500" required
+                   class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white">
+          </div>
+        </div>
+
+        <div class="flex justify-end space-x-3 pt-4 border-t border-gray-800">
+          <button type="button" @click="routeModalOpen = false"
+                  class="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium">
+            Cancel
+          </button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow">
+            Save Route
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Client-side SPA Application Logic -->
+  <script>
+    function relayApp() {
+      return {
+        currentTab: 'routes',
+        toasts: [],
+        routes: [],
+        requests: [],
+        reqTotal: 0,
+        reqLimit: 50,
+        reqOffset: 0,
+        reqFilter: { status: '', routeId: '', search: '' },
+        dlqItems: [],
+        dlqTotal: 0,
+
+        // Modals & Drawers
+        routeModalOpen: false,
+        isEditingRoute: false,
+        routeForm: {},
+        drawerOpen: false,
+        requestDetail: null,
+
+        init() {
+          this.fetchRoutes();
+          this.fetchRequests(0);
+          this.fetchDLQ();
+        },
+
+        setTab(tab) {
+          this.currentTab = tab;
+          if (tab === 'routes') this.fetchRoutes();
+          if (tab === 'requests') this.fetchRequests(0);
+          if (tab === 'dlq') this.fetchDLQ();
+        },
+
+        showToast(type, message) {
+          const id = Date.now();
+          this.toasts.push({ id, type, message });
+          setTimeout(() => {
+            this.toasts = this.toasts.filter(t => t.id !== id);
+          }, 4000);
+        },
+
+        copy(text) {
+          if (!text) return;
+          navigator.clipboard.writeText(text);
+          this.showToast('info', 'Copied to clipboard!');
+        },
+
+        formatDate(ts) {
+          if (!ts) return '-';
+          const d = new Date(ts);
+          return isNaN(d.getTime()) ? ts : d.toLocaleString();
+        },
+
+        // --- Routes CRUD ---
+        async fetchRoutes() {
+          try {
+            const res = await fetch('/api/v1/routes');
+            if (res.ok) {
+              this.routes = await res.json();
+            }
+          } catch (e) {
+            this.showToast('error', 'Failed to fetch routes');
+          }
+        },
+
+        openCreateRouteModal() {
+          this.isEditingRoute = false;
+          this.routeForm = {
+            name: '',
+            type: 'inbound',
+            mode: 'async',
+            path: '/api/v1/webhook/',
+            destination_url: '',
+            signature_provider: 'none',
+            signature_secret: '',
+            max_attempts: 5,
+            timeout_ms: 10000,
+            retry_backoff_strategy: 'exp'
+          };
+          this.routeModalOpen = true;
+        },
+
+        onRouteTypeChange() {
+          if (this.routeForm.type === 'inbound') {
+            this.routeForm.mode = 'async';
+            this.routeForm.signature_provider = this.routeForm.signature_provider || 'none';
+          } else {
+            this.routeForm.signature_provider = 'none';
+            this.routeForm.signature_secret = '';
+            if (!this.routeForm.mode) this.routeForm.mode = 'async';
+          }
+          this.updateDefaultPath();
+        },
+
+        onRouteModeChange() {
+          this.updateDefaultPath();
+        },
+
+        onRouteNameInput() {
+          this.updateDefaultPath();
+        },
+
+        updateDefaultPath() {
+          const slug = (this.routeForm.name || '').trim();
+          if (this.routeForm.type === 'inbound') {
+            this.routeForm.path = slug ? `/api/v1/webhook/${slug}` : '/api/v1/webhook/';
+          } else {
+            if (this.routeForm.mode === 'sync') {
+              this.routeForm.path = slug ? `/api/v1/relay/${slug}` : '/api/v1/relay/';
+            } else {
+              this.routeForm.path = slug ? `/api/v1/jobs/${slug}` : '/api/v1/jobs/';
+            }
+          }
+        },
+
+        openEditRouteModal(r) {
+          this.isEditingRoute = true;
+          this.routeForm = JSON.parse(JSON.stringify(r));
+          this.routeModalOpen = true;
+        },
+
+        async saveRoute() {
+          try {
+            if (this.routeForm.type === 'inbound') {
+              this.routeForm.mode = 'async';
+            } else {
+              this.routeForm.signature_provider = 'none';
+              this.routeForm.signature_secret = '';
+            }
+
+            const method = this.isEditingRoute ? 'PUT' : 'POST';
+            const url = this.isEditingRoute ? `/api/v1/routes/${this.routeForm.id}` : '/api/v1/routes';
+            const res = await fetch(url, {
+              method,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.routeForm)
+            });
+
+            if (!res.ok) {
+              const errData = await res.json();
+              this.showToast('error', errData.error || 'Failed to save route');
+              return;
+            }
+
+            this.routeModalOpen = false;
+            this.showToast('success', this.isEditingRoute ? 'Route updated!' : 'Route created!');
+            this.fetchRoutes();
+          } catch (e) {
+            this.showToast('error', 'Network error saving route');
+          }
+        },
+
+        async confirmDeleteRoute(r) {
+          if (!confirm(`Are you sure you want to delete route "${r.name}"?`)) return;
+          try {
+            const res = await fetch(`/api/v1/routes/${r.id}`, { method: 'DELETE' });
+            if (res.ok) {
+              this.showToast('success', 'Route deleted');
+              this.fetchRoutes();
+            } else {
+              this.showToast('error', 'Failed to delete route');
+            }
+          } catch (e) {
+            this.showToast('error', 'Network error deleting route');
+          }
+        },
+
+        // --- Requests Explorer ---
+        async fetchRequests(offset = 0) {
+          this.reqOffset = Math.max(0, offset);
+          const params = new URLSearchParams({
+            limit: this.reqLimit,
+            offset: this.reqOffset
+          });
+          if (this.reqFilter.status) params.set('status', this.reqFilter.status);
+          if (this.reqFilter.routeId) params.set('route_id', this.reqFilter.routeId);
+          if (this.reqFilter.search) params.set('search', this.reqFilter.search);
+
+          try {
+            const res = await fetch(`/api/v1/requests?${params.toString()}`);
+            if (res.ok) {
+              const data = await res.json();
+              this.requests = data.items || [];
+              this.reqTotal = data.total || 0;
+            }
+          } catch (e) {
+            this.showToast('error', 'Failed to query requests');
+          }
+        },
+
+        async openRequestDrawer(id) {
+          this.requestDetail = null;
+          this.drawerOpen = true;
+          try {
+            const res = await fetch(`/api/v1/requests/${id}`);
+            if (res.ok) {
+              this.requestDetail = await res.json();
+            } else {
+              this.showToast('error', 'Failed to fetch request detail');
+            }
+          } catch (e) {
+            this.showToast('error', 'Network error fetching detail');
+          }
+        },
+
+        closeDrawer() {
+          this.drawerOpen = false;
+          this.requestDetail = null;
+        },
+
+        // --- DLQ Management ---
+        async fetchDLQ() {
+          try {
+            const res = await fetch('/api/v1/dlq?limit=50');
+            if (res.ok) {
+              const data = await res.json();
+              this.dlqItems = data.items || [];
+              this.dlqTotal = data.total || 0;
+            }
+          } catch (e) {
+            this.showToast('error', 'Failed to query DLQ');
+          }
+        },
+
+        async triggerReplaySingle(id) {
+          try {
+            const res = await fetch(`/api/v1/dlq/${id}/replay`, { method: 'POST' });
+            if (res.ok) {
+              this.showToast('success', `Replay triggered for ${id}!`);
+              this.fetchDLQ();
+              this.fetchRequests(0);
+            } else {
+              this.showToast('error', 'Failed to replay request');
+            }
+          } catch (e) {
+            this.showToast('error', 'Network error triggering replay');
+          }
+        },
+
+        async triggerReplayAll() {
+          if (!confirm(`Are you sure you want to replay all ${this.dlqTotal} dead-lettered requests?`)) return;
+          try {
+            const res = await fetch('/api/v1/dlq/replay-all', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ limit: 100 })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              this.showToast('success', `Replayed ${data.replayed_count} requests!`);
+              this.fetchDLQ();
+              this.fetchRequests(0);
+            } else {
+              this.showToast('error', 'Failed to batch replay DLQ');
+            }
+          } catch (e) {
+            this.showToast('error', 'Network error during bulk replay');
+          }
+        }
+
+      };
+    }
+  </script>
+</body>
+</html>

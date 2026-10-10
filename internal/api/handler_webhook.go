@@ -45,8 +45,11 @@ func NewWebhookHandler(
 
 		route, found := registry.GetByName(routeName)
 		if !found || route == nil {
-			writeJSONError(w, http.StatusNotFound, "route not found")
-			return
+			route, found = registry.GetByPath(r.URL.Path)
+			if !found || route == nil {
+				writeJSONError(w, http.StatusNotFound, "route not found")
+				return
+			}
 		}
 
 		if route.Type != model.RouteTypeInbound {

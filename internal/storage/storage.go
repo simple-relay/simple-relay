@@ -26,12 +26,22 @@ type RouteRepository interface {
 	DeleteRoute(ctx context.Context, id string) error
 }
 
+// RequestFilter defines criteria for querying requests.
+type RequestFilter struct {
+	Status  string // Optional: 'pending', 'processing', 'success', 'failed', 'dlq'
+	RouteID string // Optional: filter by specific route ID
+	Search  string // Optional: ID prefix search
+	Limit   int    // Default 50, maximum 100
+	Offset  int    // Pagination offset
+}
+
 // RequestRepository defines the storage operations for durable HTTP requests and jobs.
 type RequestRepository interface {
 	CreateRequest(ctx context.Context, req *model.Request) error
 	CreateRequestsBatch(ctx context.Context, reqs []*model.Request) error
 	GetRequestByID(ctx context.Context, id string) (*model.Request, error)
 	ListPendingRequests(ctx context.Context, limit int, dueBefore time.Time) ([]*model.Request, error)
+	ListRequests(ctx context.Context, filter RequestFilter) ([]*model.RequestMetadata, int64, error)
 	UpdateRequestStatus(ctx context.Context, id string, status model.RequestStatus, attemptsCount int, nextAttemptAt *time.Time, lastError *string) error
 	ClaimPendingRequests(ctx context.Context, limit int, dueBefore time.Time) ([]*model.Request, error)
 	RecoverStuckRequests(ctx context.Context, stuckBefore time.Time) (int64, error)

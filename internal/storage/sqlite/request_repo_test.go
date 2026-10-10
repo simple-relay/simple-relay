@@ -542,3 +542,136 @@ func TestRequestRepo_ReplayAllDLQRequests(t *testing.T) {
 	}
 }
 
+func TestRequestRepo_ListRequests(t *testing.T) {
+	db, routeRepo, reqRepo, route1 := setupTestDBWithRoute(t)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	// Create route2
+	route2 := &model.Route{
+		Name:                 "analytics-service",
+		Type:                 model.RouteTypeInbound,
+		Mode:                 model.RouteModeAsync,
+		Path:                 "/api/v1/webhook/analytics",
+		DestinationURL:       "https://api.analytics.internal/events",
+		MaxAttempts:          3,
+		TimeoutMS:            5000,
+		RetryBackoffStrategy: model.RetryStrategyLinear,
+	}
+	if err := routeRepo.CreateRoute(ctx, route2); err != nil {
+		t.Fatalf("failed to create route2: %v", err)
+	}
+
+	// Insert 3 requests for route1: 2 success, 1 dlq
+	req1 := &model.Request{
+		ID:      "req_01_success",
+		RouteID: route1.ID,
+		Method:  "POST",
+		URL:     "https://example.com/1",
+		Status:  model.RequestStatusSuccess,
+		Body:    []byte("heavy blob 1"),
+	}
+	req2 := &model.Request{
+		ID:      "req_02_success",
+		RouteID: route1.ID,
+		Method:  "POST",
+		URL:     "https://example.com/2",
+		Status:  model.RequestStatusSuccess,
+		Body:    []byte("heavy blob 2"),
+	}
+	req3 := &model.Request{
+		ID:      "req_03_dlq",
+		RouteID: route1.ID,
+		Method:  "POST",
+		URL:     "https://example.com/3",
+		Status:  model.RequestStatusDLQ,
+		Body:    []byte("heavy blob 3"),
+	}
+
+	// Insert 2 requests for route2: 1 pending, 1 failed
+	req4 := &model.Request{
+		ID:      "req_04_pending",
+		RouteID: route2.ID,
+		Method:  "POST",
+		URL:     "https://example.com/4",
+		Status:  model.RequestStatusPending,
+		Body:    []byte("heavy blob 4"),
+	}
+	req5 := &model.Request{
+		ID:      "req_05_failed",
+		RouteID: route2.ID,
+		Method:  "POST",
+		URL:     "https://example.com/5",
+		Status:  model.RequestStatusFailed,
+		Body:    []byte("heavy blob 5"),
+	}
+
+	for _, r := range []*model.Request{req1, req2, req3, req4, req5} {
+		if err := reqRepo.CreateRequest(ctx, r); err != nil {
+			t.Fatalf("failed to insert request %s: %v", r.ID, err)
+		}
+	}
+
+	// 1. List all requests
+	items, total, err := reqRepo.ListRequests(ctx, storage.RequestFilter{})
+	if err != nil {
+		t.Fatalf("ListRequests all failed: %v", err)
+	}
+	if total != 5 || len(items) != 5 {
+		t.Fatalf("expected total 5 and len 5, got total %d, len %d", total, len(items))
+	}
+	// Verify route name joined correctly
+	if items[0].RouteName == "" {
+		t.Errorf("expected RouteName to be populated, got empty")
+	}
+
+	// 2. Filter by Status = success
+	successItems, successTotal, err := reqRepo.ListRequests(ctx, storage.RequestFilter{
+		Status: "success",
+	})
+	if err != nil {
+		t.Fatalf("ListRequests status failed: %v", err)
+	}
+	if successTotal != 2 || len(successItems) != 2 {
+		t.Fatalf("expected total 2 success, got total %d, len %d", successTotal, len(successItems))
+	}
+
+	// 3. Filter by RouteID = route2
+	route2Items, route2Total, err := reqRepo.ListRequests(ctx, storage.RequestFilter{
+		RouteID: route2.ID,
+	})
+	if err != nil {
+		t.Fatalf("ListRequests route2 failed: %v", err)
+	}
+	if route2Total != 2 || len(route2Items) != 2 {
+		t.Fatalf("expected total 2 for route2, got total %d, len %d", route2Total, len(route2Items))
+	}
+
+	// 4. Search by ID prefix
+	searchItems, searchTotal, err := reqRepo.ListRequests(ctx, storage.RequestFilter{
+		Search: "req_03",
+	})
+	if err != nil {
+		t.Fatalf("ListRequests search failed: %v", err)
+	}
+	if searchTotal != 1 || len(searchItems) != 1 || searchItems[0].ID != "req_03_dlq" {
+		t.Fatalf("expected 1 search item req_03_dlq, got %v", searchItems)
+	}
+
+	// 5. Pagination (Limit 2, Offset 1)
+	pagedItems, pagedTotal, err := reqRepo.ListRequests(ctx, storage.RequestFilter{
+		Limit:  2,
+		Offset: 1,
+	})
+	if err != nil {
+		t.Fatalf("ListRequests pagination failed: %v", err)
+	}
+	if pagedTotal != 5 {
+		t.Fatalf("expected total 5 for paged query, got %d", pagedTotal)
+	}
+	if len(pagedItems) != 2 {
+		t.Fatalf("expected 2 paged items, got %d", len(pagedItems))
+	}
+}
+

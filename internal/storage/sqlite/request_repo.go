@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/simple-relay/simple-relay/internal/model"
@@ -593,5 +594,109 @@ func (r *RequestRepo) ReplayAllDLQRequests(ctx context.Context, routeID string, 
 	}
 
 	return ids, nil
+}
+
+// ListRequests queries requests matching filter criteria and returns lightweight metadata (excluding body BLOB).
+func (r *RequestRepo) ListRequests(ctx context.Context, filter storage.RequestFilter) ([]*model.RequestMetadata, int64, error) {
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	var conditions []string
+	var args []any
+
+	if filter.Status != "" {
+		conditions = append(conditions, "r.status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.RouteID != "" {
+		conditions = append(conditions, "r.route_id = ?")
+		args = append(args, filter.RouteID)
+	}
+	if filter.Search != "" {
+		conditions = append(conditions, "r.id LIKE ?")
+		args = append(args, filter.Search+"%")
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM requests r %s;", whereClause)
+	var total int64
+	if err := r.db.Reader().QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count requests: %w", err)
+	}
+
+	if total == 0 {
+		return []*model.RequestMetadata{}, 0, nil
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT r.id, r.route_id, COALESCE(routes.name, '') AS route_name,
+		       r.method, r.url, r.status, r.attempts_count,
+		       r.next_attempt_at, r.last_error, r.created_at, r.updated_at
+		FROM requests r
+		LEFT JOIN routes ON r.route_id = routes.id
+		%s
+		ORDER BY r.created_at DESC
+		LIMIT ? OFFSET ?;
+	`, whereClause)
+
+	queryArgs := append(append([]any{}, args...), filter.Limit, filter.Offset)
+
+	rows, err := r.db.Reader().QueryContext(ctx, selectQuery, queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query requests: %w", err)
+	}
+	defer rows.Close()
+
+	results := make([]*model.RequestMetadata, 0, filter.Limit)
+	for rows.Next() {
+		var item model.RequestMetadata
+		var statusStr string
+		var nextAttemptAt sql.NullTime
+		var lastError sql.NullString
+
+		err := rows.Scan(
+			&item.ID,
+			&item.RouteID,
+			&item.RouteName,
+			&item.Method,
+			&item.URL,
+			&statusStr,
+			&item.AttemptsCount,
+			&nextAttemptAt,
+			&lastError,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan request metadata: %w", err)
+		}
+
+		item.Status = model.RequestStatus(statusStr)
+		if nextAttemptAt.Valid {
+			item.NextAttemptAt = &nextAttemptAt.Time
+		}
+		if lastError.Valid {
+			item.LastError = &lastError.String
+		}
+
+		results = append(results, &item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("rows iteration error in requests: %w", err)
+	}
+
+	return results, total, nil
 }
 

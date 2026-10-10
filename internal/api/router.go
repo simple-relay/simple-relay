@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"time"
@@ -9,10 +10,12 @@ import (
 	"github.com/simple-relay/simple-relay/internal/config"
 	"github.com/simple-relay/simple-relay/internal/engine"
 	"github.com/simple-relay/simple-relay/internal/storage"
+	"github.com/simple-relay/simple-relay/ui"
 )
 
 // RouterOptions specifies optional subsystem dependencies for the router.
 type RouterOptions struct {
+	RouteRepo     storage.RouteRepository
 	RouteRegistry *engine.RouteRegistry
 	RelayEngine   *engine.RelayEngine
 	BatchWriter   *engine.BatchWriter
@@ -39,8 +42,36 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 		})
 	})
 
+	// Mount embedded Web UI static assets and SPA HTML shell
+	staticSub, err := fs.Sub(ui.FS, "static")
+	if err == nil {
+		mux.Handle("GET /ui/static/", http.StripPrefix("/ui/static/", http.FileServerFS(staticSub)))
+	}
+
+	uiHandler := func(w http.ResponseWriter, r *http.Request) {
+		indexHTML, err := ui.FS.ReadFile("index.html")
+		if err != nil {
+			http.Error(w, "embedded UI index.html not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(indexHTML)
+	}
+	mux.HandleFunc("GET /{$}", uiHandler)
+	mux.HandleFunc("GET /ui", uiHandler)
+	mux.HandleFunc("GET /ui/", uiHandler)
+
 	if len(opts) > 0 {
 		opt := opts[0]
+		if opt.RouteRepo != nil {
+			routesHandler := NewRoutesHandler(opt.RouteRepo, opt.RouteRegistry, logger)
+			mux.HandleFunc("GET /api/v1/routes", routesHandler.ListRoutes)
+			mux.HandleFunc("POST /api/v1/routes", routesHandler.CreateRoute)
+			mux.HandleFunc("GET /api/v1/routes/{id}", routesHandler.GetRoute)
+			mux.HandleFunc("PUT /api/v1/routes/{id}", routesHandler.UpdateRoute)
+			mux.HandleFunc("DELETE /api/v1/routes/{id}", routesHandler.DeleteRoute)
+		}
 		if opt.RouteRegistry != nil && opt.RelayEngine != nil {
 			relayHandler := NewRelayHandler(opt.RouteRegistry, opt.RelayEngine, logger, opt.MaxBodyBytes)
 			mux.HandleFunc("/api/v1/relay/{route_name}", relayHandler)
@@ -57,6 +88,10 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 			mux.HandleFunc("GET /api/v1/jobs/{job_id}", inspectHandler)
 		}
 		if opt.RequestRepo != nil {
+			requestsHandler := NewRequestsHandler(opt.RequestRepo, opt.AttemptRepo, logger)
+			mux.HandleFunc("GET /api/v1/requests", requestsHandler.ListRequests)
+			mux.HandleFunc("GET /api/v1/requests/{id}", requestsHandler.GetRequest)
+
 			dlqHandler := NewDLQHandler(opt.RequestRepo, opt.RouteRegistry, opt.WakeFn, logger)
 			mux.HandleFunc("GET /api/v1/dlq", dlqHandler.ListDLQ)
 			mux.HandleFunc("POST /api/v1/dlq/{request_id}/replay", dlqHandler.ReplaySingle)
