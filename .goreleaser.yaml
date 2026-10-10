@@ -82,5 +82,8 @@ docker_manifests:
       - "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:latest-amd64"
       - "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:latest-arm64"
 
+changelog:
+  disable: true
+
 release:
   mode: append
