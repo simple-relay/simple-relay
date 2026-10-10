@@ -53,17 +53,22 @@
 
 ## 6. Source Control & Git Policy
 - **Prompt After Code Changes:** After completing a request that involves code changes, ask the user if they would like to commit the changes.
-- **Issue Branches & Pull Requests:** If the thread/task is associated with a remote repository issue, check out a new branch before committing, and create a pull request after pushing.
+- **Issue Branches:** Always check out a dedicated feature branch named `feat/<issue-id>-<short-description>` (or `fix/...`) before writing code or committing.
+- **Pull Request Conventions:**
+  - **PR Title:** Follow Conventional Commits: `<type>(<scope>): <summary>` (e.g., `feat(security): implement stripe signature adapter (#9)`).
+  - **PR Description:** MUST explicitly link the target issue using GitHub closing keywords: `Fixes #<issue-id>` or `Closes #<issue-id>`.
+  - **Verification Checklist:** State passing test commands (`go test -race ./...` and `CGO_ENABLED=0 go build`).
+- **Roadmap Synchronization:** When completing a roadmap task, the PR MUST check the box (`- [x]`) in `docs/roadmap.md` while keeping the issue link `([#ID](...))` intact.
 - **User Confirmation:** Only execute state-changing git commands (`git add`, `git commit`, `git push`, `git checkout`, etc.) when instructed or explicitly confirmed by the user.
 
 ---
 
 ## 7. How to Start a Task
-1. Review relevant specifications in [architecture.md](docs/architecture.md) and [roadmap.md](docs/roadmap.md).
+1. Review relevant specifications in [architecture.md](docs/architecture.md) and identify the target task and linked GitHub Issue `[#<id>]` in [roadmap.md](docs/roadmap.md).
 2. Propose a **Surgical Plan** with clear verification steps.
-3. Execute only after plan approval.
-4. Verify with `go test -race ./...`.
-5. Summarize changes and update project documentation (`docs/roadmap.md`, `docs/architecture.md`) if architecture or milestones change.
+3. Execute only after plan approval on branch `feat/<issue-id>-<task-name>`.
+4. Verify with `go test -race ./...` and static build `CGO_ENABLED=0 go build -o /dev/null ./cmd/relay`.
+5. Summarize changes, tick the completed checkbox (`- [x]`) in `docs/roadmap.md`, and open a Pull Request linking `Fixes #<id>`.
 
 ---
 
