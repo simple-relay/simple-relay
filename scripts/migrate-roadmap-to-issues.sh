@@ -255,6 +255,8 @@ fi
 
 # Apply Mode
 echo "Applying changes via gh CLI..."
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo "simple-relay/simple-relay")
+
 for item in "${LABELS[@]}"; do
     IFS="|" read -r name color desc <<< "$item"
     echo "Creating/updating label: $name"
@@ -264,18 +266,24 @@ done
 for item in "${MILESTONES[@]}"; do
     IFS="|" read -r title desc <<< "$item"
     echo "Creating milestone: $title"
-    gh milestone create --title "$title" --description "$desc" 2>/dev/null || true
+    gh api "repos/${REPO}/milestones" -f title="$title" -f description="$desc" 2>/dev/null || true
 done
 
 for item in "${TASKS[@]}"; do
     IFS="|" read -r task_id title milestone labels body <<< "$item"
     echo "Creating issue: $title"
-    ISSUE_URL=$(gh issue create --title "$title" --milestone "$milestone" --label "$labels" --body "$body" 2>/dev/null || echo "")
+    LABEL_ARGS=()
+    IFS=',' read -ra SPLIT_LABELS <<< "$labels"
+    for lbl in "${SPLIT_LABELS[@]}"; do
+        LABEL_ARGS+=(--label "$lbl")
+    done
+    ISSUE_URL=$(gh issue create --title "$title" --milestone "$milestone" "${LABEL_ARGS[@]}" --body "$body" 2>/dev/null || echo "")
     echo "Created: $ISSUE_URL"
     
     if [[ "$UPDATE_ROADMAP" == "true" && -n "$ISSUE_URL" ]]; then
-        # Example: Replace "**Task 2.1.2: ..." with "**Task 2.1.2: ...** ([#XX](url))"
-        sed -i "s|\(\*\*${task_id}:[^*]*\*\*\)|\1 ([#${ISSUE_URL##*/}](${ISSUE_URL}))|" "$ROADMAP_FILE"
+        ISSUE_NUM="${ISSUE_URL##*/}"
+        # Inject link into roadmap file after the bold task title
+        sed -i "s|\(\*\*${task_id}:[^*]*\*\*\)|\1 ([#${ISSUE_NUM}](${ISSUE_URL}))|" "$ROADMAP_FILE"
     fi
 done
 
