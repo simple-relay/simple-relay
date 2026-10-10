@@ -1,8 +1,13 @@
-.PHONY: build test race run clean tidy fmt check-fmt check-tidy lint check help
+.PHONY: build test race run debug debug-dlv clean tidy fmt check-fmt check-tidy lint check help
 
 BINARY_NAME=relay
 BIN_DIR=bin
 MAIN_SRC=./cmd/relay
+
+# Runtime configuration defaults (override via: make debug PORT=8080 DB=test.db)
+PORT ?= 8088
+DB ?= relay.db
+LOG_LEVEL ?= debug
 
 help: ## Show list of available make targets
 	@echo "Available targets:"
@@ -36,7 +41,13 @@ race: ## Run test suites with data race detector
 check: check-tidy check-fmt lint race build ## Run all quality checks locally before opening a PR
 
 run: ## Run relay service directly
-	go run $(MAIN_SRC)
+	go run $(MAIN_SRC) -port $(PORT) -db $(DB)
+
+debug: ## Run relay service in debug mode (log-level=debug, configurable via PORT/DB)
+	go run $(MAIN_SRC) -port $(PORT) -db $(DB) -log-level $(LOG_LEVEL)
+
+debug-dlv: ## Run relay service under Delve debugger on :2345 (headless)
+	dlv debug $(MAIN_SRC) --headless --listen=:2345 --api-version=2 --accept-multiclient -- -port $(PORT) -db $(DB) -log-level $(LOG_LEVEL)
 
 clean: ## Clean build artifacts, test coverages, and local databases
 	rm -rf $(BIN_DIR) coverage.out coverage.html *.db *.db-shm *.db-wal
