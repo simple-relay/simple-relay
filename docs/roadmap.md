@@ -26,7 +26,7 @@
 
 * **Phase 1 — Outbound Relay & Core Storage Engine:** Build the foundational single-writer SQLite storage engine (WAL mode), route configuration handling with in-memory caching and hot-reloading, synchronous outbound HTTP proxy with client-disconnect context cancellation, durable asynchronous job ingestion, and background worker delivery pool.
 * **Phase 2 — Inbound Webhooks & Security Pipeline:** Establish durable inbound webhook ingestion with raw-byte cryptographic preservation, HMAC signature adapters (Stripe, GitHub, Generic HMAC-SHA256), burst-protective micro-batch persistence, DLQ state machine, and replay APIs.
-* **Phase 3 — Embedded Web UI & Lifecycle Maintenance:** Deliver embedded zero-dependency Web UI (`go:embed`, Alpine.js, Tailwind CSS), admin authentication with CSRF protection, scheduled retention pruning with incremental SQLite vacuuming, versioned database schema migration engine (`schema_migrations`), Litestream replication guide, automated multi-platform release pipeline (release-please + GoReleaser), and in-app upstream version update checker.
+* **Phase 3 — Embedded Web UI & Lifecycle Maintenance:** Deliver embedded zero-dependency Web UI (`go:embed`, Alpine.js, Tailwind CSS), dynamic URL navigation and deep-linking, admin authentication with CSRF protection, scheduled retention pruning with incremental SQLite vacuuming, versioned database schema migration engine (`schema_migrations`), Litestream replication guide, automated multi-platform release pipeline (release-please + GoReleaser), and in-app upstream version update checker.
 * **Phase 4 — CLI, Observability & Alerting:** Provide CLI inspection binary, Slack/Discord/Email alerting on DLQ threshold breaches, API key management, Prometheus metrics (`/metrics`), and extended signature verification adapters.
 * **Phase 5 — Multi-node Clustering & Advanced Features:** Add built-in PostgreSQL storage backend, distributed multi-node worker clustering, and asymmetric public-key webhook verification.
 
@@ -156,6 +156,10 @@
 - [x] **DLQ Dashboard & Replay Action** ([#13](https://github.com/simple-relay/simple-relay/issues/13))
   - Dedicated view for failed/DLQ events.
   - One-click individual replay and bulk replay buttons.
+- [ ] **Dynamic URL Navigation & Deep Linking for Dashboard** ([#49](https://github.com/simple-relay/simple-relay/issues/49))
+  - Synchronize active dashboard tab state (`routes`, `requests`, `dlq`) with browser URL hash/history.
+  - Support deep-linking and browser back/forward navigation for request inspector drawer (`#requests?inspect=<ulid>`).
+  - Native browser event handling (`hashchange` / `popstate`) with zero external frontend routing dependencies.
 - [ ] **Admin Password Authentication & CSRF Protection** ([#14](https://github.com/simple-relay/simple-relay/issues/14))
   - Protect UI routes with session cookie authenticated against `RELAY_ADMIN_PASSWORD`.
   - CSRF token validation on all state-mutating requests (Route CRUD, Replay, Purge).
