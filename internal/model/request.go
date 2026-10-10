@@ -32,6 +32,21 @@ type Request struct {
 	UpdatedAt     time.Time         `json:"updated_at"`
 }
 
+// RequestMetadata contains high-level request information without heavy payload BLOBs.
+type RequestMetadata struct {
+	ID            string        `json:"id"`
+	RouteID       string        `json:"route_id"`
+	RouteName     string        `json:"route_name,omitempty"`
+	Method        string        `json:"method"`
+	URL           string        `json:"url"`
+	Status        RequestStatus `json:"status"`
+	AttemptsCount int           `json:"attempts_count"`
+	NextAttemptAt *time.Time    `json:"next_attempt_at,omitempty"`
+	LastError     *string       `json:"last_error,omitempty"`
+	CreatedAt     time.Time     `json:"created_at"`
+	UpdatedAt     time.Time     `json:"updated_at"`
+}
+
 var (
 	ErrRequestIDRequired      = errors.New("request id is required")
 	ErrRequestRouteIDRequired = errors.New("route_id is required")

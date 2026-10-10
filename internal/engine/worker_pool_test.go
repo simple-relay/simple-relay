@@ -102,6 +102,9 @@ func (m *mockWorkerRepo) RecoverStuckRequests(ctx context.Context, stuckBefore t
 func (m *mockWorkerRepo) ListDLQRequests(ctx context.Context, routeID string, limit, offset int) ([]*model.Request, int64, error) {
 	return nil, 0, nil
 }
+func (m *mockWorkerRepo) ListRequests(ctx context.Context, filter storage.RequestFilter) ([]*model.RequestMetadata, int64, error) {
+	return nil, 0, nil
+}
 func (m *mockWorkerRepo) ReplayDLQRequest(ctx context.Context, id string) (*model.Request, error) {
 	return nil, nil
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/simple-relay/simple-relay/internal/model"
+	"github.com/simple-relay/simple-relay/internal/storage"
 )
 
 type mockRequestRepo struct {
@@ -57,6 +58,10 @@ func (m *mockRequestRepo) RecoverStuckRequests(ctx context.Context, stuckBefore 
 }
 
 func (m *mockRequestRepo) ListDLQRequests(ctx context.Context, routeID string, limit, offset int) ([]*model.Request, int64, error) {
+	return nil, 0, nil
+}
+
+func (m *mockRequestRepo) ListRequests(ctx context.Context, filter storage.RequestFilter) ([]*model.RequestMetadata, int64, error) {
 	return nil, 0, nil
 }
 

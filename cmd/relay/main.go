@@ -86,6 +86,7 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 	defer workerPool.Close()
 
 	handler := api.NewRouter(cfg, logger, api.RouterOptions{
+		RouteRepo:     db.RouteRepo,
 		RouteRegistry: registry,
 		RelayEngine:   relayEngine,
 		BatchWriter:   batchWriter,

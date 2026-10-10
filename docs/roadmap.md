@@ -12,13 +12,13 @@
 | :--- | :--- | :--- | :--- |
 | **Phase 1** | Outbound Relay & Core Storage Engine | **Completed** | 100% Completed |
 | **Phase 2** | Inbound Webhooks & Security Pipeline | **Completed** | 100% Completed |
-| **Phase 3** | Embedded Web UI & Storage Retention | Planned | 0% |
+| **Phase 3** | Embedded Web UI & Storage Retention | **In Progress** | 40% Completed |
 | **v0.3** | CLI, Observability & Alerting | Backlog | 0% |
 | **v1.0** | Enterprise Clustering & PostgreSQL | Backlog | 0% |
 
 ### Active Execution Pointer
-- **Current Milestone:** Phase 3 — Milestone 3.1: Embedded Dashboard Web UI
-- **Next Immediate Task:** `Task 3.1.1` — Embedded Assets & Base Layout (`ui/`).
+- **Current Milestone:** Phase 3 — Milestone 3.2: Security & Storage Maintenance
+- **Next Immediate Task:** `Task 3.2.1` — Admin Password Authentication & CSRF Protection.
 
 ---
 
@@ -152,17 +152,17 @@
 ### Phase 3 — Embedded UI & System Lifecycle
 
 #### Milestone 3.1: Embedded Dashboard Web UI
-- [ ] **Task 3.1.1: Embedded Assets & Base Layout (`ui/`)**
+- [x] **Task 3.1.1: Embedded Assets & Base Layout (`ui/`)**
   - Embed HTML templates and static assets using `go:embed`.
   - Zero Node.js build pipeline: Alpine.js + Tailwind CSS.
-- [ ] **Task 3.1.2: Routes Management UI**
+- [x] **Task 3.1.2: Routes Management UI**
   - View all active routes (inbound & outbound).
   - Create, edit, and delete routes via UI modal.
   - Instant hot-reloading verification in UI.
-- [ ] **Task 3.1.3: Requests & Attempts Explorer**
+- [x] **Task 3.1.3: Requests & Attempts Explorer**
   - Filterable requests table: search by ID, status (`pending`, `success`, `dlq`), route name, date range.
   - Slide-over detail drawer: inspect request headers, raw body, attempt status codes, duration, and error logs.
-- [ ] **Task 3.1.4: DLQ Dashboard & Replay Action**
+- [x] **Task 3.1.4: DLQ Dashboard & Replay Action**
   - Dedicated view for failed/DLQ events.
   - One-click individual replay and bulk replay buttons.
 
