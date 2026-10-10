@@ -38,7 +38,7 @@ internal/storage/migrations/
 │   ├── 000001_initial_schema.sql
 │   ├── 000002_add_index_optimizations.sql
 │   └── embed.go
-└── postgres/       # Reserved for Milestone 1.0 (Enterprise)
+└── postgres/       # Reserved for Milestone 1.0 (PostgreSQL support)
 ```
 
 In `embed.go`:

@@ -11,7 +11,7 @@ The system is designed with extreme minimalism to optimize operational costs and
 * **Core Language:** Go (Golang) — provides high performance, low memory footprint, and static binary compilation without external runtime dependencies.
 * **Database & Storage Adapter:** Embedded **SQLite** is the default database to maintain the "zero-config, single binary" philosophy.
   * **Concurrency Configuration:** Configured in **WAL (Write-Ahead Logging)** mode with dedicated connection separation: **1 dedicated Writer connection (`SetMaxOpenConns(1)`)** and a pooled set of Reader connections with `busy_timeout = 5000ms`.
-  * **Storage Architecture:** Built using **Storage Interfaces (Adapter / Repository Pattern)**, completely decoupling business logic from SQLite. This enables future plug-ins for PostgreSQL or MySQL when horizontal scale is required.
+  * **Storage Architecture:** Built using **Storage Interfaces (Adapter / Repository Pattern)**, completely decoupling business logic from SQLite. This enables built-in storage backends for PostgreSQL or MySQL (with SQLite remaining the zero-config default) without altering business logic.
   * **Disaster Recovery / Replication:** Supports native integration with **Litestream** for zero-downtime, continuous streaming replication to S3/Cloud Storage, eliminating the single point of failure (SPOF) of single-node SQLite.
 * **Packaging & Deployment:**
   * Distributed primarily as a **Single binary** containing the backend engine and embedded frontend UI.

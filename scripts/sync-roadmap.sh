@@ -74,11 +74,11 @@ trap 'rm -f "$TEMP_FILE"' EXIT
 CHANGES_COUNT=0
 
 # Process line by line and update task status if issue link exists
-# Pattern looks for: - [ ] **Task ...** ([#<id>]...) or - [x] **Task ...** ([#<id>]...)
+# Pattern looks for: - [ ] **...** ([#<id>]...) or - [x] **...** ([#<id>]...)
 while IFS= read -r line || [[ -n "$line" ]]; do
     UPDATED_LINE="$line"
 
-    if [[ "$line" =~ ^([[:space:]]*-[[:space:]]\[)([[:space:]xX])(\][[:space:]]\*\*Task[^*]+\*\*.*\[#([0-9]+)\]) ]]; then
+    if [[ "$line" =~ ^([[:space:]]*-[[:space:]]\[)([[:space:]xX])(\][[:space:]]\*\*[^*]+\*\*.*\[#([0-9]+)\]) ]]; then
         PREFIX="${BASH_REMATCH[1]}"
         CURRENT_MARK="${BASH_REMATCH[2]}"
         REST="${BASH_REMATCH[3]}"
@@ -107,12 +107,16 @@ calc_phase_progress() {
     local end_pattern="$2"
 
     local section
-    section=$(sed -n "/$start_pattern/,/$end_pattern/p" "$TEMP_FILE")
+    if [[ "$end_pattern" == "$" || -z "$end_pattern" ]]; then
+        section=$(sed -n "/$start_pattern/,\$p" "$TEMP_FILE")
+    else
+        section=$(sed -n "/$start_pattern/,/$end_pattern/p" "$TEMP_FILE")
+    fi
 
     local total
-    total=$(echo "$section" | grep -c '^[[:space:]]*-[[:space:]]\[[[:space:]xX]\][[:space:]]\*\*Task' || true)
+    total=$(echo "$section" | grep -c '^[[:space:]]*-[[:space:]]\[[[:space:]xX]\][[:space:]]\*\*' || true)
     local done_count
-    done_count=$(echo "$section" | grep -c '^[[:space:]]*-[[:space:]]\[[xX]\][[:space:]]\*\*Task' || true)
+    done_count=$(echo "$section" | grep -c '^[[:space:]]*-[[:space:]]\[[xX]\][[:space:]]\*\*' || true)
 
     if [[ $total -eq 0 ]]; then
         echo "0% (0/0)"
@@ -124,16 +128,16 @@ calc_phase_progress() {
 
 P1_STAT=$(calc_phase_progress "### Phase 1" "### Phase 2")
 P2_STAT=$(calc_phase_progress "### Phase 2" "### Phase 3")
-P3_STAT=$(calc_phase_progress "### Phase 3" "### v0.3")
-V03_STAT=$(calc_phase_progress "### v0.3" "### v1.0")
-V10_STAT=$(calc_phase_progress "### v1.0" "$")
+P3_STAT=$(calc_phase_progress "### Phase 3" "### Phase 4")
+P4_STAT=$(calc_phase_progress "### Phase 4" "### Phase 5")
+P5_STAT=$(calc_phase_progress "### Phase 5" "$")
 
 echo "Phase Progress Summary:"
 echo "  Phase 1: $P1_STAT"
 echo "  Phase 2: $P2_STAT"
 echo "  Phase 3: $P3_STAT"
-echo "  v0.3:    $V03_STAT"
-echo "  v1.0:    $V10_STAT"
+echo "  Phase 4: $P4_STAT"
+echo "  Phase 5: $P5_STAT"
 
 if [[ "$DRY_RUN" == "true" ]]; then
     echo "Dry-run mode: $CHANGES_COUNT task checkbox updates detected. No changes written to $ROADMAP_FILE."
