@@ -1,6 +1,6 @@
-# Contributing to Simple HTTP Relay
+# Contributing to Simple Relay
 
-Thank you for your interest in contributing to **Simple HTTP Relay**!  
+Thank you for your interest in contributing to **Simple Relay**!  
 We welcome contributions ranging from bug fixes and documentation improvements to new features outlined in our roadmap.
 
 ---

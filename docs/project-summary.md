@@ -1,4 +1,4 @@
-# Simple HTTP Relay — Project Summary
+# Simple Relay — Project Summary
 
 > **One binary. No infrastructure. Reliable HTTP delivery.**
 
@@ -6,7 +6,7 @@
 
 ## 1. Project Overview
 
-**Simple HTTP Relay** is a small, self-hosted HTTP reliability layer.
+**Simple Relay** is a small, self-hosted HTTP reliability layer.
 
 Its core job is simple:
 
@@ -39,7 +39,7 @@ Third-party (e.g. Stripe, GitHub)
     │
     │ HTTP POST (with HMAC signature)
     ▼
-Simple HTTP Relay
+Simple Relay
     │
     ├── Verify raw HMAC signature (Stripe, GitHub, Generic)
     ├── Buffer to Single-Writer Batch Queue
@@ -79,7 +79,7 @@ An internal application calls external HTTP APIs (e.g., Stripe, LINE, CRM, inter
 #### 1. Sync Proxy Mode (with Client Abort Handling)
 
 ```text
-My Application ──────► Simple HTTP Relay ──────► External API
+My Application ──────► Simple Relay ──────► External API
   (HTTP open)            (Sync retry loop)       (429 / 5xx / Timeout)
 ```
 
@@ -96,7 +96,7 @@ My Application
     │
     │ POST /api/v1/jobs/{route}
     ▼
-Simple HTTP Relay
+Simple Relay
     │
     ├── Persist job to SQLite
     └── Return 202 Accepted + job_id immediately
@@ -118,7 +118,7 @@ External Destination API
 Both inbound and outbound modes share the same reliability primitives:
 
 ```text
-                    SIMPLE HTTP RELAY
+                    SIMPLE RELAY
                             │
                  ┌──────────┴──────────┐
                  │                     │

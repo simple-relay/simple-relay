@@ -12,7 +12,7 @@
 ## 1. Executive Summary & Goals
 
 ### 1.1 Objective
-Implement Phase 1 Milestone 1.2 for Simple HTTP Relay: a robust, low-latency, zero-dependency synchronous HTTP proxy layer at `/api/v1/relay/{route_name}`. The system executes outbound HTTP requests against target destination URLs with automatic bounded retries, Full Jitter exponential backoff, rate-limit awareness (`Retry-After`), immediate client-disconnect cancellation, and complete SQLite audit persistence adhering to foreign key relationships.
+Implement Phase 1 Milestone 1.2 for Simple Relay: a robust, low-latency, zero-dependency synchronous HTTP proxy layer at `/api/v1/relay/{route_name}`. The system executes outbound HTTP requests against target destination URLs with automatic bounded retries, Full Jitter exponential backoff, rate-limit awareness (`Retry-After`), immediate client-disconnect cancellation, and complete SQLite audit persistence adhering to foreign key relationships.
 
 ### 1.2 Non-Goals & Scope Boundaries
 - **No Large File Streaming / Multipart Ingestion:** Payloads are capped at a default of 10 MB (`http.MaxBytesReader`) to avoid SQLite BLOB storage exhaustion and excessive memory allocations.

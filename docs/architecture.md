@@ -1,4 +1,4 @@
-# Simple HTTP Relay — Architecture Document
+# Simple Relay — Architecture Document
 
 *Tagline: "One binary. No infrastructure. Reliable HTTP delivery."*
 
@@ -27,7 +27,7 @@ The system is designed with extreme minimalism to optimize operational costs and
 
 ### Product Positioning
 
-**Simple HTTP Relay** is an open-source, self-hosted **HTTP Reliability Layer**. It sits between your applications and external HTTP endpoints to guarantee reliable delivery, automatic retries, and failure visibility without requiring heavy message queues (Kafka, RabbitMQ) or distributed databases.
+**Simple Relay** is an open-source, self-hosted **HTTP Reliability Layer**. It sits between your applications and external HTTP endpoints to guarantee reliable delivery, automatic retries, and failure visibility without requiring heavy message queues (Kafka, RabbitMQ) or distributed databases.
 
 ### Two Core Use Cases
 
@@ -276,11 +276,11 @@ Configured via environment variables with clear naming:
 
 ## 9. Disaster Recovery & High Availability (Production Strategy)
 
-While Simple HTTP Relay is designed as a standalone single-binary application, production deployments requiring zero data loss and fast recovery should pair it with **Litestream**:
+While Simple Relay is designed as a standalone single-binary application, production deployments requiring zero data loss and fast recovery should pair it with **Litestream**:
 
 ```text
 ┌──────────────────────────┐
-│    Simple HTTP Relay     │
+│    Simple Relay     │
 │   (Go + Embedded SQLite) │
 └────────────┬─────────────┘
              │ Writes WAL

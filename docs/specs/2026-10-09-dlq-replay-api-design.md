@@ -9,7 +9,7 @@
 
 ## 1. Overview & Problem Statement
 
-Simple HTTP Relay ingests and delivers webhook and outbound HTTP jobs. When delivery attempts fail repeatedly and exhaust `route.max_attempts`, the request transitions into the Dead Letter Queue (`status = 'dlq'`). Currently, records in `dlq` remain parked indefinitely in SQLite storage.
+Simple Relay ingests and delivers webhook and outbound HTTP jobs. When delivery attempts fail repeatedly and exhaust `route.max_attempts`, the request transitions into the Dead Letter Queue (`status = 'dlq'`). Currently, records in `dlq` remain parked indefinitely in SQLite storage.
 
 This specification details the **DLQ Replay Management API**, providing operators and dashboard services with:
 1. Inspection of dead-lettered requests via `GET /api/v1/dlq` with pagination and route filtering.

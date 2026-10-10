@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary & Objective
 
-The objective of this specification is to establish the inbound webhook ingestion layer for Simple HTTP Relay. 
+The objective of this specification is to establish the inbound webhook ingestion layer for Simple Relay. 
 Simple Relay acts as a durable shock absorber for incoming webhooks (from services such as Stripe, GitHub, Shopify, etc.), immediately accepting webhooks and storing unmodified raw payloads into SQLite WAL storage before acknowledging HTTP `200 OK` to senders. Subsequently, the durable delivery pipeline (Dispatcher and Worker Pool) forwards the webhooks to internal destination services with retries and DLQ guarantees.
 
 Cryptographic signature verification adapters are deliberately decoupled and deferred to a downstream security layer milestone; during this phase, Relay preserves raw payload bytes and incoming signature headers intact so destination services can verify authenticity without disruption.

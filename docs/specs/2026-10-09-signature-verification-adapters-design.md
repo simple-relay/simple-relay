@@ -11,7 +11,7 @@
 
 ## 1. Executive Summary
 
-This specification defines the cryptographic signature verification architecture for the inbound webhook ingestion pipeline of **Simple HTTP Relay**.
+This specification defines the cryptographic signature verification architecture for the inbound webhook ingestion pipeline of **Simple Relay**.
 
 The primary objective is to guarantee payload authenticity and tamper-resistance **before** any disk persistence or downstream processing takes place, strictly maintaining the **Durability Golden Rule**:
 

@@ -11,7 +11,7 @@
 
 ## 1. Executive Summary & Objective
 
-Simple HTTP Relay is a single-binary, zero-infrastructure HTTP delivery and webhook reliability layer. To date, Phase 1 (Outbound Relay & Core Storage Engine) and Phase 2 (Inbound Webhook & Security Pipeline) have provided rock-solid synchronous/asynchronous proxying, signature verification, SQLite WAL persistence, and DLQ replay APIs.
+Simple Relay is a single-binary, zero-infrastructure HTTP delivery and webhook reliability layer. To date, Phase 1 (Outbound Relay & Core Storage Engine) and Phase 2 (Inbound Webhook & Security Pipeline) have provided rock-solid synchronous/asynchronous proxying, signature verification, SQLite WAL persistence, and DLQ replay APIs.
 
 Milestone 3.1 introduces the **Embedded Dashboard Web UI**, providing operators with an out-of-the-box, zero-dependency browser management interface bundled directly into the Go binary. Operators can visualize system traffic, configure routes dynamically with zero downtime, inspect requests and payload audit trails, and replay failed dead-lettered webhooks.
 
@@ -227,7 +227,7 @@ var FS embed.FS
 
 The UI uses a **Modern Sidebar Navigation** layout:
 * **Sidebar (Fixed Left, 260px):**
-  * Brand Header: "Simple HTTP Relay" with glowing green status dot (`Healthy`).
+  * Brand Header: "Simple Relay" with glowing green status dot (`Healthy`).
   * Navigation Tabs:
     1. **Routes (`routes`)**: Icon ⚡, badge displaying total routes count.
     2. **Requests Explorer (`requests`)**: Icon 📋, showing recent requests.

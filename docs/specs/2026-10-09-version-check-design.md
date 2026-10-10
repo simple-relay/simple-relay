@@ -10,7 +10,7 @@
 
 ## 1. Overview & Problem Statement
 
-Simple HTTP Relay is distributed as a single, self-hosted static binary without central infrastructure or mandatory cloud telemetry. Operators deploying instances on standalone servers, VPSs, or local infrastructure often run outdated builds, missing out on critical bug fixes, performance optimizations, and security patches.
+Simple Relay is distributed as a single, self-hosted static binary without central infrastructure or mandatory cloud telemetry. Operators deploying instances on standalone servers, VPSs, or local infrastructure often run outdated builds, missing out on critical bug fixes, performance optimizations, and security patches.
 
 When repository `https://github.com/simple-relay/simple-relay` is public and utilizes **Release Please** for automated changelog generation and Git tagging (e.g., `v1.2.0`), GitHub creates official Releases.
 
@@ -252,7 +252,7 @@ Exposes the version status to programmatic consumers and the embedded dashboard:
 ### 5.3 Startup Structured Log Output
 When an update is detected, log a concise warning at `INFO` or `WARN` level:
 ```
-level=INFO msg="A new version of Simple HTTP Relay is available" current=v1.1.0 latest=v1.2.0 url=https://github.com/simple-relay/simple-relay/releases/tag/v1.2.0
+level=INFO msg="A new version of Simple Relay is available" current=v1.1.0 latest=v1.2.0 url=https://github.com/simple-relay/simple-relay/releases/tag/v1.2.0
 ```
 
 ---

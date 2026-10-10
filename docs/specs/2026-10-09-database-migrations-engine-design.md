@@ -10,7 +10,7 @@
 
 ## 1. Overview & Problem Statement
 
-Simple HTTP Relay relies on embedded SQLite as its primary zero-infrastructure storage backend. Currently, schema initialization is implemented via a monolithic hardcoded string (`CREATE TABLE IF NOT EXISTS`) in `internal/storage/sqlite/migrations.go`.
+Simple Relay relies on embedded SQLite as its primary zero-infrastructure storage backend. Currently, schema initialization is implemented via a monolithic hardcoded string (`CREATE TABLE IF NOT EXISTS`) in `internal/storage/sqlite/migrations.go`.
 
 ### The Problem
 When new releases introduce database schema changes (e.g., adding table columns, new indexes, or altering constraints):

@@ -1,4 +1,4 @@
-# Simple HTTP Relay — Agent Mandates
+# Simple Relay — Agent Mandates
 
 > **Tagline:** One binary. No infrastructure. Reliable HTTP delivery.  
 > **Core Mission:** A tiny, self-hosted HTTP reliability layer providing durable webhook ingestion, reliable retries with jitter, DLQ replay, and client-abort-aware outbound proxying.

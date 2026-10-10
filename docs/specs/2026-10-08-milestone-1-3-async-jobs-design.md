@@ -15,7 +15,7 @@
 
 ## 1. Overview & Goals
 
-Milestone 1.3 equips **Simple HTTP Relay** with an asynchronous, durable execution pipeline. Instead of holding open client connections (like the sync proxy in Milestone 1.2), incoming HTTP requests are durably committed to database storage and acknowledged with `202 Accepted`. A background delivery engine picks up scheduled jobs, executes outbound HTTP requests with exponential backoff and full jitter, logs execution audits, and routes repeatedly failing jobs to the Dead Letter Queue (DLQ).
+Milestone 1.3 equips **Simple Relay** with an asynchronous, durable execution pipeline. Instead of holding open client connections (like the sync proxy in Milestone 1.2), incoming HTTP requests are durably committed to database storage and acknowledged with `202 Accepted`. A background delivery engine picks up scheduled jobs, executes outbound HTTP requests with exponential backoff and full jitter, logs execution audits, and routes repeatedly failing jobs to the Dead Letter Queue (DLQ).
 
 ### Core Goals
 1. **Durability Golden Rule:** Never acknowledge `202 Accepted` until raw payload bytes are durably committed to storage.

@@ -1,4 +1,4 @@
-# Simple HTTP Relay — Roadmap
+# Simple Relay — Roadmap
 
 > **Tagline:** One binary. No infrastructure. Reliable HTTP delivery.  
 > **Source Document:** See [architecture.md](architecture.md) for architectural details and API contracts.
