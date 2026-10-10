@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Config holds all runtime configurations for the relay service.
@@ -19,6 +20,7 @@ type Config struct {
 	WorkerPoolSize       int
 	RetentionSuccessDays int
 	RetentionFailedDays  int
+	CleanerInterval      time.Duration
 	AdminPassword        string
 	MaxBatchSize         int
 	BatchTimeoutMS       int
@@ -34,6 +36,7 @@ func DefaultConfig() *Config {
 		WorkerPoolSize:       20,
 		RetentionSuccessDays: 7,
 		RetentionFailedDays:  30,
+		CleanerInterval:      1 * time.Hour,
 		AdminPassword:        "",
 		MaxBatchSize:         50,
 		BatchTimeoutMS:       10,
@@ -51,6 +54,7 @@ func Load() (*Config, error) {
 	fs.IntVar(&cfg.Port, "port", cfg.Port, "Server HTTP port")
 	fs.StringVar(&cfg.DBPath, "db", cfg.DBPath, "Path to SQLite database file")
 	fs.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "Log level: debug, info, warn, error")
+	fs.DurationVar(&cfg.CleanerInterval, "cleaner-interval", cfg.CleanerInterval, "Storage retention cleaner execution interval")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return nil, fmt.Errorf("failed to parse command line flags: %w", err)
@@ -100,6 +104,11 @@ func (c *Config) loadFromEnv() {
 			c.RetentionFailedDays = d
 		}
 	}
+	if val := os.Getenv("RELAY_CLEANER_INTERVAL"); val != "" {
+		if d, err := time.ParseDuration(val); err == nil && d > 0 {
+			c.CleanerInterval = d
+		}
+	}
 	if val := os.Getenv("RELAY_ADMIN_PASSWORD"); val != "" {
 		c.AdminPassword = val
 	}
@@ -125,6 +134,9 @@ func (c *Config) Validate() error {
 	}
 	if c.WorkerPoolSize < 1 {
 		return fmt.Errorf("worker pool size must be >= 1")
+	}
+	if c.CleanerInterval <= 0 {
+		return fmt.Errorf("cleaner interval must be > 0")
 	}
 	return nil
 }

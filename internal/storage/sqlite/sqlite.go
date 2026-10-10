@@ -20,6 +20,7 @@ type DB struct {
 	*RouteRepo
 	*RequestRepo
 	*AttemptRepo
+	*RetentionRepo
 }
 
 var _ storage.Storage = (*DB)(nil)
@@ -58,6 +59,7 @@ func Open(dsn string) (*DB, error) {
 	db.RouteRepo = NewRouteRepo(db)
 	db.RequestRepo = NewRequestRepo(db)
 	db.AttemptRepo = NewAttemptRepo(db)
+	db.RetentionRepo = NewRetentionRepo(db)
 
 	// Apply WAL and performance pragmas on writer
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -160,11 +160,12 @@
   - Protect UI routes with session cookie authenticated against `RELAY_ADMIN_PASSWORD`.
   - CSRF token validation on all state-mutating requests (Route CRUD, Replay, Purge).
   - Login rate limiter to prevent brute-force attacks.
-- [ ] **Storage Retention Cleaner (`internal/engine/cleaner.go`)** ([#15](https://github.com/simple-relay/simple-relay/issues/15))
+- [x] **Storage Retention Cleaner (`internal/engine/cleaner.go`)** ([#15](https://github.com/simple-relay/simple-relay/issues/15))
   - Periodic background worker (hourly/daily).
   - Purge successful requests older than `RELAY_RETENTION_SUCCESS_DAYS` (default 7 days).
   - Purge DLQ requests older than `RELAY_RETENTION_FAILED_DAYS` (default 30 days).
   - Execute `PRAGMA incremental_vacuum(1000)` to reclaim OS disk pages without exclusive table locks.
+  - See design specification: [2026-10-10-storage-retention-cleaner-design.md](specs/2026-10-10-storage-retention-cleaner-design.md).
 - [ ] **Litestream Disaster Recovery Integration** ([#16](https://github.com/simple-relay/simple-relay/issues/16))
   - Provide production configuration guide and Docker compose setup for Litestream S3 streaming replication.
   - Zero-SPOF SQLite durability verification.
