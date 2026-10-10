@@ -80,7 +80,7 @@
                 class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors">
           <div class="flex items-center space-x-3">
             <span>📋</span>
-            <span>Requests Explorer</span>
+            <span>Requests</span>
           </div>
         </button>
 
@@ -89,7 +89,7 @@
                 class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors">
           <div class="flex items-center space-x-3">
             <span>💀</span>
-            <span>Dead Letter Queue</span>
+            <span>DLQ</span>
           </div>
           <span class="px-2 py-0.5 text-xs rounded-full font-semibold"
                 :class="dlqTotal > 0 ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-800 text-gray-400'"
@@ -108,12 +108,12 @@
     <main class="flex-1 flex flex-col bg-gray-900 overflow-y-auto">
 
       <!-- ========================================== -->
-      <!-- TAB 1: ROUTES MANAGEMENT -->
+      <!-- TAB 1: ROUTES -->
       <!-- ========================================== -->
       <section x-show="currentTab === 'routes'" class="p-8 space-y-6">
         <div class="flex items-center justify-between">
           <div>
-            <h1 class="text-2xl font-bold text-white tracking-tight">Routes Management</h1>
+            <h1 class="text-2xl font-bold text-white tracking-tight">Routes</h1>
             <p class="text-sm text-gray-400 mt-1">Configure durable inbound webhook endpoints and outbound proxy destinations.</p>
           </div>
           <button @click="openCreateRouteDrawer()"
@@ -156,8 +156,8 @@
                     <span x-text="r.max_attempts + ' max'"></span> • <span x-text="(r.timeout_ms / 1000) + 's'"></span>
                   </td>
                   <td class="px-6 py-4 text-right space-x-2">
+                    <button @click="viewRouteRequests(r.id)" class="text-blue-400 hover:text-blue-300 text-xs font-medium">Request log</button>
                     <button @click="openEditRouteDrawer(r)" class="text-indigo-400 hover:text-indigo-300 text-xs font-medium">Edit</button>
-                    <button @click="confirmDeleteRoute(r)" class="text-red-400 hover:text-red-300 text-xs font-medium">Delete</button>
                   </td>
                 </tr>
               </template>
@@ -172,12 +172,12 @@
       </section>
 
       <!-- ========================================== -->
-      <!-- TAB 2: REQUESTS EXPLORER -->
+      <!-- TAB 2: REQUESTS -->
       <!-- ========================================== -->
       <section x-show="currentTab === 'requests'" class="p-8 space-y-6">
         <div class="flex items-center justify-between">
           <div>
-            <h1 class="text-2xl font-bold text-white tracking-tight">Requests Explorer</h1>
+            <h1 class="text-2xl font-bold text-white tracking-tight">Requests</h1>
             <p class="text-sm text-gray-400 mt-1">Audit request payloads, status lifecycle, and execution attempts in real-time.</p>
           </div>
           <button @click="fetchRequests()"
@@ -288,12 +288,12 @@
       </section>
 
       <!-- ========================================== -->
-      <!-- TAB 3: DEAD LETTER QUEUE (DLQ) -->
+      <!-- TAB 3: DLQ -->
       <!-- ========================================== -->
       <section x-show="currentTab === 'dlq'" class="p-8 space-y-6">
         <div class="flex items-center justify-between">
           <div>
-            <h1 class="text-2xl font-bold text-white tracking-tight">Dead Letter Queue (DLQ)</h1>
+            <h1 class="text-2xl font-bold text-white tracking-tight">DLQ</h1>
             <p class="text-sm text-gray-400 mt-1">Inspect and replay failed webhooks that exhausted maximum retry limits.</p>
           </div>
           <div class="space-x-3">
@@ -642,6 +642,20 @@
                   <p class="text-[11px] text-gray-500 mt-1">Hard HTTP socket deadline.</p>
                 </div>
               </div>
+
+              <!-- Danger Zone (Edit mode only) -->
+              <div x-show="isEditingRoute" class="mt-8 pt-6 border-t border-gray-800">
+                <div class="rounded-xl border border-red-900/40 bg-red-950/20 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <h4 class="text-sm font-semibold text-red-400">Danger Zone</h4>
+                    <p class="text-xs text-gray-400 mt-0.5">Permanently delete this route. Webhooks targeted at this path will be rejected.</p>
+                  </div>
+                  <button type="button" @click="confirmDeleteRoute(routeForm)"
+                          class="px-3.5 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow transition-colors flex-shrink-0 self-start sm:self-auto">
+                    Delete Route
+                  </button>
+                </div>
+              </div>
             </div>
 
           </div>
@@ -843,6 +857,7 @@
             const res = await fetch(`/api/v1/routes/${r.id}`, { method: 'DELETE' });
             if (res.ok) {
               this.showToast('success', 'Route deleted');
+              this.closeRouteDrawer();
               this.fetchRoutes();
             } else {
               this.showToast('error', 'Failed to delete route');
@@ -852,7 +867,14 @@
           }
         },
 
-        // --- Requests Explorer ---
+        viewRouteRequests(routeId) {
+          this.reqFilter.routeId = routeId;
+          this.reqFilter.search = '';
+          this.reqFilter.status = '';
+          this.setTab('requests');
+        },
+
+        // --- Requests ---
         async fetchRequests(offset = 0) {
           this.reqOffset = Math.max(0, offset);
           const params = new URLSearchParams({
