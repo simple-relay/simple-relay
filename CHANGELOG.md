@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/simple-relay/simple-relay/compare/v0.2.0...v0.3.0) (2026-10-10)
+
+
+### Features
+
+* **ui:** automate dashboard version sync via release-please extra-files ([#36](https://github.com/simple-relay/simple-relay/issues/36)) ([6fbc630](https://github.com/simple-relay/simple-relay/commit/6fbc6309601b3c8b20d19e890a1a7c60b65fe82a))
+* **ui:** update tab labels, add request log action, and move delete to drawer danger zone ([#40](https://github.com/simple-relay/simple-relay/issues/40)) ([d8a3479](https://github.com/simple-relay/simple-relay/commit/d8a347963e399767d39fc5e7d749893b965a5109))
+
 ## [0.2.0](https://github.com/simple-relay/simple-relay/compare/v0.1.0...v0.2.0) (2026-10-10)
 
 
