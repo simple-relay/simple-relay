@@ -121,7 +121,7 @@
 - [x] **Task 2.1.1: Raw Byte Body Preserving Receiver**
   - Ensure zero payload mutation: capture exact bytes into memory/disk.
   - Enforce maximum body size (`RELAY_MAX_BODY_SIZE_MB`, default 10MB) with `http.MaxBytesReader`.
-- [x] **Task 2.1.2: Signature Verification Adapters (`internal/signature`)**
+- [x] **Task 2.1.2: Signature Verification Adapters (`internal/signature`)** ([#9](https://github.com/simple-relay/simple-relay/issues/9))
   - Define `Verifier` interface: `Verify(header http.Header, secret string, rawBody []byte) error`.
   - Stripe HMAC adapter: parse `t=timestamp,v1=signature`, verify HMAC-SHA256 across candidate signatures using constant-time comparison.
   - GitHub HMAC adapter: verify `sha256=<hex>` against `X-Hub-Signature-256`.
@@ -152,34 +152,34 @@
 ### Phase 3 — Embedded UI & System Lifecycle
 
 #### Milestone 3.1: Embedded Dashboard Web UI
-- [x] **Task 3.1.1: Embedded Assets & Base Layout (`ui/`)**
+- [x] **Task 3.1.1: Embedded Assets & Base Layout (`ui/`)** ([#10](https://github.com/simple-relay/simple-relay/issues/10))
   - Embed HTML templates and static assets using `go:embed`.
   - Zero Node.js build pipeline: Alpine.js + Tailwind CSS.
-- [x] **Task 3.1.2: Routes Management UI**
+- [x] **Task 3.1.2: Routes Management UI** ([#11](https://github.com/simple-relay/simple-relay/issues/11))
   - View all active routes (inbound & outbound).
   - Create, edit, and delete routes via UI modal.
   - Instant hot-reloading verification in UI.
-- [x] **Task 3.1.3: Requests & Attempts Explorer**
+- [x] **Task 3.1.3: Requests & Attempts Explorer** ([#12](https://github.com/simple-relay/simple-relay/issues/12))
   - Filterable requests table: search by ID, status (`pending`, `success`, `dlq`), route name, date range.
   - Slide-over detail drawer: inspect request headers, raw body, attempt status codes, duration, and error logs.
-- [x] **Task 3.1.4: DLQ Dashboard & Replay Action**
+- [x] **Task 3.1.4: DLQ Dashboard & Replay Action** ([#13](https://github.com/simple-relay/simple-relay/issues/13))
   - Dedicated view for failed/DLQ events.
   - One-click individual replay and bulk replay buttons.
 
 #### Milestone 3.2: Security & Storage Maintenance
-- [ ] **Task 3.2.1: Admin Password Authentication & CSRF Protection**
+- [ ] **Task 3.2.1: Admin Password Authentication & CSRF Protection** ([#14](https://github.com/simple-relay/simple-relay/issues/14))
   - Protect UI routes with session cookie authenticated against `RELAY_ADMIN_PASSWORD`.
   - CSRF token validation on all state-mutating requests (Route CRUD, Replay, Purge).
   - Login rate limiter to prevent brute-force attacks.
-- [ ] **Task 3.2.2: Storage Retention Cleaner (`internal/engine/cleaner.go`)**
+- [ ] **Task 3.2.2: Storage Retention Cleaner (`internal/engine/cleaner.go`)** ([#15](https://github.com/simple-relay/simple-relay/issues/15))
   - Periodic background worker (hourly/daily).
   - Purge successful requests older than `RELAY_RETENTION_SUCCESS_DAYS` (default 7 days).
   - Purge DLQ requests older than `RELAY_RETENTION_FAILED_DAYS` (default 30 days).
   - Execute `PRAGMA incremental_vacuum(1000)` to reclaim OS disk pages without exclusive table locks.
-- [ ] **Task 3.2.3: Litestream Disaster Recovery Integration**
+- [ ] **Task 3.2.3: Litestream Disaster Recovery Integration** ([#16](https://github.com/simple-relay/simple-relay/issues/16))
   - Provide production configuration guide and Docker compose setup for Litestream S3 streaming replication.
   - Zero-SPOF SQLite durability verification.
-- [ ] **Task 3.2.4: Versioned Database Schema Migrations Engine (`schema_migrations`)**
+- [ ] **Task 3.2.4: Versioned Database Schema Migrations Engine (`schema_migrations`)** ([#17](https://github.com/simple-relay/simple-relay/issues/17))
   - Embed migration SQL files directly into the static binary with `go:embed`.
   - Maintain durable version history via `schema_migrations (version, name, applied_at)` table.
   - Sequentially execute pending migrations on boot within atomic SQLite transactions (`BEGIN IMMEDIATE`).
@@ -188,15 +188,15 @@
   - See design specification: [2026-10-09-database-migrations-engine-design.md](specs/2026-10-09-database-migrations-engine-design.md).
 
 #### Milestone 3.3: Automated Multi-Platform Release Pipeline
-- [ ] **Task 3.3.1: Multi-Platform Build Configuration (`.goreleaser.yaml`)**
+- [ ] **Task 3.3.1: Multi-Platform Build Configuration (`.goreleaser.yaml`)** ([#18](https://github.com/simple-relay/simple-relay/issues/18))
   - Zero-CGO static compilation (`CGO_ENABLED=0`) across Linux (`amd64`, `arm64`), macOS (`amd64`, `arm64`), and Windows (`amd64`).
   - Automated archive packaging (`.tar.gz`, `.zip`) with SHA-256 checksum generation (`checksums.txt`).
   - Multi-architecture Docker image build and push configuration.
-- [ ] **Task 3.3.2: Automated Versioning & Release Workflow (`.github/workflows/release.yml`)**
+- [ ] **Task 3.3.2: Automated Versioning & Release Workflow (`.github/workflows/release.yml`)** ([#19](https://github.com/simple-relay/simple-relay/issues/19))
   - Integrate `release-please` to parse Conventional Commits and maintain `CHANGELOG.md`.
   - Automatically manage SemVer release pull requests on `main`.
   - Trigger GoReleaser upon Release PR merge to attach cross-platform binaries to GitHub Releases.
-- [ ] **Task 3.3.3: In-App Version Update Checker (`internal/version`)**
+- [ ] **Task 3.3.3: In-App Version Update Checker (`internal/version`)** ([#20](https://github.com/simple-relay/simple-relay/issues/20))
   - Background non-blocking version checker querying upstream GitHub Releases (`simple-relay/simple-relay`) created by Release Please.
   - Dual discovery strategy: GitHub REST API with seamless fallback to rate-limit-free HTTP HEAD redirect trick.
   - Robust SemVer comparison using standard `golang.org/x/mod/semver`.
@@ -207,17 +207,17 @@
 ---
 
 ### v0.3 — Utility & Observability Extensions
-- [ ] **Task 0.3.1:** CLI tool (`cmd/relay-cli`) for inspecting relay health, routes, and queue depth.
-- [ ] **Task 0.3.2:** Webhook alert notifications (Slack / Discord / Email) when DLQ count exceeds configurable threshold.
-- [ ] **Task 0.3.3:** API Key authentication for programmatic API management.
-- [ ] **Task 0.3.4:** Prometheus metrics exporter endpoint (`GET /metrics`) tracking ingestion rate, retry counts, queue depth, and latency histograms.
+- [ ] **Task 0.3.1:** ([#21](https://github.com/simple-relay/simple-relay/issues/21)) CLI tool (`cmd/relay-cli`) for inspecting relay health, routes, and queue depth.
+- [ ] **Task 0.3.2:** ([#22](https://github.com/simple-relay/simple-relay/issues/22)) Webhook alert notifications (Slack / Discord / Email) when DLQ count exceeds configurable threshold.
+- [ ] **Task 0.3.3:** ([#23](https://github.com/simple-relay/simple-relay/issues/23)) API Key authentication for programmatic API management.
+- [ ] **Task 0.3.4:** ([#24](https://github.com/simple-relay/simple-relay/issues/24)) Prometheus metrics exporter endpoint (`GET /metrics`) tracking ingestion rate, retry counts, queue depth, and latency histograms.
 - [ ] **Task 0.3.5:** Extended Signature Verification Adapters (`Shopify` with base64 HMAC, `Slack` v0 signature, `Svix` / Standard Webhooks).
 
 ---
 
 ### v1.0 — Enterprise Edition
-- [ ] **Task 1.0.1:** Pluggable PostgreSQL storage adapter (`internal/storage/postgres`) implementing `storage.Storage`.
-- [ ] **Task 1.0.2:** Multi-node worker clustering with distributed leader election / advisory locks.
-- [ ] **Task 1.0.3:** Enterprise SSO integration (OIDC, OAuth2, SAML).
-- [ ] **Task 1.0.4:** Role-Based Access Control (RBAC) and security audit logs.
+- [ ] **Task 1.0.1:** ([#25](https://github.com/simple-relay/simple-relay/issues/25)) Pluggable PostgreSQL storage adapter (`internal/storage/postgres`) implementing `storage.Storage`.
+- [ ] **Task 1.0.2:** ([#26](https://github.com/simple-relay/simple-relay/issues/26)) Multi-node worker clustering with distributed leader election / advisory locks.
+- [ ] **Task 1.0.3:** ([#27](https://github.com/simple-relay/simple-relay/issues/27)) Enterprise SSO integration (OIDC, OAuth2, SAML).
+- [ ] **Task 1.0.4:** ([#28](https://github.com/simple-relay/simple-relay/issues/28)) Role-Based Access Control (RBAC) and security audit logs.
 - [ ] **Task 1.0.5:** Asymmetric Public-Key Webhook Verification (Ed25519 & RSA SHA-256 for AWS SNS, DocuSign).
