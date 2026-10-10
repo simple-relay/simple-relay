@@ -54,12 +54,6 @@ LABELS=(
     "type:docs|0075ca|Documentation update or specification"
     "type:refactor|bfdadc|Code refactoring without behavior change"
     "type:chore|c5def5|Build scripts, dependencies, or repo maintenance"
-    "area:engine|5319e7|Core execution engine (batch writer, retry, worker pool)"
-    "area:storage|0e8a16|SQLite repository, schema migrations, WAL handling"
-    "area:api|fbca04|HTTP handlers, routing, middlewares"
-    "area:security|b60205|HMAC verification, CSRF, admin auth"
-    "area:ui|e99695|Embedded Web UI (Alpine.js, Tailwind)"
-    "area:ci|128A0C|GitHub Actions, release pipeline, GoReleaser"
     "status:triage|d4c5f9|Newly opened issue awaiting review"
     "status:ready|0e8a16|Refined and ready to be picked up"
     "status:in-progress|fbca04|Actively being worked on by an assignee"
@@ -73,7 +67,7 @@ MILESTONES=()
 
 # 3. Tasks Definition: task_id|title|milestone|labels|body
 TASKS=(
-    "Task 2.1.2|Task 2.1.2: Signature Verification Adapters (internal/signature)|v0.2.0 - Inbound Webhooks & Security Pipeline|type:feat,area:security,status:ready|### What needs to be done?
+    "Task 2.1.2|Task 2.1.2: Signature Verification Adapters (internal/signature)|v0.2.0 - Inbound Webhooks & Security Pipeline|type:feat,status:ready|### What needs to be done?
 - Implement Verifier interface: \`Verify(header string, secret string, rawBody []byte) error\`
 - Implement Stripe HMAC adapter: parse \`t=timestamp,v1=signature\`, verify HMAC-SHA256 with timestamp tolerance.
 - Implement GitHub HMAC adapter: verify \`sha256=<hex>\` against \`X-Hub-Signature-256\`.
@@ -82,14 +76,14 @@ TASKS=(
 ### Why & Context
 Complete Phase 2 security ingestion layer. Reference: docs/architecture.md and docs/roadmap.md."
 
-    "Task 3.1.1|Task 3.1.1: Embedded Assets & Base Layout (ui/)|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,area:ui,status:ready|### What needs to be done?
+    "Task 3.1.1|Task 3.1.1: Embedded Assets & Base Layout (ui/)|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,status:ready|### What needs to be done?
 - Embed HTML templates and static assets using \`go:embed\`.
 - Zero Node.js build pipeline: Alpine.js + Tailwind CSS.
 
 ### Why & Context
 Foundational UI layout for Phase 3 embedded dashboard."
 
-    "Task 3.1.2|Task 3.1.2: Routes Management UI|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,area:ui,status:ready|### What needs to be done?
+    "Task 3.1.2|Task 3.1.2: Routes Management UI|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,status:ready|### What needs to be done?
 - View all active routes (inbound & outbound).
 - Create, edit, and delete routes via UI modal.
 - Verify instant hot-reloading in UI.
@@ -97,21 +91,21 @@ Foundational UI layout for Phase 3 embedded dashboard."
 ### Why & Context
 Web-based management of routes."
 
-    "Task 3.1.3|Task 3.1.3: Requests & Attempts Explorer|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,area:ui,status:ready|### What needs to be done?
+    "Task 3.1.3|Task 3.1.3: Requests & Attempts Explorer|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,status:ready|### What needs to be done?
 - Filterable requests table: search by ID, status (\`pending\`, \`success\`, \`dlq\`), route name, date range.
 - Slide-over detail drawer: inspect request headers, raw body, attempt status codes, duration, and error logs.
 
 ### Why & Context
 Visual observability into request lifecycle and attempts."
 
-    "Task 3.1.4|Task 3.1.4: DLQ Dashboard & Replay Action|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,area:ui,status:ready|### What needs to be done?
+    "Task 3.1.4|Task 3.1.4: DLQ Dashboard & Replay Action|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,status:ready|### What needs to be done?
 - Dedicated view for failed/DLQ events.
 - One-click individual replay and bulk replay buttons.
 
 ### Why & Context
 DLQ inspection and recovery interface."
 
-    "Task 3.2.1|Task 3.2.1: Admin Password Authentication & CSRF Protection|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,area:security,status:ready|### What needs to be done?
+    "Task 3.2.1|Task 3.2.1: Admin Password Authentication & CSRF Protection|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,status:ready|### What needs to be done?
 - Protect UI routes with session cookie authenticated against \`RELAY_ADMIN_PASSWORD\`.
 - CSRF token validation on all state-mutating requests (Route CRUD, Replay, Purge).
 - Login rate limiter to prevent brute-force attacks.
@@ -119,7 +113,7 @@ DLQ inspection and recovery interface."
 ### Why & Context
 Security boundary for admin operations and embedded UI."
 
-    "Task 3.2.2|Task 3.2.2: Storage Retention Cleaner (internal/engine/cleaner.go)|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,area:storage,status:ready|### What needs to be done?
+    "Task 3.2.2|Task 3.2.2: Storage Retention Cleaner (internal/engine/cleaner.go)|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,status:ready|### What needs to be done?
 - Periodic background cleaner worker (hourly/daily).
 - Purge successful requests older than \`RELAY_RETENTION_SUCCESS_DAYS\` (default 7 days).
 - Purge DLQ requests older than \`RELAY_RETENTION_FAILED_DAYS\` (default 30 days).
@@ -128,14 +122,14 @@ Security boundary for admin operations and embedded UI."
 ### Why & Context
 Prevent database bloat over extended runtimes."
 
-    "Task 3.2.3|Task 3.2.3: Litestream Disaster Recovery Integration|v0.3.0 - Embedded Web UI & System Lifecycle|type:docs,area:storage,status:ready|### What needs to be done?
+    "Task 3.2.3|Task 3.2.3: Litestream Disaster Recovery Integration|v0.3.0 - Embedded Web UI & System Lifecycle|type:docs,status:ready|### What needs to be done?
 - Provide production configuration guide and Docker compose setup for Litestream S3 streaming replication.
 - Verify zero-SPOF SQLite durability.
 
 ### Why & Context
 High availability and disaster recovery for SQLite."
 
-    "Task 3.2.4|Task 3.2.4: Versioned Database Schema Migrations Engine|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,area:storage,status:ready|### What needs to be done?
+    "Task 3.2.4|Task 3.2.4: Versioned Database Schema Migrations Engine|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,status:ready|### What needs to be done?
 - Embed migration SQL files directly with \`go:embed\`.
 - Maintain durable version history via \`schema_migrations\` table.
 - Sequentially execute pending migrations on boot within \`BEGIN IMMEDIATE\` transactions.
@@ -144,7 +138,7 @@ High availability and disaster recovery for SQLite."
 ### Why & Context
 Reliable database schema evolution. Reference: docs/specs/2026-10-09-database-migrations-engine-design.md."
 
-    "Task 3.3.1|Task 3.3.1: Multi-Platform Build Configuration (.goreleaser.yaml)|v0.3.0 - Embedded Web UI & System Lifecycle|type:chore,area:ci,status:ready|### What needs to be done?
+    "Task 3.3.1|Task 3.3.1: Multi-Platform Build Configuration (.goreleaser.yaml)|v0.3.0 - Embedded Web UI & System Lifecycle|type:chore,status:ready|### What needs to be done?
 - Zero-CGO static compilation (\`CGO_ENABLED=0\`) across Linux, macOS, and Windows.
 - Automated archive packaging (\`.tar.gz\`, \`.zip\`) with SHA-256 checksum generation.
 - Multi-architecture Docker image build and push configuration.
@@ -152,7 +146,7 @@ Reliable database schema evolution. Reference: docs/specs/2026-10-09-database-mi
 ### Why & Context
 Cross-platform distribution without manual builds."
 
-    "Task 3.3.2|Task 3.3.2: Automated Versioning & Release Workflow (.github/workflows/release.yml)|v0.3.0 - Embedded Web UI & System Lifecycle|type:chore,area:ci,status:ready|### What needs to be done?
+    "Task 3.3.2|Task 3.3.2: Automated Versioning & Release Workflow (.github/workflows/release.yml)|v0.3.0 - Embedded Web UI & System Lifecycle|type:chore,status:ready|### What needs to be done?
 - Integrate \`release-please\` for Conventional Commits and automated \`CHANGELOG.md\`.
 - Automatically manage SemVer release pull requests on \`main\`.
 - Trigger GoReleaser upon Release PR merge.
@@ -160,7 +154,7 @@ Cross-platform distribution without manual builds."
 ### Why & Context
 Automated release management."
 
-    "Task 3.3.3|Task 3.3.3: In-App Version Update Checker (internal/version)|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,area:engine,status:ready|### What needs to be done?
+    "Task 3.3.3|Task 3.3.3: In-App Version Update Checker (internal/version)|v0.3.0 - Embedded Web UI & System Lifecycle|type:feat,status:ready|### What needs to be done?
 - Background non-blocking version checker querying upstream GitHub Releases.
 - Dual discovery: GitHub REST API with fallback to HTTP HEAD redirect trick.
 - SemVer comparison using \`golang.org/x/mod/semver\`.
@@ -169,31 +163,31 @@ Automated release management."
 ### Why & Context
 Self-hosted update notification. Reference: docs/specs/2026-10-09-version-check-design.md."
 
-    "Task 0.3.1|Task 0.3.1: CLI inspection binary (cmd/relay-cli)|v0.4.0 - Utility & Observability Extensions|type:feat,area:api,status:ready|### What needs to be done?
+    "Task 0.3.1|Task 0.3.1: CLI inspection binary (cmd/relay-cli)|v0.4.0 - Utility & Observability Extensions|type:feat,status:ready|### What needs to be done?
 - CLI tool (\`cmd/relay-cli\`) for inspecting relay health, routes, and queue depth.
 
 ### Why & Context
 Terminal-based operational troubleshooting."
 
-    "Task 0.3.2|Task 0.3.2: Webhook alert notifications on DLQ threshold breaches|v0.4.0 - Utility & Observability Extensions|type:feat,area:engine,status:ready|### What needs to be done?
+    "Task 0.3.2|Task 0.3.2: Webhook alert notifications on DLQ threshold breaches|v0.4.0 - Utility & Observability Extensions|type:feat,status:ready|### What needs to be done?
 - Webhook alert notifications (Slack / Discord / Email) when DLQ count exceeds configurable threshold.
 
 ### Why & Context
 Proactive failure alerting."
 
-    "Task 0.3.3|Task 0.3.3: API Key authentication for programmatic management|v0.4.0 - Utility & Observability Extensions|type:feat,area:security,status:ready|### What needs to be done?
+    "Task 0.3.3|Task 0.3.3: API Key authentication for programmatic management|v0.4.0 - Utility & Observability Extensions|type:feat,status:ready|### What needs to be done?
 - API Key authentication for programmatic API management.
 
 ### Why & Context
 Secure programmatic access for external orchestration."
 
-    "Task 0.3.4|Prometheus metrics exporter endpoint (/metrics)||type:feat,area:api,status:ready|### What needs to be done?
+    "Task 0.3.4|Prometheus metrics exporter endpoint (/metrics)||type:feat,status:ready|### What needs to be done?
 - Prometheus metrics exporter endpoint (\`GET /metrics\`) tracking ingestion rate, retry counts, queue depth, and latency histograms.
 
 ### Why & Context
 Production metrics scraping."
 
-    "Built-in PostgreSQL storage backend|Built-in PostgreSQL storage backend||type:feat,area:storage,status:ready|### What needs to be done?
+    "Built-in PostgreSQL storage backend|Built-in PostgreSQL storage backend||type:feat,status:ready|### What needs to be done?
 - [ ] Built-in PostgreSQL storage backend (\`internal/storage/postgres\`) implementing \`storage.Storage\`.
 - [ ] Pure-Go driver support preserving zero-CGO static compilation (\`CGO_ENABLED=0\`).
 - [ ] Database configuration switch (\`RELAY_DB_DRIVER=postgres\` or connection URL \`RELAY_DATABASE_URL\`), keeping SQLite as zero-config default.
@@ -201,13 +195,13 @@ Production metrics scraping."
 ### Why & Context
 Centralized scalable persistence."
 
-    "Multi-node worker clustering with leader election|Multi-node worker clustering with leader election||type:feat,area:engine,status:ready|### What needs to be done?
+    "Multi-node worker clustering with leader election|Multi-node worker clustering with leader election||type:feat,status:ready|### What needs to be done?
 - Multi-node worker clustering with distributed leader election / advisory locks.
 
 ### Why & Context
 High throughput horizontal scaling."
 
-    "Asymmetric Public-Key Webhook Verification|Asymmetric Public-Key Webhook Verification (Ed25519 & RSA-SHA256)||type:feat,area:security,status:ready|### What needs to be done?
+    "Asymmetric Public-Key Webhook Verification|Asymmetric Public-Key Webhook Verification (Ed25519 & RSA-SHA256)||type:feat,status:ready|### What needs to be done?
 - [ ] Implement Ed25519 public-key signature verification adapter for webhooks (e.g., DocuSign, Standard Webhooks).
 - [ ] Implement RSA-SHA256 signature verification adapter with certificate validation (e.g., AWS SNS).
 - [ ] In-memory caching for public keys and X.509 certificates with TTL to eliminate network latency overhead.
