@@ -1,0 +1,13 @@
+FROM alpine:3.20
+
+RUN apk --no-cache add ca-certificates tzdata \
+    && addgroup -S relay -g 10001 \
+    && adduser -S relay -u 10001 -G relay
+
+WORKDIR /app
+COPY simple-relay /usr/local/bin/simple-relay
+
+USER 10001:10001
+EXPOSE 8080
+
+ENTRYPOINT ["simple-relay"]

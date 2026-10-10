@@ -674,4 +674,3 @@ func TestRequestRepo_ListRequests(t *testing.T) {
 		t.Fatalf("expected 2 paged items, got %d", len(pagedItems))
 	}
 }
-

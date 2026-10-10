@@ -1,0 +1,86 @@
+version: 2
+
+project_name: simple-relay
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: simple-relay
+    main: ./cmd/relay
+    binary: simple-relay
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/simple-relay/simple-relay/internal/version.Version={{ .Version }}
+      - -X github.com/simple-relay/simple-relay/internal/version.GitCommit={{ .Commit }}
+      - -X github.com/simple-relay/simple-relay/internal/version.BuildDate={{ .Date }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+dockers:
+  - image_templates:
+      - "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:latest-amd64"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+    goos: linux
+    goarch: amd64
+
+  - image_templates:
+      - "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:latest-arm64"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+    goos: linux
+    goarch: arm64
+
+docker_manifests:
+  - name_template: "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:latest"
+    image_templates:
+      - "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:latest-amd64"
+      - "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:latest-arm64"
+
+release:
+  mode: append

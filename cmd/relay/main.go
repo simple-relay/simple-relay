@@ -16,6 +16,7 @@ import (
 	"github.com/simple-relay/simple-relay/internal/engine"
 	"github.com/simple-relay/simple-relay/internal/model"
 	"github.com/simple-relay/simple-relay/internal/storage/sqlite"
+	"github.com/simple-relay/simple-relay/internal/version"
 )
 
 func main() {
@@ -29,6 +30,12 @@ func main() {
 		Level: cfg.SlogLevel(),
 	}))
 	slog.SetDefault(logger)
+
+	logger.Info("starting simple-relay",
+		"version", version.Version,
+		"commit", version.GitCommit,
+		"build_date", version.BuildDate,
+	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

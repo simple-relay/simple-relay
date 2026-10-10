@@ -12,7 +12,7 @@
 | :--- | :--- | :--- | :--- |
 | **Phase 1** | Outbound Relay & Core Storage Engine | **Completed** | 100% Completed |
 | **Phase 2** | Inbound Webhooks & Security Pipeline | **Completed** | 100% Completed |
-| **Phase 3** | Embedded Web UI & Lifecycle Maintenance | **In Progress** | 36% Completed |
+| **Phase 3** | Embedded Web UI & Lifecycle Maintenance | **In Progress** | 55% Completed |
 | **Phase 4** | CLI, Observability & Alerting | Backlog | 0% |
 | **Phase 5** | Multi-node Clustering & Advanced Features | Backlog | 0% |
 
@@ -175,11 +175,11 @@
   - Implement fail-fast safety and automatic baseline migration for existing databases.
   - Multi-database architecture ready for SQLite, PostgreSQL, and MySQL adapters.
   - See design specification: [2026-10-09-database-migrations-engine-design.md](specs/2026-10-09-database-migrations-engine-design.md).
-- [ ] **Multi-Platform Build Configuration (`.goreleaser.yaml`)** ([#18](https://github.com/simple-relay/simple-relay/issues/18))
+- [x] **Multi-Platform Build Configuration (`.goreleaser.yaml`)** ([#18](https://github.com/simple-relay/simple-relay/issues/18))
   - Zero-CGO static compilation (`CGO_ENABLED=0`) across Linux (`amd64`, `arm64`), macOS (`amd64`, `arm64`), and Windows (`amd64`).
   - Automated archive packaging (`.tar.gz`, `.zip`) with SHA-256 checksum generation (`checksums.txt`).
   - Multi-architecture Docker image build and push configuration.
-- [ ] **Automated Versioning & Release Workflow (`.github/workflows/release.yml`)** ([#19](https://github.com/simple-relay/simple-relay/issues/19))
+- [x] **Automated Versioning & Release Workflow (`.github/workflows/release.yml`)** ([#19](https://github.com/simple-relay/simple-relay/issues/19))
   - Integrate `release-please` to parse Conventional Commits and maintain `CHANGELOG.md`.
   - Automatically manage SemVer release pull requests on `main`.
   - Trigger GoReleaser upon Release PR merge to attach cross-platform binaries to GitHub Releases.

@@ -367,4 +367,3 @@ func TestE2E_InboundWebhook_WithSignatureVerification(t *testing.T) {
 		t.Fatalf("expected destination to receive %s, got %s", payload, receivedBody)
 	}
 }
-
