@@ -38,6 +38,9 @@ test: ## Run all test suites
 race: ## Run test suites with data race detector
 	go test -race ./...
 
+bench: ## Run automated E2E performance benchmark suite
+	./scripts/benchmark.sh
+
 check: check-tidy check-fmt lint race build ## Run all quality checks locally before opening a PR
 
 run: ## Run relay service directly
