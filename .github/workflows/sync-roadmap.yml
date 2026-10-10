@@ -1,0 +1,36 @@
+name: Sync Roadmap with Issues
+
+on:
+  issues:
+    types: [closed, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run roadmap synchronization
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x ./scripts/sync-roadmap.sh
+          ./scripts/sync-roadmap.sh
+
+      - name: Commit changes if roadmap changed
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          if [[ -n $(git status -s docs/roadmap.md) ]]; then
+            git add docs/roadmap.md
+            git commit -m "chore: synchronize roadmap with issue status [skip ci]"
+            git push
+          else
+            echo "No roadmap changes detected."
+          fi
