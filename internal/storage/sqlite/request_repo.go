@@ -699,4 +699,3 @@ func (r *RequestRepo) ListRequests(ctx context.Context, filter storage.RequestFi
 
 	return results, total, nil
 }
-

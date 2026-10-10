@@ -102,4 +102,3 @@ func TestUIRoutes_StaticAssets(t *testing.T) {
 		}
 	}
 }
-
