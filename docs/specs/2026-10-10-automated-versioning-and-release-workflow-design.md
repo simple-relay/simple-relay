@@ -84,6 +84,9 @@ Located at repository root:
         { "type": "refactor", "section": "Code Refactoring" },
         { "type": "docs", "section": "Documentation" },
         { "type": "chore", "section": "Maintenance & Dependencies" }
+      ],
+      "extra-files": [
+        "ui/index.html"
       ]
     }
   }
