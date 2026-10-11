@@ -25,6 +25,12 @@
     @media (min-width: 1024px) {
       .route-drawer-container { width: 640px !important; }
     }
+    .content-blur {
+      filter: blur(8px);
+      pointer-events: none !important;
+      user-select: none !important;
+      transition: filter 0.3s ease;
+    }
   </style>
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans min-h-screen antialiased flex flex-col" x-data="relayApp()" x-init="init()" x-cloak>
@@ -44,7 +50,51 @@
     </template>
   </div>
 
-  <div class="flex-1 flex overflow-hidden">
+  <!-- Admin Login Modal Overlay -->
+  <div x-show="authRequired && !authenticated"
+       class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+       x-cloak>
+    <div class="bg-gray-950 border border-gray-800 rounded-2xl p-8 max-w-md w-full shadow-2xl relative"
+         @keydown.enter="submitLogin()">
+      <div class="flex items-center space-x-3 mb-6">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-white shadow-lg text-lg">
+          ⚡
+        </div>
+        <div>
+          <h2 class="text-xl font-bold text-white tracking-tight">Simple Relay</h2>
+          <p class="text-xs text-gray-400">Admin authentication required</p>
+        </div>
+      </div>
+
+      <template x-if="loginError">
+        <div class="mb-4 p-3 rounded-lg bg-red-950 border border-red-800 text-red-300 text-xs flex items-center space-x-2">
+          <span>⚠️</span>
+          <span x-text="loginError"></span>
+        </div>
+      </template>
+
+      <form @submit.prevent="submitLogin()" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">Admin Password</label>
+          <input type="password"
+                 x-model="loginPassword"
+                 placeholder="Enter RELAY_ADMIN_PASSWORD"
+                 :disabled="rateLimitSeconds > 0 || loginLoading"
+                 class="w-full px-3.5 py-2.5 rounded-lg bg-gray-900 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm">
+        </div>
+
+        <button type="submit"
+                :disabled="rateLimitSeconds > 0 || loginLoading"
+                class="w-full py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm shadow transition-colors flex items-center justify-center space-x-2">
+          <span x-show="loginLoading" class="animate-spin text-sm">⏳</span>
+          <span x-text="rateLimitSeconds > 0 ? `Locked (${rateLimitSeconds}s)` : 'Sign In'"></span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="flex-1 flex overflow-hidden transition-all duration-300"
+       :class="{ 'content-blur': authRequired && !authenticated }">
     <!-- Sidebar Navigation -->
     <aside class="w-64 bg-gray-950 border-r border-gray-800 flex flex-col flex-shrink-0">
       <!-- Brand Header -->
@@ -98,9 +148,17 @@
       </nav>
 
       <!-- Sidebar Footer -->
-      <div class="p-4 border-t border-gray-800 text-xs text-gray-500 flex justify-between items-center">
-        <span>v0.6.0<!-- x-release-please-version --> • Embedded UI</span>
-        <a href="/healthz" target="_blank" class="hover:text-gray-300 underline">healthz</a>
+      <div class="p-4 border-t border-gray-800 text-xs text-gray-500 flex flex-col space-y-2">
+        <template x-if="authRequired && authenticated">
+          <button @click="submitLogout()" class="w-full py-1.5 px-2 rounded bg-gray-900 hover:bg-red-950/50 text-gray-400 hover:text-red-400 border border-gray-800 hover:border-red-800 text-xs font-medium flex items-center justify-center space-x-1.5 transition-colors">
+            <span>🚪</span>
+            <span>Logout</span>
+          </button>
+        </template>
+        <div class="flex justify-between items-center">
+          <span>v0.6.0<!-- x-release-please-version --> • Embedded UI</span>
+          <a href="/healthz" target="_blank" class="hover:text-gray-300 underline">healthz</a>
+        </div>
       </div>
     </aside>
 
@@ -745,6 +803,15 @@
         dlqItems: [],
         dlqTotal: 0,
 
+        // Auth State
+        authRequired: false,
+        authenticated: true,
+        loginPassword: '',
+        loginError: '',
+        loginLoading: false,
+        rateLimitSeconds: 0,
+        rateLimitTimer: null,
+
         // Modals & Drawers
         routeDrawerOpen: false,
         routeModalOpen: false,
@@ -755,10 +822,91 @@
         drawerOpen: false,
         requestDetail: null,
 
-        init() {
-          this.fetchRoutes();
-          this.fetchRequests(0);
-          this.fetchDLQ();
+        async init() {
+          await this.checkAuthStatus();
+          if (this.authenticated) {
+            this.fetchRoutes();
+            this.fetchRequests(0);
+            this.fetchDLQ();
+          }
+        },
+
+        async checkAuthStatus() {
+          try {
+            const res = await fetch('/api/v1/auth/status');
+            if (res.ok) {
+              const data = await res.json();
+              this.authRequired = !!data.auth_required;
+              this.authenticated = !!data.authenticated;
+            }
+          } catch (e) {}
+        },
+
+        async submitLogin() {
+          if (!this.loginPassword) return;
+          this.loginLoading = true;
+          this.loginError = '';
+          try {
+            const res = await fetch('/api/v1/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ password: this.loginPassword })
+            });
+            if (res.ok) {
+              this.authenticated = true;
+              this.loginPassword = '';
+              this.loginError = '';
+              this.fetchRoutes();
+              this.fetchRequests(0);
+              this.fetchDLQ();
+              this.showToast('success', 'Logged in successfully');
+            } else if (res.status === 429) {
+              const data = await res.json().catch(() => ({}));
+              const retryAfter = data.retry_after || 60;
+              this.startRateLimitTimer(retryAfter);
+              this.loginError = `Too many failed attempts. Locked for ${retryAfter}s.`;
+            } else {
+              const data = await res.json().catch(() => ({}));
+              this.loginError = data.error || 'Invalid password';
+            }
+          } catch (e) {
+            this.loginError = 'Network error during login';
+          } finally {
+            this.loginLoading = false;
+          }
+        },
+
+        async submitLogout() {
+          try {
+            await fetch('/api/v1/auth/logout', { method: 'POST' });
+          } catch (e) {}
+          this.authenticated = false;
+          this.showToast('info', 'Logged out');
+          await this.checkAuthStatus();
+        },
+
+        startRateLimitTimer(seconds) {
+          this.rateLimitSeconds = seconds;
+          if (this.rateLimitTimer) clearInterval(this.rateLimitTimer);
+          this.rateLimitTimer = setInterval(() => {
+            this.rateLimitSeconds--;
+            if (this.rateLimitSeconds <= 0) {
+              clearInterval(this.rateLimitTimer);
+              this.rateLimitTimer = null;
+              this.loginError = '';
+            } else {
+              this.loginError = `Too many failed attempts. Locked for ${this.rateLimitSeconds}s.`;
+            }
+          }, 1000);
+        },
+
+        async apiFetch(url, options = {}) {
+          const res = await fetch(url, options);
+          if (res.status === 401 && this.authRequired) {
+            this.authenticated = false;
+            this.showToast('warn', 'Session expired. Please sign in again.');
+          }
+          return res;
         },
 
         getRouteVerificationLabel(r) {
@@ -773,6 +921,7 @@
 
         setTab(tab) {
           this.currentTab = tab;
+          if (!this.authenticated) return;
           if (tab === 'routes') this.fetchRoutes();
           if (tab === 'requests') this.fetchRequests(0);
           if (tab === 'dlq') this.fetchDLQ();
@@ -801,7 +950,7 @@
         // --- Routes CRUD ---
         async fetchRoutes() {
           try {
-            const res = await fetch('/api/v1/routes');
+            const res = await this.apiFetch('/api/v1/routes');
             if (res.ok) {
               this.routes = await res.json();
             }
@@ -928,7 +1077,7 @@
 
             const method = this.isEditingRoute ? 'PUT' : 'POST';
             const url = this.isEditingRoute ? `/api/v1/routes/${payload.id}` : '/api/v1/routes';
-            const res = await fetch(url, {
+            const res = await this.apiFetch(url, {
               method,
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
@@ -951,7 +1100,7 @@
         async confirmDeleteRoute(r) {
           if (!confirm(`Are you sure you want to delete route "${r.name}"?`)) return;
           try {
-            const res = await fetch(`/api/v1/routes/${r.id}`, { method: 'DELETE' });
+            const res = await this.apiFetch(`/api/v1/routes/${r.id}`, { method: 'DELETE' });
             if (res.ok) {
               this.showToast('success', 'Route deleted');
               this.closeRouteDrawer();
@@ -983,7 +1132,7 @@
           if (this.reqFilter.search) params.set('search', this.reqFilter.search);
 
           try {
-            const res = await fetch(`/api/v1/requests?${params.toString()}`);
+            const res = await this.apiFetch(`/api/v1/requests?${params.toString()}`);
             if (res.ok) {
               const data = await res.json();
               this.requests = data.items || [];
@@ -998,7 +1147,7 @@
           this.requestDetail = null;
           this.drawerOpen = true;
           try {
-            const res = await fetch(`/api/v1/requests/${id}`);
+            const res = await this.apiFetch(`/api/v1/requests/${id}`);
             if (res.ok) {
               this.requestDetail = await res.json();
             } else {
@@ -1017,7 +1166,7 @@
         // --- DLQ Management ---
         async fetchDLQ() {
           try {
-            const res = await fetch('/api/v1/dlq?limit=50');
+            const res = await this.apiFetch('/api/v1/dlq?limit=50');
             if (res.ok) {
               const data = await res.json();
               this.dlqItems = data.items || [];
@@ -1030,7 +1179,7 @@
 
         async triggerReplaySingle(id) {
           try {
-            const res = await fetch(`/api/v1/dlq/${id}/replay`, { method: 'POST' });
+            const res = await this.apiFetch(`/api/v1/dlq/${id}/replay`, { method: 'POST' });
             if (res.ok) {
               this.showToast('success', `Replay triggered for ${id}!`);
               this.fetchDLQ();
@@ -1046,7 +1195,7 @@
         async triggerReplayAll() {
           if (!confirm(`Are you sure you want to replay all ${this.dlqTotal} dead-lettered requests?`)) return;
           try {
-            const res = await fetch('/api/v1/dlq/replay-all', {
+            const res = await this.apiFetch('/api/v1/dlq/replay-all', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ limit: 100 })

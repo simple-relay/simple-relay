@@ -126,6 +126,7 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 	upgradeManager.StartSignalListener(runCtx)
 
 	handler := api.NewRouter(cfg, logger, api.RouterOptions{
+		Context:       runCtx,
 		RouteRepo:     db.RouteRepo,
 		RouteRegistry: registry,
 		RelayEngine:   relayEngine,

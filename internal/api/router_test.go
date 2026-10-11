@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/simple-relay/simple-relay/internal/config"
 )
@@ -99,6 +100,83 @@ func TestUIRoutes_StaticAssets(t *testing.T) {
 		}
 		if len(rr.Body.Bytes()) == 0 {
 			t.Errorf("expected non-empty body for %s", tt.path)
+		}
+	}
+}
+
+func TestRouter_AuthMiddleware(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	// Case 1: Admin password disabled
+	cfgNoAuth := config.DefaultConfig()
+	cfgNoAuth.AdminPassword = ""
+	routerNoAuth := NewRouter(cfgNoAuth, logger)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	rr := httptest.NewRecorder()
+	routerNoAuth.ServeHTTP(rr, req)
+	// Without routeRepo it returns 404 from ServeMux, NOT 401 Unauthorized
+	if rr.Code == http.StatusUnauthorized {
+		t.Fatalf("expected non-401 for /api/v1/routes when auth disabled, got %d", rr.Code)
+	}
+
+	// Case 2: Admin password enabled
+	cfgAuth := config.DefaultConfig()
+	cfgAuth.AdminPassword = "adminsecret123"
+	sessionStore := NewSessionStore(24 * time.Hour)
+	routerAuth := NewRouter(cfgAuth, logger, RouterOptions{SessionStore: sessionStore})
+
+	// Public endpoints should pass through
+	publicPaths := []string{"/healthz", "/ui/static/js/alpine.min.js", "/", "/api/v1/auth/status"}
+	for _, p := range publicPaths {
+		reqPub := httptest.NewRequest(http.MethodGet, p, nil)
+		rrPub := httptest.NewRecorder()
+		routerAuth.ServeHTTP(rrPub, reqPub)
+		if rrPub.Code == http.StatusUnauthorized {
+			t.Fatalf("expected public endpoint %s to not be blocked by auth, got 401", p)
+		}
+	}
+
+	// Protected endpoints should return 401 Unauthorized when unauthenticated
+	protectedPaths := []string{
+		"/api/v1/routes",
+		"/api/v1/routes/any-id",
+		"/api/v1/requests",
+		"/api/v1/requests/any-id",
+		"/api/v1/dlq",
+		"/api/v1/dlq/any-id/replay",
+		"/api/v1/jobs/01hx0000000000000000000000",
+	}
+	for _, p := range protectedPaths {
+		reqProt := httptest.NewRequest(http.MethodGet, p, nil)
+		rrProt := httptest.NewRecorder()
+		routerAuth.ServeHTTP(rrProt, reqProt)
+		if rrProt.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized for %s without cookie, got %d", p, rrProt.Code)
+		}
+	}
+
+	// Machine ingest POST /api/v1/jobs/{route_name} should remain unauthenticated
+	reqIngest := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/test-route", nil)
+	rrIngest := httptest.NewRecorder()
+	routerAuth.ServeHTTP(rrIngest, reqIngest)
+	if rrIngest.Code == http.StatusUnauthorized {
+		t.Fatalf("expected POST /api/v1/jobs/test-route not to be blocked by auth, got 401")
+	}
+
+	// Protected endpoints with valid cookie should not return 401
+	token, err := sessionStore.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	for _, p := range protectedPaths {
+		reqAuth := httptest.NewRequest(http.MethodGet, p, nil)
+		reqAuth.AddCookie(&http.Cookie{Name: "relay_session", Value: token})
+		rrAuth := httptest.NewRecorder()
+		routerAuth.ServeHTTP(rrAuth, reqAuth)
+		if rrAuth.Code == http.StatusUnauthorized {
+			t.Fatalf("expected non-401 for %s with valid session cookie, got %d", p, rrAuth.Code)
 		}
 	}
 }

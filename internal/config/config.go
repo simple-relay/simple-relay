@@ -169,6 +169,9 @@ func (c *Config) Validate() error {
 	if c.DrainTimeout <= 0 {
 		return fmt.Errorf("drain timeout must be > 0")
 	}
+	if c.AdminPassword != "" && len(c.AdminPassword) < 10 {
+		return fmt.Errorf("admin password must be at least 10 characters long")
+	}
 	// Dynamic buffer resolution: 0 signifies auto-sizing to 2 * WorkerConcurrency
 	if c.DispatcherBuffer <= 0 {
 		c.DispatcherBuffer = c.WorkerConcurrency * 2

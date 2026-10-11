@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/simple-relay/simple-relay/internal/config"
@@ -15,6 +17,7 @@ import (
 
 // RouterOptions specifies optional subsystem dependencies for the router.
 type RouterOptions struct {
+	Context       context.Context
 	RouteRepo     storage.RouteRepository
 	RouteRegistry *engine.RouteRegistry
 	RelayEngine   *engine.RelayEngine
@@ -23,14 +26,43 @@ type RouterOptions struct {
 	AttemptRepo   storage.AttemptRepository
 	WakeFn        func()
 	MaxBodyBytes  int64
+	SessionStore  *SessionStore
+	RateLimiter   *RateLimiter
 }
 
 // NewRouter creates and configures the HTTP routing using Go 1.22+ standard library ServeMux.
 func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) http.Handler {
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
 	if logger == nil {
 		logger = slog.Default()
 	}
 	mux := http.NewServeMux()
+
+	var opt RouterOptions
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
+	sessionStore := opt.SessionStore
+	if sessionStore == nil {
+		sessionStore = NewSessionStore(24 * time.Hour)
+	}
+	rateLimiter := opt.RateLimiter
+	if rateLimiter == nil {
+		rateLimiter = NewRateLimiter(5, 5*time.Minute)
+	}
+
+	if opt.Context != nil {
+		sessionStore.StartAutoCleanup(opt.Context, 10*time.Minute)
+		rateLimiter.StartAutoCleanup(opt.Context, 10*time.Minute)
+	}
+
+	authHandler := NewAuthHandler(cfg.AdminPassword, sessionStore, rateLimiter, logger)
+	mux.HandleFunc("GET /api/v1/auth/status", authHandler.Status)
+	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
+	mux.HandleFunc("POST /api/v1/auth/logout", authHandler.Logout)
 
 	// Health check endpoint for container orchestrators and monitoring
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -62,68 +94,90 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 	mux.HandleFunc("GET /ui", uiHandler)
 	mux.HandleFunc("GET /ui/", uiHandler)
 
-	if len(opts) > 0 {
-		opt := opts[0]
-		if opt.RouteRepo != nil {
-			routesHandler := NewRoutesHandler(opt.RouteRepo, opt.RouteRegistry, logger)
-			mux.HandleFunc("GET /api/v1/routes", routesHandler.ListRoutes)
-			mux.HandleFunc("POST /api/v1/routes", routesHandler.CreateRoute)
-			mux.HandleFunc("GET /api/v1/routes/{id}", routesHandler.GetRoute)
-			mux.HandleFunc("PUT /api/v1/routes/{id}", routesHandler.UpdateRoute)
-			mux.HandleFunc("DELETE /api/v1/routes/{id}", routesHandler.DeleteRoute)
-		}
-		if opt.RouteRegistry != nil && opt.RelayEngine != nil {
-			relayHandler := NewRelayHandler(opt.RouteRegistry, opt.RelayEngine, logger, opt.MaxBodyBytes)
-			mux.HandleFunc("/api/v1/relay/{route_name}", relayHandler)
-		}
-		if opt.RouteRegistry != nil && opt.BatchWriter != nil {
-			ingestHandler := NewJobIngestHandler(opt.RouteRegistry, opt.BatchWriter, logger, opt.MaxBodyBytes)
-			mux.HandleFunc("POST /api/v1/jobs/{route_name}", ingestHandler)
+	if opt.RouteRepo != nil {
+		routesHandler := NewRoutesHandler(opt.RouteRepo, opt.RouteRegistry, logger)
+		mux.HandleFunc("GET /api/v1/routes", routesHandler.ListRoutes)
+		mux.HandleFunc("POST /api/v1/routes", routesHandler.CreateRoute)
+		mux.HandleFunc("GET /api/v1/routes/{id}", routesHandler.GetRoute)
+		mux.HandleFunc("PUT /api/v1/routes/{id}", routesHandler.UpdateRoute)
+		mux.HandleFunc("DELETE /api/v1/routes/{id}", routesHandler.DeleteRoute)
+	}
+	if opt.RouteRegistry != nil && opt.RelayEngine != nil {
+		relayHandler := NewRelayHandler(opt.RouteRegistry, opt.RelayEngine, logger, opt.MaxBodyBytes)
+		mux.HandleFunc("/api/v1/relay/{route_name}", relayHandler)
+	}
+	if opt.RouteRegistry != nil && opt.BatchWriter != nil {
+		ingestHandler := NewJobIngestHandler(opt.RouteRegistry, opt.BatchWriter, logger, opt.MaxBodyBytes)
+		mux.HandleFunc("POST /api/v1/jobs/{route_name}", ingestHandler)
 
-			webhookHandler := NewWebhookHandler(opt.RouteRegistry, opt.BatchWriter, logger, opt.MaxBodyBytes)
-			mux.HandleFunc("/api/v1/webhook/{route_name}", webhookHandler)
-		}
-		if opt.RequestRepo != nil && opt.AttemptRepo != nil {
-			inspectHandler := NewJobInspectHandler(opt.RequestRepo, opt.AttemptRepo, logger)
-			mux.HandleFunc("GET /api/v1/jobs/{job_id}", inspectHandler)
-		}
-		if opt.RequestRepo != nil {
-			requestsHandler := NewRequestsHandler(opt.RequestRepo, opt.AttemptRepo, logger)
-			mux.HandleFunc("GET /api/v1/requests", requestsHandler.ListRequests)
-			mux.HandleFunc("GET /api/v1/requests/{id}", requestsHandler.GetRequest)
-
-			mux.HandleFunc("GET /api/v1/queue/stats", func(w http.ResponseWriter, r *http.Request) {
-				pending, inFlight, err := opt.RequestRepo.GetQueueStats(r.Context())
-				if err != nil {
-					logger.Error("failed to get queue stats", "error", err)
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusInternalServerError)
-					_ = json.NewEncoder(w).Encode(map[string]any{"error": "failed to get queue stats"})
-					return
-				}
-				status := "HEALTHY"
-				if pending+inFlight >= 1000 {
-					status = "BACKLOG"
-				}
+		webhookHandler := NewWebhookHandler(opt.RouteRegistry, opt.BatchWriter, logger, opt.MaxBodyBytes)
+		mux.HandleFunc("/api/v1/webhook/{route_name}", webhookHandler)
+	}
+	if opt.RequestRepo != nil && opt.AttemptRepo != nil {
+		inspectHandler := NewJobInspectHandler(opt.RequestRepo, opt.AttemptRepo, logger)
+		mux.HandleFunc("GET /api/v1/jobs/{job_id}", inspectHandler)
+	}
+	if opt.RequestRepo != nil {
+		requestsHandler := NewRequestsHandler(opt.RequestRepo, opt.AttemptRepo, logger)
+		mux.HandleFunc("GET /api/v1/requests", requestsHandler.ListRequests)
+		mux.HandleFunc("GET /api/v1/requests/{id}", requestsHandler.GetRequest)
+		mux.HandleFunc("GET /api/v1/queue/stats", func(w http.ResponseWriter, r *http.Request) {
+			pending, inFlight, err := opt.RequestRepo.GetQueueStats(r.Context())
+			if err != nil {
+				logger.Error("failed to get queue stats", "error", err)
 				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusOK)
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"pending":     pending,
-					"in_flight":   inFlight,
-					"queue_depth": pending + inFlight,
-					"status":      status,
-				})
+				w.WriteHeader(http.StatusInternalServerError)
+				_ = json.NewEncoder(w).Encode(map[string]any{"error": "failed to get queue stats"})
+				return
+			}
+			status := "HEALTHY"
+			if pending+inFlight >= 1000 {
+				status = "BACKLOG"
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"pending":     pending,
+				"in_flight":   inFlight,
+				"queue_depth": pending + inFlight,
+				"status":      status,
 			})
+		})
 
-			dlqHandler := NewDLQHandler(opt.RequestRepo, opt.RouteRegistry, opt.WakeFn, logger)
-			mux.HandleFunc("GET /api/v1/dlq", dlqHandler.ListDLQ)
-			mux.HandleFunc("POST /api/v1/dlq/{request_id}/replay", dlqHandler.ReplaySingle)
-			mux.HandleFunc("POST /api/v1/dlq/replay-all", dlqHandler.ReplayAll)
-		}
+		dlqHandler := NewDLQHandler(opt.RequestRepo, opt.RouteRegistry, opt.WakeFn, logger)
+		mux.HandleFunc("GET /api/v1/dlq", dlqHandler.ListDLQ)
+		mux.HandleFunc("POST /api/v1/dlq/{request_id}/replay", dlqHandler.ReplaySingle)
+		mux.HandleFunc("POST /api/v1/dlq/replay-all", dlqHandler.ReplayAll)
 	}
 
+	handler := authMiddleware(cfg.AdminPassword, sessionStore, mux)
+
 	// Wrap mux with standard logging & panic recovery middleware
-	return loggingMiddleware(logger, recoveryMiddleware(logger, mux))
+	return loggingMiddleware(logger, recoveryMiddleware(logger, handler))
+}
+
+func authMiddleware(adminPassword string, sessionStore *SessionStore, next http.Handler) http.Handler {
+	if adminPassword == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.HasPrefix(path, "/api/v1/routes") ||
+			strings.HasPrefix(path, "/api/v1/requests") ||
+			strings.HasPrefix(path, "/api/v1/dlq") ||
+			((r.Method == http.MethodGet || r.Method == http.MethodHead) && strings.HasPrefix(path, "/api/v1/jobs/")) {
+			cookie, err := r.Cookie("relay_session")
+			if err != nil || cookie == nil || !sessionStore.Validate(cookie.Value) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"error": "Unauthorized: admin session required",
+				})
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func loggingMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
