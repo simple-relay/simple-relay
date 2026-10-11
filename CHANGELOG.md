@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0](https://github.com/simple-relay/simple-relay/compare/v0.3.0...v0.4.0) (2026-10-10)
+
+
+### Features
+
+* **bench:** add automated E2E benchmark suite, v0.3.0 report, and roadmap item ([#45](https://github.com/simple-relay/simple-relay/issues/45)) ([#46](https://github.com/simple-relay/simple-relay/issues/46)) ([3cd8f6d](https://github.com/simple-relay/simple-relay/commit/3cd8f6df13edb021e95d2776bc07e2e5985e1c0a))
+* **dev:** add debug and debug-dlv targets to Makefile ([#43](https://github.com/simple-relay/simple-relay/issues/43)) ([00e92c2](https://github.com/simple-relay/simple-relay/commit/00e92c2afbcfabc2d68509e91b07648aff22ecff))
+
+
+### Documentation
+
+* **roadmap:** track dynamic url dashboard task ([#49](https://github.com/simple-relay/simple-relay/issues/49)) ([68e51cf](https://github.com/simple-relay/simple-relay/commit/68e51cfef6200b7da47b9c6a5146db35c0a9e528))
+
+
+### Maintenance & Dependencies
+
+* Update roadmap.md ([#48](https://github.com/simple-relay/simple-relay/issues/48)) ([e0abf23](https://github.com/simple-relay/simple-relay/commit/e0abf23ee59d9374bffd1b244b6e05268d044e6d))
+
 ## [0.3.0](https://github.com/simple-relay/simple-relay/compare/v0.2.0...v0.3.0) (2026-10-10)
 
 
