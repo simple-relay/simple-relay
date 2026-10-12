@@ -200,6 +200,22 @@ On Windows (`//go:build windows`):
   * Parent stops its Dispatcher immediately when the readiness signal is received.
   * Child begins polling for new pending jobs.
 
+### 4.5 Release Pipeline & Distribution Alignment (Release Please + GoReleaser)
+
+Simple Relay uses an automated CI/CD release workflow:
+* **Release Please:** Triggered by `.github/workflows/release.yml`, parses Conventional Commits and tags GitHub releases with SemVer.
+* **GoReleaser (`.goreleaser.yaml`):** Cross-compiles static binaries (`CGO_ENABLED=0`) across platforms:
+  * Linux: `linux/amd64`, `linux/arm64`
+  * macOS: `darwin/amd64`, `darwin/arm64`
+  * Windows: `windows/amd64`
+  * Artifact archives: `simple-relay_{version}_{os}_{arch}.tar.gz` (and `.zip` for Windows) packaging the executable `simple-relay`.
+
+#### Executable Resolution on Upgrades
+When an operator downloads an updated release archive or stages a binary:
+1. **Explicit Override (`RELAY_UPGRADE_BINARY`):** If specified (e.g. `RELAY_UPGRADE_BINARY=/opt/bin/simple-relay.new`), the parent directly spawns this target path.
+2. **Path Lookup (`exec.LookPath(os.Args[0])`):** Resolves the binary name from `$PATH` (e.g. `/usr/local/bin/simple-relay`).
+3. **Self Resolution (`os.Executable()`):** Fallback to `/proc/self/exe` on Linux or `_NSGetExecutablePath` on Darwin. If the binary was unlinked/replaced on disk (causing `/proc/self/exe` to point to `/path/to/simple-relay (deleted)` on Linux), the resolver strips the ` (deleted)` suffix and verifies the file at that path exists before invoking `exec.Command`.
+
 ---
 
 ## 5. Configuration & Environment Variables
@@ -217,13 +233,16 @@ On Windows (`//go:build windows`):
 1. **Unit Tests:**
    * Test `upgrade.GetListener` in cold boot vs simulated FD inheritance.
    * Test readiness pipe handshake and timeout cancellation.
+   * Test executable path resolution with simulated deleted / staged binaries.
 2. **Integration Test — Zero-Downtime Reload under Traffic (Linux & macOS):**
    * Start relay binary on an ephemeral port.
    * Launch background worker pool sending 100 requests/sec.
    * Send `SIGUSR2` to trigger live upgrade.
    * Assert 100% requests succeed (0 connection refused, 0 timeouts).
    * Assert child takes over socket, parent terminates cleanly with exit code 0.
-3. **Build Matrix Verification:**
-   * Static compilation check: `CGO_ENABLED=0 GOOS=linux go build ./cmd/relay`
-   * Darwin compilation check: `CGO_ENABLED=0 GOOS=darwin go build ./cmd/relay`
-   * Windows compilation check: `CGO_ENABLED=0 GOOS=windows go build ./cmd/relay`
+3. **GoReleaser Cross-Platform Build Matrix Verification:**
+   * `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/relay`
+   * `CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /dev/null ./cmd/relay`
+   * `CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o /dev/null ./cmd/relay`
+   * `CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/relay`
+   * `CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/relay`
