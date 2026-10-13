@@ -152,7 +152,7 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 
 	// Signal readiness to parent if we were launched as an upgrade child
 	if err := upgrade.SignalReady(); err != nil {
-		logger.Error("failed to signal upgrade readiness to parent", "error", err)
+		return fmt.Errorf("failed to signal upgrade readiness to parent: %w", err)
 	}
 
 	select {

@@ -1,17 +1,16 @@
-package upgrade_test
+package upgrade
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
-
-	"github.com/simple-relay/simple-relay/internal/upgrade"
 )
 
 func TestResolveExecutable_EnvOverride(t *testing.T) {
 	expected := "/usr/local/bin/custom-relay"
-	t.Setenv(upgrade.EnvUpgradeBinary, expected)
+	t.Setenv(EnvUpgradeBinary, expected)
 
-	path, err := upgrade.ResolveExecutable()
+	path, err := ResolveExecutable()
 	if err != nil {
 		t.Fatalf("unexpected error resolving executable: %v", err)
 	}
@@ -22,23 +21,65 @@ func TestResolveExecutable_EnvOverride(t *testing.T) {
 }
 
 func TestResolveExecutable_TrimDeletedSuffix(t *testing.T) {
-	t.Setenv(upgrade.EnvUpgradeBinary, "/bin/simple-relay (deleted)")
+	t.Setenv(EnvUpgradeBinary, "")
 
-	path, err := upgrade.ResolveExecutable()
+	origArgs := os.Args
+	t.Cleanup(func() {
+		os.Args = origArgs
+	})
+	os.Args = []string{"nonexistent-binary-fallback"}
+
+	tmpDir := t.TempDir()
+	binPath := filepath.Join(tmpDir, "simple-relay")
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+		t.Fatalf("failed to create temp binary: %v", err)
+	}
+
+	origExec := executableFunc
+	t.Cleanup(func() {
+		executableFunc = origExec
+	})
+	executableFunc = func() (string, error) {
+		return binPath + " (deleted)", nil
+	}
+
+	path, err := ResolveExecutable()
 	if err != nil {
 		t.Fatalf("unexpected error resolving executable: %v", err)
 	}
 
-	expected := "/bin/simple-relay"
-	if path != expected {
-		t.Fatalf("expected trimmed executable %q, got %q", expected, path)
+	if path != binPath {
+		t.Fatalf("expected trimmed executable %q, got %q", binPath, path)
+	}
+}
+
+func TestResolveExecutable_StatFailure(t *testing.T) {
+	t.Setenv(EnvUpgradeBinary, "")
+
+	origArgs := os.Args
+	t.Cleanup(func() {
+		os.Args = origArgs
+	})
+	os.Args = []string{"nonexistent-binary-fallback"}
+
+	origExec := executableFunc
+	t.Cleanup(func() {
+		executableFunc = origExec
+	})
+	executableFunc = func() (string, error) {
+		return "/nonexistent/binary/path (deleted)", nil
+	}
+
+	_, err := ResolveExecutable()
+	if err == nil {
+		t.Fatalf("expected error when resolved binary does not exist, got nil")
 	}
 }
 
 func TestResolveExecutable_Default(t *testing.T) {
-	t.Setenv(upgrade.EnvUpgradeBinary, "")
+	t.Setenv(EnvUpgradeBinary, "")
 
-	path, err := upgrade.ResolveExecutable()
+	path, err := ResolveExecutable()
 	if err != nil {
 		t.Fatalf("unexpected error resolving default executable: %v", err)
 	}

@@ -76,9 +76,12 @@ func TestTriggerUpgrade_SuccessHandshake(t *testing.T) {
 	if childProc == nil {
 		t.Fatalf("expected non-nil ChildProcess after successful upgrade")
 	}
-	defer func() {
-		_ = childProc.Kill()
-	}()
+	t.Cleanup(func() {
+		if childProc != nil {
+			_ = childProc.Kill()
+			_, _ = childProc.Wait()
+		}
+	})
 
 	select {
 	case <-readyCalled:
@@ -132,7 +135,12 @@ func TestTriggerUpgrade_TimeoutAbort(t *testing.T) {
 	if childProc == nil {
 		t.Fatalf("expected childProc to be tracked")
 	}
-	_ = childProc.Kill()
+	t.Cleanup(func() {
+		if childProc != nil {
+			_ = childProc.Kill()
+			_, _ = childProc.Wait()
+		}
+	})
 }
 
 func TestUpgradeManager_StartSignalListener(t *testing.T) {
@@ -168,7 +176,11 @@ func TestUpgradeManager_StartSignalListener(t *testing.T) {
 		t.Fatalf("timed out waiting for SIGUSR2 to trigger upgrade")
 	}
 
-	if childProc := mgr.ChildProcess(); childProc != nil {
-		_ = childProc.Kill()
-	}
+	childProc := mgr.ChildProcess()
+	t.Cleanup(func() {
+		if childProc != nil {
+			_ = childProc.Kill()
+			_, _ = childProc.Wait()
+		}
+	})
 }

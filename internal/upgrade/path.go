@@ -40,7 +40,11 @@ func ResolveExecutable() (string, error) {
 		return "", fmt.Errorf("failed to determine executable path: %w", err)
 	}
 
-	return cleanExecutablePath(execPath), nil
+	cleaned := cleanExecutablePath(execPath)
+	if _, err := os.Stat(cleaned); err != nil {
+		return "", fmt.Errorf("resolved binary %q does not exist: %w", cleaned, err)
+	}
+	return cleaned, nil
 }
 
 func cleanExecutablePath(path string) string {
