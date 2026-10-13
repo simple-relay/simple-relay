@@ -216,7 +216,7 @@
 - [ ] **CLI Inspection Binary (`cmd/relay-cli`)** ([#21](https://github.com/simple-relay/simple-relay/issues/21))
   - Command-line tool to inspect relay health, active routes, and queue depth.
   - Query in-flight jobs and Dead Letter Queue directly from terminal.
-- [ ] **Webhook Alert Notifications on DLQ Threshold Breaches** ([#22](https://github.com/simple-relay/simple-relay/issues/22))
+- [x] **Webhook Alert Notifications on DLQ Threshold Breaches** ([#22]
   - Push alert notifications to external webhooks (Slack, Discord, Email) when DLQ item count exceeds configured threshold.
 - [ ] **API Key Authentication for Programmatic Management** ([#23](https://github.com/simple-relay/simple-relay/issues/23))
   - Secure API endpoints using API keys for machine-to-machine route management and job querying.
