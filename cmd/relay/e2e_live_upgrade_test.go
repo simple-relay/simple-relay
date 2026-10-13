@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -135,8 +136,20 @@ func TestE2ELiveUpgrade(t *testing.T) {
 			_ = parentCmd.Process.Kill()
 			_ = parentCmd.Wait()
 		}
-		if childPID > 0 {
-			_ = syscall.Kill(childPID, syscall.SIGKILL)
+		targetChildPID := childPID
+		if targetChildPID == 0 {
+			if logBytes, err := os.ReadFile(logFilePath); err == nil {
+				re := regexp.MustCompile(`"child_pid":\s*(\d+)`)
+				if matches := re.FindAllSubmatch(logBytes, -1); len(matches) > 0 {
+					last := matches[len(matches)-1]
+					if parsed, err := strconv.Atoi(string(last[1])); err == nil && parsed > 0 {
+						targetChildPID = parsed
+					}
+				}
+			}
+		}
+		if targetChildPID > 0 {
+			_ = syscall.Kill(targetChildPID, syscall.SIGKILL)
 		}
 	})
 
@@ -354,14 +367,16 @@ func TestE2ELiveUpgrade(t *testing.T) {
 			break
 		}
 		// On Linux, check /proc/<pid>/status to catch reaped or zombie processes ⚡
-		if statusBytes, procErr := os.ReadFile(fmt.Sprintf("/proc/%d/status", childPID)); procErr == nil {
-			if strings.Contains(string(statusBytes), "State:\tZ (zombie)") {
+		if runtime.GOOS == "linux" {
+			if statusBytes, procErr := os.ReadFile(fmt.Sprintf("/proc/%d/status", childPID)); procErr == nil {
+				if strings.Contains(string(statusBytes), "State:\tZ (zombie)") {
+					childTerminated = true
+					break
+				}
+			} else if errors.Is(procErr, os.ErrNotExist) {
 				childTerminated = true
 				break
 			}
-		} else if errors.Is(procErr, os.ErrNotExist) {
-			childTerminated = true
-			break
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
