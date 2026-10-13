@@ -14,7 +14,9 @@ type mockDispatcherRepo struct {
 	mu             sync.Mutex
 	pending        []*model.Request
 	claimed        []*model.Request
+	processing     []*model.Request
 	recoveredCount int64
+	recoverCalls   int
 }
 
 func (m *mockDispatcherRepo) CreateRequest(ctx context.Context, req *model.Request) error {
@@ -56,7 +58,22 @@ func (m *mockDispatcherRepo) ClaimPendingRequests(ctx context.Context, limit int
 func (m *mockDispatcherRepo) RecoverStuckRequests(ctx context.Context, stuckBefore time.Time) (int64, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	c := m.recoveredCount
+	m.recoverCalls++
+
+	var recovered int64
+	var stillProcessing []*model.Request
+	for _, req := range m.processing {
+		if req.UpdatedAt.IsZero() || !req.UpdatedAt.After(stuckBefore) {
+			req.Status = model.RequestStatusPending
+			m.pending = append(m.pending, req)
+			recovered++
+		} else {
+			stillProcessing = append(stillProcessing, req)
+		}
+	}
+	m.processing = stillProcessing
+
+	c := m.recoveredCount + recovered
 	m.recoveredCount = 0
 	return c, nil
 }
@@ -179,3 +196,81 @@ func TestDispatcher_CapacityBounding(t *testing.T) {
 	}
 	repo.mu.Unlock()
 }
+
+func TestDispatcher_SkipImmediateRecovery(t *testing.T) {
+	t.Run("suppressed recovery when SkipImmediateRecovery is true", func(t *testing.T) {
+		repo := &mockDispatcherRepo{
+			processing: []*model.Request{
+				{ID: "req-proc-1", Status: model.RequestStatusProcessing},
+				{ID: "req-proc-2", Status: model.RequestStatusProcessing},
+			},
+		}
+
+		jobsCh := make(chan *model.Request, 10)
+		disp := NewDispatcher(repo, jobsCh, DispatcherConfig{
+			PollInterval:          10 * time.Second,
+			SkipImmediateRecovery: true,
+		})
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		disp.Start(ctx)
+		defer disp.Close()
+
+		time.Sleep(50 * time.Millisecond)
+
+		repo.mu.Lock()
+		defer repo.mu.Unlock()
+
+		if repo.recoverCalls != 0 {
+			t.Errorf("expected 0 calls to RecoverStuckRequests on startup, got %d", repo.recoverCalls)
+		}
+		if len(repo.processing) != 2 {
+			t.Errorf("expected 2 requests to remain in processing state, got %d", len(repo.processing))
+		}
+		if len(repo.pending) != 0 {
+			t.Errorf("expected 0 pending requests, got %d", len(repo.pending))
+		}
+		if len(jobsCh) != 0 {
+			t.Errorf("expected jobs channel to be empty, got %d", len(jobsCh))
+		}
+	})
+
+	t.Run("immediate recovery executed when SkipImmediateRecovery is false", func(t *testing.T) {
+		repo := &mockDispatcherRepo{
+			processing: []*model.Request{
+				{ID: "req-proc-1", Status: model.RequestStatusProcessing},
+				{ID: "req-proc-2", Status: model.RequestStatusProcessing},
+			},
+		}
+
+		jobsCh := make(chan *model.Request, 10)
+		disp := NewDispatcher(repo, jobsCh, DispatcherConfig{
+			PollInterval:          10 * time.Second,
+			SkipImmediateRecovery: false,
+		})
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		disp.Start(ctx)
+		defer disp.Close()
+
+		time.Sleep(50 * time.Millisecond)
+
+		repo.mu.Lock()
+		defer repo.mu.Unlock()
+
+		if repo.recoverCalls == 0 {
+			t.Errorf("expected RecoverStuckRequests to be called on startup")
+		}
+		if len(repo.processing) != 0 {
+			t.Errorf("expected 0 requests to remain in processing, got %d", len(repo.processing))
+		}
+		if len(jobsCh) != 2 {
+			t.Errorf("expected 2 recovered requests to be dispatched to jobsCh, got %d", len(jobsCh))
+		}
+	})
+}
+
