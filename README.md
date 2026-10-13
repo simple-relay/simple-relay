@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/logo.svg" alt="Simple Relay Logo" height="60" />
-  &nbsp;
-  <span style="font-size:2em; font-weight:bold; vertical-align:middle;">Simple Relay</span>
+  <img src="docs/logo.svg" alt="Simple Relay Logo" height="96" />
 </p>
+
+# Simple Relay
 
 <p align="center">
   <strong>One binary. No infrastructure. Reliable HTTP delivery.</strong>
