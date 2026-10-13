@@ -20,6 +20,12 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.SlogLevel() != slog.LevelInfo {
 		t.Fatalf("expected SlogLevel Info, got %v", cfg.SlogLevel())
 	}
+	if cfg.WorkerConcurrency != 20 {
+		t.Fatalf("expected default WorkerConcurrency 20, got %d", cfg.WorkerConcurrency)
+	}
+	if cfg.DispatcherPollMS != 500 {
+		t.Fatalf("expected default DispatcherPollMS 500, got %d", cfg.DispatcherPollMS)
+	}
 	if cfg.CleanerInterval.Hours() != 1 {
 		t.Fatalf("expected default CleanerInterval 1h, got %v", cfg.CleanerInterval)
 	}
@@ -33,6 +39,9 @@ func TestLoadFromEnv(t *testing.T) {
 	os.Setenv("RELAY_HOST", "127.0.0.1")
 	os.Setenv("RELAY_LOG_LEVEL", "debug")
 	os.Setenv("RELAY_DB_PATH", "/tmp/test.db")
+	os.Setenv("RELAY_WORKER_CONCURRENCY", "100")
+	os.Setenv("RELAY_DISPATCHER_BUFFER", "300")
+	os.Setenv("RELAY_DISPATCHER_POLL_MS", "250")
 	os.Setenv("RELAY_CLEANER_INTERVAL", "30m")
 	os.Setenv("RELAY_DRAIN_TIMEOUT", "45s")
 	defer func() {
@@ -40,6 +49,9 @@ func TestLoadFromEnv(t *testing.T) {
 		os.Unsetenv("RELAY_HOST")
 		os.Unsetenv("RELAY_LOG_LEVEL")
 		os.Unsetenv("RELAY_DB_PATH")
+		os.Unsetenv("RELAY_WORKER_CONCURRENCY")
+		os.Unsetenv("RELAY_DISPATCHER_BUFFER")
+		os.Unsetenv("RELAY_DISPATCHER_POLL_MS")
 		os.Unsetenv("RELAY_CLEANER_INTERVAL")
 		os.Unsetenv("RELAY_DRAIN_TIMEOUT")
 	}()
@@ -58,6 +70,15 @@ func TestLoadFromEnv(t *testing.T) {
 	if cfg.DBPath != "/tmp/test.db" {
 		t.Fatalf("expected DBPath /tmp/test.db, got %s", cfg.DBPath)
 	}
+	if cfg.WorkerConcurrency != 100 {
+		t.Fatalf("expected WorkerConcurrency 100, got %d", cfg.WorkerConcurrency)
+	}
+	if cfg.DispatcherBuffer != 300 {
+		t.Fatalf("expected DispatcherBuffer 300, got %d", cfg.DispatcherBuffer)
+	}
+	if cfg.DispatcherPollMS != 250 {
+		t.Fatalf("expected DispatcherPollMS 250, got %d", cfg.DispatcherPollMS)
+	}
 	if cfg.SlogLevel() != slog.LevelDebug {
 		t.Fatalf("expected SlogLevel Debug, got %v", cfg.SlogLevel())
 	}
@@ -66,6 +87,27 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if cfg.DrainTimeout.Seconds() != 45 {
 		t.Fatalf("expected DrainTimeout 45s, got %v", cfg.DrainTimeout)
+	}
+}
+
+func TestConfig_DynamicDispatcherBuffer(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.WorkerConcurrency = 50
+	cfg.DispatcherBuffer = 0
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DispatcherBuffer != 100 {
+		t.Fatalf("expected dynamic DispatcherBuffer 100 (2x50), got %d", cfg.DispatcherBuffer)
+	}
+
+	// Explicit buffer remains unchanged
+	cfg.DispatcherBuffer = 150
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DispatcherBuffer != 150 {
+		t.Fatalf("expected explicit DispatcherBuffer 150, got %d", cfg.DispatcherBuffer)
 	}
 }
 
@@ -83,9 +125,15 @@ func TestConfig_Validate(t *testing.T) {
 	}
 
 	cfg = DefaultConfig()
-	cfg.WorkerPoolSize = 0
+	cfg.WorkerConcurrency = 0
 	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected error for zero worker pool size")
+		t.Fatal("expected error for zero worker concurrency")
+	}
+
+	cfg = DefaultConfig()
+	cfg.DispatcherPollMS = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for zero dispatcher poll interval")
 	}
 
 	cfg = DefaultConfig()

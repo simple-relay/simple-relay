@@ -253,3 +253,20 @@ func TestRetentionRepo_ReclaimStorage(t *testing.T) {
 		t.Fatalf("ReclaimStorage with default fallback failed: %v", err)
 	}
 }
+
+func TestRetentionRepo_Checkpoint(t *testing.T) {
+	db, cleanup := setupTestRetentionDB(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Insert raw requests to generate WAL activity
+	insertRawRequestWithTime(t, db, "01hckpt00000000000000000001", "success", time.Now().UTC())
+	insertRawRequestWithTime(t, db, "01hckpt00000000000000000002", "failed", time.Now().UTC())
+
+	// Execute Checkpoint
+	if err := db.RetentionRepo.Checkpoint(ctx); err != nil {
+		t.Fatalf("Checkpoint failed: %v", err)
+	}
+}

@@ -195,7 +195,7 @@
   - In-memory cache and configurable opt-out (`RELAY_CHECK_UPDATES=false`) for air-gapped deployments.
   - Expose version metadata via `GET /api/v1/system/version` and Web UI notification badge.
   - See design specification: [2026-10-09-version-check-design.md](specs/2026-10-09-version-check-design.md).
-- [ ] **Configurable Dispatcher Concurrency & Active WAL Checkpointing** ([#47](https://github.com/simple-relay/simple-relay/issues/47))
+- [x] **Configurable Dispatcher Concurrency & Active WAL Checkpointing** ([#47](https://github.com/simple-relay/simple-relay/issues/47))
   - Expose `-workers` CLI flag and `RELAY_WORKER_CONCURRENCY` env var (default: 20) to scale outbound delivery throughput beyond ~111 ev/s.
   - Allow tuning dispatcher channel buffer capacity and poll interval (`RELAY_DISPATCHER_BUFFER`, `RELAY_DISPATCHER_POLL_MS`).
   - Implement active SQLite WAL checkpointing (`PRAGMA wal_checkpoint(PASSIVE)` / `TRUNCATE`) in the background cleaner to prevent unbounded WAL file growth during continuous high-throughput bursts.

@@ -67,6 +67,11 @@ type RetentionRepository interface {
 	// In SQLite, this executes PRAGMA incremental_vacuum.
 	// In PostgreSQL/MySQL, this is a no-op (managed by database daemon autovacuum).
 	ReclaimStorage(ctx context.Context, maxPages int) error
+
+	// Checkpoint executes database-specific write-ahead log synchronization.
+	// In SQLite, this executes PRAGMA wal_checkpoint(PASSIVE).
+	// In PostgreSQL / MySQL, this is a no-op (WAL is managed by the DB daemon).
+	Checkpoint(ctx context.Context) error
 }
 
 // Storage encapsulates the complete storage engine interface.
