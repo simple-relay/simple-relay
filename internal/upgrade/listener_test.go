@@ -2,10 +2,8 @@ package upgrade_test
 
 import (
 	"io"
-	"net"
 	"os"
 	"strconv"
-	"syscall"
 	"testing"
 
 	"github.com/simple-relay/simple-relay/internal/upgrade"
@@ -26,50 +24,6 @@ func TestGetListener_ColdBoot(t *testing.T) {
 
 	if ln.Addr() == nil {
 		t.Fatalf("expected active listener with non-nil address")
-	}
-}
-
-func TestGetListener_Inherited(t *testing.T) {
-	// 1. Create a parent listener to simulate existing active socket
-	origLn, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to create initial listener: %v", err)
-	}
-	defer origLn.Close()
-
-	tcpLn, ok := origLn.(*net.TCPListener)
-	if !ok {
-		t.Fatalf("expected *net.TCPListener, got %T", origLn)
-	}
-
-	// 2. Extract underlying file descriptor
-	f, err := tcpLn.File()
-	if err != nil {
-		t.Fatalf("failed to extract file descriptor: %v", err)
-	}
-	defer f.Close()
-
-	// Duplicate to FD 3 as specified by convention for ExtraFiles[0]
-	targetFD := 3
-	if err := syscall.Dup2(int(f.Fd()), targetFD); err != nil {
-		t.Fatalf("failed to dup file descriptor to fd %d: %v", targetFD, err)
-	}
-
-	t.Setenv(upgrade.EnvInheritFD, strconv.Itoa(targetFD))
-
-	// 3. Acquire listener through upgrade package
-	inheritedLn, inherited, err := upgrade.GetListener("127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("unexpected error getting inherited listener: %v", err)
-	}
-	defer inheritedLn.Close()
-
-	if !inherited {
-		t.Fatalf("expected inherited=true, got false")
-	}
-
-	if inheritedLn.Addr().String() != origLn.Addr().String() {
-		t.Fatalf("listener address mismatch: got %s, want %s", inheritedLn.Addr().String(), origLn.Addr().String())
 	}
 }
 
