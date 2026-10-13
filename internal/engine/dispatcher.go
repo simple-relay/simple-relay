@@ -12,19 +12,21 @@ import (
 
 // DispatcherConfig encapsulates settings for the Dispatcher.
 type DispatcherConfig struct {
-	PollInterval      time.Duration
-	LeaseTimeout      time.Duration
-	LeaseReapInterval time.Duration
+	PollInterval          time.Duration
+	LeaseTimeout          time.Duration
+	LeaseReapInterval     time.Duration
+	SkipImmediateRecovery bool
 }
 
 // Dispatcher orchestrates picking up due requests and distributing them to the WorkerPool.
 type Dispatcher struct {
-	repo              storage.RequestRepository
-	jobsCh            chan *model.Request
-	wakeCh            chan struct{}
-	pollInterval      time.Duration
-	leaseTimeout      time.Duration
-	leaseReapInterval time.Duration
+	repo                  storage.RequestRepository
+	jobsCh                chan *model.Request
+	wakeCh                chan struct{}
+	pollInterval          time.Duration
+	leaseTimeout          time.Duration
+	leaseReapInterval     time.Duration
+	skipImmediateRecovery bool
 
 	done chan struct{}
 	wg   sync.WaitGroup
@@ -50,13 +52,14 @@ func NewDispatcher(repo storage.RequestRepository, jobsCh chan *model.Request, c
 	}
 
 	return &Dispatcher{
-		repo:              repo,
-		jobsCh:            jobsCh,
-		wakeCh:            make(chan struct{}, 1),
-		pollInterval:      pollInterval,
-		leaseTimeout:      leaseTimeout,
-		leaseReapInterval: leaseReapInterval,
-		done:              make(chan struct{}),
+		repo:                  repo,
+		jobsCh:                jobsCh,
+		wakeCh:                make(chan struct{}, 1),
+		pollInterval:          pollInterval,
+		leaseTimeout:          leaseTimeout,
+		leaseReapInterval:     leaseReapInterval,
+		skipImmediateRecovery: cfg.SkipImmediateRecovery,
+		done:                  make(chan struct{}),
 	}
 }
 
@@ -70,12 +73,16 @@ func (d *Dispatcher) Wake() {
 
 // Start launches the background dispatching loop.
 func (d *Dispatcher) Start(ctx context.Context) {
-	// Startup recovery: reclaim any requests left stuck in 'processing' by a previous instance
-	recovered, err := d.repo.RecoverStuckRequests(ctx, time.Now().UTC())
-	if err != nil {
-		slog.Error("failed to recover stuck requests during dispatcher startup", "error", err)
-	} else if recovered > 0 {
-		slog.Info("recovered stuck requests on startup", "count", recovered)
+	// Startup recovery: reclaim any requests left stuck in 'processing' by a previous instance.
+	// When running as an inherited process during live binary upgrade, immediate recovery is
+	// skipped to avoid stealing in-flight deliveries from the draining parent process ⚡.
+	if !d.skipImmediateRecovery {
+		recovered, err := d.repo.RecoverStuckRequests(ctx, time.Now().UTC())
+		if err != nil {
+			slog.Error("failed to recover stuck requests during dispatcher startup", "error", err)
+		} else if recovered > 0 {
+			slog.Info("recovered stuck requests on startup", "count", recovered)
+		}
 	}
 
 	d.wg.Add(1)

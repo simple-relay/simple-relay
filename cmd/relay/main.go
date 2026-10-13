@@ -16,6 +16,7 @@ import (
 	"github.com/simple-relay/simple-relay/internal/engine"
 	"github.com/simple-relay/simple-relay/internal/model"
 	"github.com/simple-relay/simple-relay/internal/storage/sqlite"
+	"github.com/simple-relay/simple-relay/internal/upgrade"
 	"github.com/simple-relay/simple-relay/internal/version"
 )
 
@@ -75,9 +76,18 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 		logger,
 	)
 
+	// Acquire listener (inherited from parent on live upgrade, or newly bound on cold boot)
+	ln, inherited, err := upgrade.GetListener(cfg.Address())
+	if err != nil {
+		return fmt.Errorf("failed to bind or inherit listener on %s: %w", cfg.Address(), err)
+	}
+	defer ln.Close()
+
 	// Initialize asynchronous durable delivery pipeline
 	jobsCh := make(chan *model.Request, 40)
-	dispatcher := engine.NewDispatcher(db.RequestRepo, jobsCh, engine.DispatcherConfig{})
+	dispatcher := engine.NewDispatcher(db.RequestRepo, jobsCh, engine.DispatcherConfig{
+		SkipImmediateRecovery: inherited,
+	})
 	workerPool := engine.NewWorkerPool(jobsCh, registry, db.RequestRepo, db.AttemptRepo, retryEngine, engine.WorkerPoolConfig{})
 	batchWriter := engine.NewBatchWriter(db.RequestRepo, engine.BatchWriterConfig{
 		WakeFn: dispatcher.Wake,
@@ -103,6 +113,15 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 	cleaner.Start(ctx)
 	defer cleaner.Close()
 
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+
+	upgradeManager := upgrade.NewUpgradeManager(ln, func() {
+		_ = dispatcher.Close()
+		cancelRun()
+	}, logger)
+	upgradeManager.StartSignalListener(runCtx)
+
 	handler := api.NewRouter(cfg, logger, api.RouterOptions{
 		RouteRepo:     db.RouteRepo,
 		RouteRegistry: registry,
@@ -126,19 +145,28 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 			"address", cfg.Address(),
 			"log_level", cfg.LogLevel,
 		)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 		}
 	}()
 
+	// Signal readiness to parent if we were launched as an upgrade child
+	if err := upgrade.SignalReady(); err != nil {
+		return fmt.Errorf("failed to signal upgrade readiness to parent: %w", err)
+	}
+
 	select {
 	case err := <-serverErr:
 		return fmt.Errorf("http server failure: %w", err)
-	case <-ctx.Done():
+	case <-runCtx.Done():
 		logger.Info("shutting down server gracefully...")
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	drainTimeout := cfg.DrainTimeout
+	if drainTimeout <= 0 {
+		drainTimeout = 30 * time.Second
+	}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), drainTimeout)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
