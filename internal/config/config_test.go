@@ -23,6 +23,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.CleanerInterval.Hours() != 1 {
 		t.Fatalf("expected default CleanerInterval 1h, got %v", cfg.CleanerInterval)
 	}
+	if cfg.DrainTimeout.Seconds() != 30 {
+		t.Fatalf("expected default DrainTimeout 30s, got %v", cfg.DrainTimeout)
+	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -31,12 +34,14 @@ func TestLoadFromEnv(t *testing.T) {
 	os.Setenv("RELAY_LOG_LEVEL", "debug")
 	os.Setenv("RELAY_DB_PATH", "/tmp/test.db")
 	os.Setenv("RELAY_CLEANER_INTERVAL", "30m")
+	os.Setenv("RELAY_DRAIN_TIMEOUT", "45s")
 	defer func() {
 		os.Unsetenv("RELAY_PORT")
 		os.Unsetenv("RELAY_HOST")
 		os.Unsetenv("RELAY_LOG_LEVEL")
 		os.Unsetenv("RELAY_DB_PATH")
 		os.Unsetenv("RELAY_CLEANER_INTERVAL")
+		os.Unsetenv("RELAY_DRAIN_TIMEOUT")
 	}()
 
 	cfg, err := LoadFromEnv()
@@ -58,6 +63,9 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if cfg.CleanerInterval.Minutes() != 30 {
 		t.Fatalf("expected CleanerInterval 30m, got %v", cfg.CleanerInterval)
+	}
+	if cfg.DrainTimeout.Seconds() != 45 {
+		t.Fatalf("expected DrainTimeout 45s, got %v", cfg.DrainTimeout)
 	}
 }
 
@@ -84,5 +92,11 @@ func TestConfig_Validate(t *testing.T) {
 	cfg.CleanerInterval = 0
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected error for zero cleaner interval")
+	}
+
+	cfg = DefaultConfig()
+	cfg.DrainTimeout = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for zero drain timeout")
 	}
 }

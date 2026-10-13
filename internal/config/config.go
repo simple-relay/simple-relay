@@ -24,6 +24,7 @@ type Config struct {
 	AdminPassword        string
 	MaxBatchSize         int
 	BatchTimeoutMS       int
+	DrainTimeout         time.Duration
 }
 
 // DefaultConfig provides sensible production defaults.
@@ -40,6 +41,7 @@ func DefaultConfig() *Config {
 		AdminPassword:        "",
 		MaxBatchSize:         50,
 		BatchTimeoutMS:       10,
+		DrainTimeout:         30 * time.Second,
 	}
 }
 
@@ -55,6 +57,7 @@ func Load() (*Config, error) {
 	fs.StringVar(&cfg.DBPath, "db", cfg.DBPath, "Path to SQLite database file")
 	fs.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "Log level: debug, info, warn, error")
 	fs.DurationVar(&cfg.CleanerInterval, "cleaner-interval", cfg.CleanerInterval, "Storage retention cleaner execution interval")
+	fs.DurationVar(&cfg.DrainTimeout, "drain-timeout", cfg.DrainTimeout, "Graceful shutdown drain timeout")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return nil, fmt.Errorf("failed to parse command line flags: %w", err)
@@ -122,6 +125,11 @@ func (c *Config) loadFromEnv() {
 			c.BatchTimeoutMS = t
 		}
 	}
+	if val := os.Getenv("RELAY_DRAIN_TIMEOUT"); val != "" {
+		if d, err := time.ParseDuration(val); err == nil && d > 0 {
+			c.DrainTimeout = d
+		}
+	}
 }
 
 // Validate ensures configuration values are within acceptable bounds.
@@ -137,6 +145,9 @@ func (c *Config) Validate() error {
 	}
 	if c.CleanerInterval <= 0 {
 		return fmt.Errorf("cleaner interval must be > 0")
+	}
+	if c.DrainTimeout <= 0 {
+		return fmt.Errorf("drain timeout must be > 0")
 	}
 	return nil
 }
