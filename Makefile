@@ -1,4 +1,4 @@
-.PHONY: build test race run debug debug-dlv clean tidy fmt check-fmt check-tidy lint check help
+.PHONY: build test race run debug debug-dlv clean tidy fmt check-fmt check-tidy lint check help install-hooks
 
 BINARY_NAME=relay
 BIN_DIR=bin
@@ -54,3 +54,9 @@ debug-dlv: ## Run relay service under Delve debugger on :2345 (headless)
 
 clean: ## Clean build artifacts, test coverages, and local databases
 	rm -rf $(BIN_DIR) coverage.out coverage.html *.db *.db-shm *.db-wal
+
+install-hooks: ## Install Git pre-commit hooks
+	@mkdir -p .git/hooks
+	cp scripts/pre-commit.sh .git/hooks/pre-commit
+	chmod +x .git/hooks/pre-commit
+	@echo "Git pre-commit hook installed successfully!"
