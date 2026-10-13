@@ -200,7 +200,7 @@
   - Allow tuning dispatcher channel buffer capacity and poll interval (`RELAY_DISPATCHER_BUFFER`, `RELAY_DISPATCHER_POLL_MS`).
   - Implement active SQLite WAL checkpointing (`PRAGMA wal_checkpoint(PASSIVE)` / `TRUNCATE`) in the background cleaner to prevent unbounded WAL file growth during continuous high-throughput bursts.
   - Full benchmark data and analysis available in [benchmarks.md](benchmarks.md).
-- [ ] **Zero-Downtime Live Binary Upgrade & Socket Handoff** ([#51](https://github.com/simple-relay/simple-relay/issues/51))
+- [x] **Zero-Downtime Live Binary Upgrade & Socket Handoff** ([#51]
   - Implement socket inheritance / listener handover via file descriptor passing (`net.FileListener`) across process restarts.
   - Add UNIX signal listener for `SIGUSR2` to spawn the upgraded binary without terminating network traffic.
   - Implement seamless graceful handover: child process inherits listener socket, starts serving immediately; parent stops listener, drains in-flight HTTP requests and batch writer buffer, and terminates cleanly.
