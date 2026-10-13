@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.0](https://github.com/simple-relay/simple-relay/compare/v0.4.0...v0.5.0) (2026-10-13)
+
+
+### Features
+
+* **engine:** implement configurable dispatcher concurrency and active wal checkpointing ([#56](https://github.com/simple-relay/simple-relay/issues/56)) ([e4a23e4](https://github.com/simple-relay/simple-relay/commit/e4a23e43a2364ea8befb94755671c46847e09ad6))
+* **upgrade:** implement zero-downtime live binary upgrade and socket handoff ([#54](https://github.com/simple-relay/simple-relay/issues/54)) ([e0a1ba0](https://github.com/simple-relay/simple-relay/commit/e0a1ba04568e10d28ec217971ab4bc1e7a057784))
+
+
+### Documentation
+
+* **specs:** add configurable dispatcher concurrency and wal checkpointing design spec  ([#55](https://github.com/simple-relay/simple-relay/issues/55)) ([8b320eb](https://github.com/simple-relay/simple-relay/commit/8b320eb629d9d6ab06e5391dc70e63cb323e5485))
+* **specs:** add zero-downtime live upgrade technical design specification ([#51](https://github.com/simple-relay/simple-relay/issues/51)) ([#52](https://github.com/simple-relay/simple-relay/issues/52)) ([4c80098](https://github.com/simple-relay/simple-relay/commit/4c800984d12b504a6d442ff8fd9e11c5be2c4293))
+
+
+### Maintenance & Dependencies
+
+* synchronize roadmap with issue status [skip ci] ([03092fb](https://github.com/simple-relay/simple-relay/commit/03092fbabcf4c1595ef23208356b17d6dd5e2d2e))
+* synchronize roadmap with issue status [skip ci] ([7405785](https://github.com/simple-relay/simple-relay/commit/7405785da8009e56b2197c9b8072cbfe640e61f8))
+
 ## [0.4.0](https://github.com/simple-relay/simple-relay/compare/v0.3.0...v0.4.0) (2026-10-10)
 
 
