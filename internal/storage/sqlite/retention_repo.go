@@ -89,3 +89,14 @@ func (r *RetentionRepo) ReclaimStorage(ctx context.Context, maxPages int) error 
 
 	return nil
 }
+
+// Checkpoint executes PRAGMA wal_checkpoint(PASSIVE) on SQLite writer pool.
+// PASSIVE mode checkpoints as many frames as possible without waiting for readers or writers,
+// completely eliminating SQLITE_BUSY lock contention.
+func (r *RetentionRepo) Checkpoint(ctx context.Context) error {
+	query := "PRAGMA wal_checkpoint(PASSIVE);"
+	if _, err := r.db.Writer().ExecContext(ctx, query); err != nil {
+		return fmt.Errorf("failed to execute sqlite wal checkpoint: %w", err)
+	}
+	return nil
+}

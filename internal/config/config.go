@@ -17,7 +17,9 @@ type Config struct {
 	Port                 int
 	DBPath               string
 	LogLevel             string
-	WorkerPoolSize       int
+	WorkerConcurrency    int
+	DispatcherBuffer     int
+	DispatcherPollMS     int
 	RetentionSuccessDays int
 	RetentionFailedDays  int
 	CleanerInterval      time.Duration
@@ -34,7 +36,9 @@ func DefaultConfig() *Config {
 		Port:                 8080,
 		DBPath:               "relay.db",
 		LogLevel:             "info",
-		WorkerPoolSize:       20,
+		WorkerConcurrency:    20,
+		DispatcherBuffer:     0, // 0 triggers dynamic resolution to 2 * WorkerConcurrency in Validate()
+		DispatcherPollMS:     500,
 		RetentionSuccessDays: 7,
 		RetentionFailedDays:  30,
 		CleanerInterval:      1 * time.Hour,
@@ -56,6 +60,9 @@ func Load() (*Config, error) {
 	fs.IntVar(&cfg.Port, "port", cfg.Port, "Server HTTP port")
 	fs.StringVar(&cfg.DBPath, "db", cfg.DBPath, "Path to SQLite database file")
 	fs.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "Log level: debug, info, warn, error")
+	fs.IntVar(&cfg.WorkerConcurrency, "workers", cfg.WorkerConcurrency, "Outbound worker pool concurrency")
+	fs.IntVar(&cfg.DispatcherBuffer, "dispatcher-buffer", cfg.DispatcherBuffer, "Dispatcher jobs channel buffer capacity (0 for 2x workers)")
+	fs.IntVar(&cfg.DispatcherPollMS, "dispatcher-poll-ms", cfg.DispatcherPollMS, "Dispatcher polling interval in milliseconds")
 	fs.DurationVar(&cfg.CleanerInterval, "cleaner-interval", cfg.CleanerInterval, "Storage retention cleaner execution interval")
 	fs.DurationVar(&cfg.DrainTimeout, "drain-timeout", cfg.DrainTimeout, "Graceful shutdown drain timeout")
 
@@ -92,9 +99,19 @@ func (c *Config) loadFromEnv() {
 	if val := os.Getenv("RELAY_LOG_LEVEL"); val != "" {
 		c.LogLevel = strings.ToLower(val)
 	}
-	if val := os.Getenv("RELAY_WORKER_POOL_SIZE"); val != "" {
-		if s, err := strconv.Atoi(val); err == nil && s > 0 {
-			c.WorkerPoolSize = s
+	if val := os.Getenv("RELAY_WORKER_CONCURRENCY"); val != "" {
+		if w, err := strconv.Atoi(val); err == nil && w > 0 {
+			c.WorkerConcurrency = w
+		}
+	}
+	if val := os.Getenv("RELAY_DISPATCHER_BUFFER"); val != "" {
+		if b, err := strconv.Atoi(val); err == nil && b > 0 {
+			c.DispatcherBuffer = b
+		}
+	}
+	if val := os.Getenv("RELAY_DISPATCHER_POLL_MS"); val != "" {
+		if p, err := strconv.Atoi(val); err == nil && p > 0 {
+			c.DispatcherPollMS = p
 		}
 	}
 	if val := os.Getenv("RELAY_RETENTION_SUCCESS_DAYS"); val != "" {
@@ -140,14 +157,21 @@ func (c *Config) Validate() error {
 	if strings.TrimSpace(c.DBPath) == "" {
 		return fmt.Errorf("db path cannot be empty")
 	}
-	if c.WorkerPoolSize < 1 {
-		return fmt.Errorf("worker pool size must be >= 1")
+	if c.WorkerConcurrency < 1 {
+		return fmt.Errorf("worker concurrency must be >= 1")
+	}
+	if c.DispatcherPollMS <= 0 {
+		return fmt.Errorf("dispatcher poll interval must be > 0 ms")
 	}
 	if c.CleanerInterval <= 0 {
 		return fmt.Errorf("cleaner interval must be > 0")
 	}
 	if c.DrainTimeout <= 0 {
 		return fmt.Errorf("drain timeout must be > 0")
+	}
+	// Dynamic buffer resolution: 0 signifies auto-sizing to 2 * WorkerConcurrency
+	if c.DispatcherBuffer <= 0 {
+		c.DispatcherBuffer = c.WorkerConcurrency * 2
 	}
 	return nil
 }

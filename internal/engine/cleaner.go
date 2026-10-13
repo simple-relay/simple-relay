@@ -117,6 +117,11 @@ func (c *Cleaner) CleanOnce(ctx context.Context) (CleanResult, error) {
 
 	result.Duration = time.Since(startTime)
 
+	// Always execute WAL checkpoint during full maintenance pass
+	if err := c.repo.Checkpoint(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		c.logger.Warn("wal checkpoint failed during maintenance pass", "error", err)
+	}
+
 	if purged > 0 {
 		c.logger.Info("storage retention cleanup completed",
 			"purged_requests", result.PurgedCount,
@@ -147,14 +152,33 @@ func (c *Cleaner) run(ctx context.Context) {
 		c.logger.Error("initial storage retention cleanup failed", "error", err)
 	}
 
-	ticker := time.NewTicker(c.cfg.Interval)
-	defer ticker.Stop()
+	cleanTicker := time.NewTicker(c.cfg.Interval)
+	defer cleanTicker.Stop()
+
+	checkpointInterval := c.cfg.Interval / 2
+	if c.cfg.Interval >= 20*time.Second {
+		if checkpointInterval < 10*time.Second {
+			checkpointInterval = 10 * time.Second
+		}
+	} else {
+		if checkpointInterval < 5*time.Millisecond {
+			checkpointInterval = 5 * time.Millisecond
+		}
+	}
+	checkpointTicker := time.NewTicker(checkpointInterval)
+	defer checkpointTicker.Stop()
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-cleanTicker.C:
 			if _, err := c.CleanOnce(ctx); err != nil && !errors.Is(err, context.Canceled) {
 				c.logger.Error("periodic storage retention cleanup failed", "error", err)
+			}
+		case <-checkpointTicker.C:
+			if err := c.repo.Checkpoint(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				c.logger.Warn("periodic wal checkpoint failed", "error", err)
+			} else {
+				c.logger.Debug("periodic wal checkpoint executed successfully")
 			}
 		case <-ctx.Done():
 			return

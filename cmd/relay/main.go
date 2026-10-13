@@ -84,11 +84,14 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 	defer ln.Close()
 
 	// Initialize asynchronous durable delivery pipeline
-	jobsCh := make(chan *model.Request, 40)
+	jobsCh := make(chan *model.Request, cfg.DispatcherBuffer)
 	dispatcher := engine.NewDispatcher(db.RequestRepo, jobsCh, engine.DispatcherConfig{
+		PollInterval:          time.Duration(cfg.DispatcherPollMS) * time.Millisecond,
 		SkipImmediateRecovery: inherited,
 	})
-	workerPool := engine.NewWorkerPool(jobsCh, registry, db.RequestRepo, db.AttemptRepo, retryEngine, engine.WorkerPoolConfig{})
+	workerPool := engine.NewWorkerPool(jobsCh, registry, db.RequestRepo, db.AttemptRepo, retryEngine, engine.WorkerPoolConfig{
+		Concurrency: cfg.WorkerConcurrency,
+	})
 	batchWriter := engine.NewBatchWriter(db.RequestRepo, engine.BatchWriterConfig{
 		WakeFn: dispatcher.Wake,
 	})

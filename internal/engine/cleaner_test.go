@@ -11,11 +11,13 @@ import (
 )
 
 type mockRetentionRepo struct {
-	mu           sync.Mutex
-	pruneFn      func(ctx context.Context, successCutoff, failedCutoff time.Time, batchSize int) (int64, error)
-	reclaimFn    func(ctx context.Context, maxPages int) error
-	pruneCalls   int
-	reclaimCalls int
+	mu              sync.Mutex
+	pruneFn         func(ctx context.Context, successCutoff, failedCutoff time.Time, batchSize int) (int64, error)
+	reclaimFn       func(ctx context.Context, maxPages int) error
+	checkpointFn    func(ctx context.Context) error
+	pruneCalls      int
+	reclaimCalls    int
+	checkpointCalls int
 }
 
 func (m *mockRetentionRepo) PruneExpiredRequests(ctx context.Context, successCutoff, failedCutoff time.Time, batchSize int) (int64, error) {
@@ -38,6 +40,18 @@ func (m *mockRetentionRepo) ReclaimStorage(ctx context.Context, maxPages int) er
 
 	if fn != nil {
 		return fn(ctx, maxPages)
+	}
+	return nil
+}
+
+func (m *mockRetentionRepo) Checkpoint(ctx context.Context) error {
+	m.mu.Lock()
+	m.checkpointCalls++
+	fn := m.checkpointFn
+	m.mu.Unlock()
+
+	if fn != nil {
+		return fn(ctx)
 	}
 	return nil
 }
@@ -261,5 +275,80 @@ func TestCleaner_Lifecycle_StartAndClose(t *testing.T) {
 	// Calling close a second time should be idempotent
 	if err := cleaner.Close(); err != nil {
 		t.Errorf("expected idempotent close, got: %v", err)
+	}
+}
+
+func TestCleaner_CleanOnce_ExecutesCheckpoint(t *testing.T) {
+	mockRepo := &mockRetentionRepo{
+		pruneFn: func(ctx context.Context, successCutoff, failedCutoff time.Time, batchSize int) (int64, error) {
+			return 2, nil
+		},
+	}
+
+	cleaner := NewCleaner(mockRepo, CleanerConfig{}, discardLogger())
+	res, err := cleaner.CleanOnce(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.PurgedCount != 2 {
+		t.Errorf("expected PurgedCount 2, got %d", res.PurgedCount)
+	}
+
+	mockRepo.mu.Lock()
+	checkpointCalls := mockRepo.checkpointCalls
+	mockRepo.mu.Unlock()
+
+	if checkpointCalls != 1 {
+		t.Errorf("expected 1 checkpoint call in CleanOnce, got %d", checkpointCalls)
+	}
+}
+
+func TestCleaner_CleanOnce_CheckpointErrorResilient(t *testing.T) {
+	mockRepo := &mockRetentionRepo{
+		pruneFn: func(ctx context.Context, successCutoff, failedCutoff time.Time, batchSize int) (int64, error) {
+			return 0, nil
+		},
+		checkpointFn: func(ctx context.Context) error {
+			return errors.New("checkpoint sqlite busy")
+		},
+	}
+
+	cleaner := NewCleaner(mockRepo, CleanerConfig{}, discardLogger())
+	_, err := cleaner.CleanOnce(context.Background())
+	if err != nil {
+		t.Fatalf("CleanOnce should not fail when Checkpoint errors, got: %v", err)
+	}
+}
+
+func TestCleaner_PeriodicCheckpoint(t *testing.T) {
+	mockRepo := &mockRetentionRepo{
+		pruneFn: func(ctx context.Context, successCutoff, failedCutoff time.Time, batchSize int) (int64, error) {
+			return 0, nil
+		},
+	}
+
+	cleaner := NewCleaner(mockRepo, CleanerConfig{
+		Interval: 20 * time.Millisecond,
+	}, discardLogger())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cleaner.Start(ctx)
+
+	// Wait enough time for startup call + multiple ticker calls
+	time.Sleep(60 * time.Millisecond)
+
+	if err := cleaner.Close(); err != nil {
+		t.Fatalf("failed to close cleaner: %v", err)
+	}
+
+	mockRepo.mu.Lock()
+	checkpointCalls := mockRepo.checkpointCalls
+	mockRepo.mu.Unlock()
+
+	// Initial startup CleanOnce (1) + periodic checkpoint ticker (> 0)
+	if checkpointCalls < 2 {
+		t.Errorf("expected at least 2 checkpoint calls (startup + periodic), got %d", checkpointCalls)
 	}
 }
