@@ -68,30 +68,45 @@ Operators handling high-volume webhook forwarding require runtime controls to sc
 
 ```mermaid
 flowchart TD
+    Client["HTTP Client / Webhook Provider"]
+    DB_WAL[("SQLite WAL Single-Writer")]
+
     subgraph Ingestion ["1. Durable Ingestion (10,000+ RPS)"]
-        Client[HTTP Client / Provider] -->|POST /api/v1/webhook| BatchWriter[engine.BatchWriter]
-        BatchWriter -->|Micro-batch commits| DB_WAL[(SQLite WAL Single-Writer)]
-        BatchWriter -.->|Instant Wake signal| Dispatcher[engine.Dispatcher]
+        BatchWriter["engine.BatchWriter"]
     end
 
     subgraph Dispatching ["2. Configurable Dispatcher Loop"]
-        Dispatcher -->|ClaimPendingRequests limit = avail cap| DB_WAL
-        DB_WAL -->|Due Requests| Dispatcher
-        Dispatcher -->|Buffered Channel| JobsCh["jobsCh chan *Request<br/>Cap: 2x Workers or RELAY_DISPATCHER_BUFFER"]
+        Dispatcher["engine.Dispatcher"]
+        JobsCh["jobsCh Channel (Buffered: 2x Workers)"]
     end
 
     subgraph Workers ["3. Scalable Worker Pool"]
-        JobsCh --> WorkerPool["engine.WorkerPool<br/>Concurrency: RELAY_WORKER_CONCURRENCY"]
-        WorkerPool -->|Goroutine 1..N| Upstream[Upstream HTTP Endpoints]
-        WorkerPool -->|RecordAttempt & UpdateStatus| DB_WAL
+        WorkerPool["engine.WorkerPool (RELAY_WORKER_CONCURRENCY)"]
+        Upstream["Upstream HTTP Endpoints"]
     end
 
-    subgraph Maintenance ["4. Lifecycle & WAL Checkpointing"]
-        Cleaner[engine.Cleaner]
-        Cleaner -->|Every CleanerInterval / 2 (30m)| Checkpoint["repo.Checkpoint(ctx)<br/>PRAGMA wal_checkpoint(PASSIVE)"]
-        Cleaner -->|Every CleanerInterval (1h)| Prune["repo.PruneExpiredRequests + ReclaimStorage"]
-        Checkpoint -.->|Flushes committed frames to .db| DB_WAL
+    subgraph Maintenance ["4. Lifecycle & WAL Maintenance"]
+        Cleaner["engine.Cleaner"]
+        PruneTask["Prune Expired & Incremental Vacuum"]
+        CheckpointTask["repo.Checkpoint (PASSIVE)"]
     end
+
+    Client -->|"POST /api/v1/webhook"| BatchWriter
+    BatchWriter -->|"Micro-batch commits"| DB_WAL
+    BatchWriter -.->|"Instant wake signal"| Dispatcher
+
+    Dispatcher -->|"Claim due requests"| DB_WAL
+    DB_WAL -->|"Due requests"| Dispatcher
+    Dispatcher -->|"Push job"| JobsCh
+
+    JobsCh -->|"Consume job"| WorkerPool
+    WorkerPool -->|"HTTP forward"| Upstream
+    WorkerPool -->|"Record attempt & update status"| DB_WAL
+
+    Cleaner -->|"Every CleanerInterval (1h)"| PruneTask
+    Cleaner -->|"Every CleanerInterval / 2 (30m)"| CheckpointTask
+    PruneTask -->|"Incremental vacuum"| DB_WAL
+    CheckpointTask -.->|"Flush committed frames"| DB_WAL
 ```
 
 ---
