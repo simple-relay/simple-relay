@@ -55,6 +55,74 @@ func TestRoute_Validate(t *testing.T) {
 	if err := validSecuredRoute.Validate(); err != nil {
 		t.Fatalf("expected valid secured route, got: %v", err)
 	}
+
+	// Ed25519 provider tests
+	ed25519Route := validRoute
+	ed25519Route.SignatureProvider = SignatureProviderEd25519
+	ed25519Route.SignatureSecret = ""
+	if err := ed25519Route.Validate(); err != ErrRouteSignatureSecretRequired {
+		t.Fatalf("expected ErrRouteSignatureSecretRequired for ed25519, got: %v", err)
+	}
+	ed25519Route.SignatureSecret = "base64orhexpubkey"
+	if err := ed25519Route.Validate(); err != nil {
+		t.Fatalf("expected valid ed25519 route, got: %v", err)
+	}
+
+	// RSA-SHA256 provider tests (secret is optional)
+	rsaRoute := validRoute
+	rsaRoute.SignatureProvider = SignatureProviderRSASHA256
+	rsaRoute.SignatureSecret = ""
+	if err := rsaRoute.Validate(); err != nil {
+		t.Fatalf("expected valid rsa_sha256 route with empty secret, got: %v", err)
+	}
+	rsaRoute.SignatureSecret = "-----BEGIN PUBLIC KEY-----..."
+	if err := rsaRoute.Validate(); err != nil {
+		t.Fatalf("expected valid rsa_sha256 route with static secret, got: %v", err)
+	}
+
+	// ValidationRules tests
+	outboundWithRules := validRoute
+	outboundWithRules.Type = RouteTypeOutbound
+	outboundWithRules.ValidationRules = []ValidationRule{
+		{Source: RuleSourceHeader, Key: "X-Auth", Operator: RuleOperatorExists},
+	}
+	if err := outboundWithRules.Validate(); err != ErrRouteValidationRulesInboundOnly {
+		t.Fatalf("expected ErrRouteValidationRulesInboundOnly, got: %v", err)
+	}
+
+	invalidRuleKeyRoute := validRoute
+	invalidRuleKeyRoute.ValidationRules = []ValidationRule{
+		{Source: RuleSourceHeader, Key: "", Operator: RuleOperatorExists},
+	}
+	if err := invalidRuleKeyRoute.Validate(); err != ErrRouteInvalidRuleKey {
+		t.Fatalf("expected ErrRouteInvalidRuleKey, got: %v", err)
+	}
+
+	invalidRuleSourceRoute := validRoute
+	invalidRuleSourceRoute.ValidationRules = []ValidationRule{
+		{Source: "invalid_source", Key: "X-Test", Operator: RuleOperatorExists},
+	}
+	if err := invalidRuleSourceRoute.Validate(); err != ErrRouteInvalidRuleSource {
+		t.Fatalf("expected ErrRouteInvalidRuleSource, got: %v", err)
+	}
+
+	invalidRuleOpRoute := validRoute
+	invalidRuleOpRoute.ValidationRules = []ValidationRule{
+		{Source: RuleSourceHeader, Key: "X-Test", Operator: "invalid_op"},
+	}
+	if err := invalidRuleOpRoute.Validate(); err != ErrRouteInvalidRuleOperator {
+		t.Fatalf("expected ErrRouteInvalidRuleOperator, got: %v", err)
+	}
+
+	validRulesRoute := validRoute
+	validRulesRoute.ValidationRules = []ValidationRule{
+		{Source: RuleSourceHeader, Key: "X-Token", Operator: RuleOperatorEquals, Value: "secret"},
+		{Source: RuleSourceQuery, Key: "sig", Operator: RuleOperatorExists},
+		{Source: RuleSourceBodyJSON, Key: "event.type", Operator: RuleOperatorEquals, Value: "user.created"},
+	}
+	if err := validRulesRoute.Validate(); err != nil {
+		t.Fatalf("expected valid rules route, got: %v", err)
+	}
 }
 
 func TestRequest_Validate(t *testing.T) {

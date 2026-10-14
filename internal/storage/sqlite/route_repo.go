@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -40,15 +41,20 @@ func (r *RouteRepo) CreateRoute(ctx context.Context, route *model.Route) error {
 		route.UpdatedAt = now
 	}
 
+	rulesJSON, err := json.Marshal(route.ValidationRules)
+	if err != nil {
+		return fmt.Errorf("failed to marshal validation rules: %w", err)
+	}
+
 	query := `
 		INSERT INTO routes (
 			id, name, type, mode, path, destination_url,
-			signature_provider, signature_secret, max_attempts,
+			signature_provider, signature_secret, validation_rules, max_attempts,
 			timeout_ms, retry_backoff_strategy, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 	`
 
-	_, err := r.db.Writer().ExecContext(ctx, query,
+	_, err = r.db.Writer().ExecContext(ctx, query,
 		route.ID,
 		route.Name,
 		route.Type,
@@ -57,6 +63,7 @@ func (r *RouteRepo) CreateRoute(ctx context.Context, route *model.Route) error {
 		route.DestinationURL,
 		route.SignatureProvider,
 		route.SignatureSecret,
+		string(rulesJSON),
 		route.MaxAttempts,
 		route.TimeoutMS,
 		route.RetryBackoffStrategy,
@@ -78,7 +85,7 @@ func (r *RouteRepo) CreateRoute(ctx context.Context, route *model.Route) error {
 func (r *RouteRepo) GetRouteByID(ctx context.Context, id string) (*model.Route, error) {
 	query := `
 		SELECT id, name, type, mode, path, destination_url,
-		       signature_provider, signature_secret, max_attempts,
+		       signature_provider, signature_secret, validation_rules, max_attempts,
 		       timeout_ms, retry_backoff_strategy, created_at, updated_at
 		FROM routes WHERE id = ?;
 	`
@@ -89,7 +96,7 @@ func (r *RouteRepo) GetRouteByID(ctx context.Context, id string) (*model.Route, 
 func (r *RouteRepo) GetRouteByName(ctx context.Context, name string) (*model.Route, error) {
 	query := `
 		SELECT id, name, type, mode, path, destination_url,
-		       signature_provider, signature_secret, max_attempts,
+		       signature_provider, signature_secret, validation_rules, max_attempts,
 		       timeout_ms, retry_backoff_strategy, created_at, updated_at
 		FROM routes WHERE name = ?;
 	`
@@ -100,7 +107,7 @@ func (r *RouteRepo) GetRouteByName(ctx context.Context, name string) (*model.Rou
 func (r *RouteRepo) GetRouteByPath(ctx context.Context, path string) (*model.Route, error) {
 	query := `
 		SELECT id, name, type, mode, path, destination_url,
-		       signature_provider, signature_secret, max_attempts,
+		       signature_provider, signature_secret, validation_rules, max_attempts,
 		       timeout_ms, retry_backoff_strategy, created_at, updated_at
 		FROM routes WHERE path = ?;
 	`
@@ -111,7 +118,7 @@ func (r *RouteRepo) GetRouteByPath(ctx context.Context, path string) (*model.Rou
 func (r *RouteRepo) ListRoutes(ctx context.Context) ([]*model.Route, error) {
 	query := `
 		SELECT id, name, type, mode, path, destination_url,
-		       signature_provider, signature_secret, max_attempts,
+		       signature_provider, signature_secret, validation_rules, max_attempts,
 		       timeout_ms, retry_backoff_strategy, created_at, updated_at
 		FROM routes ORDER BY created_at DESC, id DESC;
 	`
@@ -129,6 +136,7 @@ func (r *RouteRepo) ListRoutes(ctx context.Context) ([]*model.Route, error) {
 			createdAt string
 			updatedAt string
 			secret    sql.NullString
+			rules     sql.NullString
 		)
 
 		err := rows.Scan(
@@ -140,6 +148,7 @@ func (r *RouteRepo) ListRoutes(ctx context.Context) ([]*model.Route, error) {
 			&rt.DestinationURL,
 			&rt.SignatureProvider,
 			&secret,
+			&rules,
 			&rt.MaxAttempts,
 			&rt.TimeoutMS,
 			&rt.RetryBackoffStrategy,
@@ -152,6 +161,9 @@ func (r *RouteRepo) ListRoutes(ctx context.Context) ([]*model.Route, error) {
 
 		if secret.Valid {
 			rt.SignatureSecret = secret.String
+		}
+		if rules.Valid && strings.TrimSpace(rules.String) != "" {
+			_ = json.Unmarshal([]byte(rules.String), &rt.ValidationRules)
 		}
 		rt.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
 		rt.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updatedAt)
@@ -174,6 +186,11 @@ func (r *RouteRepo) UpdateRoute(ctx context.Context, route *model.Route) error {
 
 	route.UpdatedAt = time.Now().UTC()
 
+	rulesJSON, err := json.Marshal(route.ValidationRules)
+	if err != nil {
+		return fmt.Errorf("failed to marshal validation rules: %w", err)
+	}
+
 	query := `
 		UPDATE routes SET
 			name = ?,
@@ -183,6 +200,7 @@ func (r *RouteRepo) UpdateRoute(ctx context.Context, route *model.Route) error {
 			destination_url = ?,
 			signature_provider = ?,
 			signature_secret = ?,
+			validation_rules = ?,
 			max_attempts = ?,
 			timeout_ms = ?,
 			retry_backoff_strategy = ?,
@@ -198,6 +216,7 @@ func (r *RouteRepo) UpdateRoute(ctx context.Context, route *model.Route) error {
 		route.DestinationURL,
 		route.SignatureProvider,
 		route.SignatureSecret,
+		string(rulesJSON),
 		route.MaxAttempts,
 		route.TimeoutMS,
 		route.RetryBackoffStrategy,
@@ -248,6 +267,7 @@ func (r *RouteRepo) scanRoute(row *sql.Row) (*model.Route, error) {
 		createdAt string
 		updatedAt string
 		secret    sql.NullString
+		rules     sql.NullString
 	)
 
 	err := row.Scan(
@@ -259,6 +279,7 @@ func (r *RouteRepo) scanRoute(row *sql.Row) (*model.Route, error) {
 		&rt.DestinationURL,
 		&rt.SignatureProvider,
 		&secret,
+		&rules,
 		&rt.MaxAttempts,
 		&rt.TimeoutMS,
 		&rt.RetryBackoffStrategy,
@@ -275,6 +296,9 @@ func (r *RouteRepo) scanRoute(row *sql.Row) (*model.Route, error) {
 
 	if secret.Valid {
 		rt.SignatureSecret = secret.String
+	}
+	if rules.Valid && strings.TrimSpace(rules.String) != "" {
+		_ = json.Unmarshal([]byte(rules.String), &rt.ValidationRules)
 	}
 	rt.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
 	rt.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updatedAt)

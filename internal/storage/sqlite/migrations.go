@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS routes (
     destination_url TEXT NOT NULL,
     signature_provider TEXT DEFAULT 'none',
     signature_secret TEXT,
+    validation_rules TEXT DEFAULT '[]',
     max_attempts INTEGER NOT NULL DEFAULT 5,
     timeout_ms INTEGER NOT NULL DEFAULT 10000,
     retry_backoff_strategy TEXT DEFAULT 'exp',

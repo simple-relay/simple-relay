@@ -186,3 +186,78 @@ func TestRoutesHandler_CRUD(t *testing.T) {
 		t.Fatalf("expected 404 on deleted route, got %d", getDelRec.Code)
 	}
 }
+
+func TestRoutesHandler_ValidationRulesAndAsymmetric(t *testing.T) {
+	router, db, _ := setupTestRoutesRouter(t)
+	defer db.Close()
+
+	// 1. Create Route with Ed25519 and ValidationRules
+	createBody := map[string]any{
+		"name":               "ed25519-custom-route",
+		"type":               "inbound",
+		"mode":               "async",
+		"path":               "/api/v1/webhook/ed25519-custom",
+		"destination_url":    "https://api.internal/ed25519-custom",
+		"signature_provider": "ed25519",
+		"signature_secret":   "MCowBQYDK2VwAyEA1111111111111111111111111111111111111111111=",
+		"validation_rules": []map[string]any{
+			{"source": "header", "key": "X-Token", "operator": "equals", "value": "secret"},
+			{"source": "query", "key": "env", "operator": "exists"},
+			{"source": "body_json", "key": "data.id", "operator": "equals", "value": "100"},
+		},
+	}
+	bodyBytes, _ := json.Marshal(createBody)
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/routes", bytes.NewReader(bodyBytes))
+	createRec := httptest.NewRecorder()
+	router.ServeHTTP(createRec, createReq)
+
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	var created model.Route
+	if err := json.NewDecoder(createRec.Body).Decode(&created); err != nil {
+		t.Fatalf("failed to decode created route: %v", err)
+	}
+	if len(created.ValidationRules) != 3 {
+		t.Fatalf("expected 3 validation rules, got %d", len(created.ValidationRules))
+	}
+	if created.SignatureProvider != model.SignatureProviderEd25519 {
+		t.Fatalf("expected ed25519 provider, got %s", created.SignatureProvider)
+	}
+
+	// 2. Fetch via GET /api/v1/routes/{id}
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/routes/"+created.ID, nil)
+	getRec := httptest.NewRecorder()
+	router.ServeHTTP(getRec, getReq)
+
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on get route, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+
+	var fetched model.Route
+	if err := json.NewDecoder(getRec.Body).Decode(&fetched); err != nil {
+		t.Fatalf("failed to decode fetched route: %v", err)
+	}
+	if len(fetched.ValidationRules) != 3 {
+		t.Fatalf("expected 3 validation rules in fetched route, got %d", len(fetched.ValidationRules))
+	}
+
+	// 3. Create Route with RSA-SHA256 (optional secret)
+	rsaBody := map[string]any{
+		"name":               "rsa-route",
+		"type":               "inbound",
+		"mode":               "async",
+		"path":               "/api/v1/webhook/rsa-test",
+		"destination_url":    "https://api.internal/rsa",
+		"signature_provider": "rsa_sha256",
+	}
+	rsaBytes, _ := json.Marshal(rsaBody)
+	rsaReq := httptest.NewRequest(http.MethodPost, "/api/v1/routes", bytes.NewReader(rsaBytes))
+	rsaRec := httptest.NewRecorder()
+	router.ServeHTTP(rsaRec, rsaReq)
+
+	if rsaRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created for rsa_sha256 without secret, got %d: %s", rsaRec.Code, rsaRec.Body.String())
+	}
+}

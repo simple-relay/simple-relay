@@ -3,10 +3,17 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto"
+	"crypto/ed25519"
 	"crypto/hmac"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -464,4 +471,279 @@ func TestWebhookIngest_SignatureVerification_EmptySecretReturns500(t *testing.T)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 Internal Server Error, got %d: %s", rec.Code, rec.Body.String())
 	}
+}
+
+func TestWebhookIngest_ValidationRules_HeaderAndQuery(t *testing.T) {
+	db, registry, bw, handler, _, _ := setupTestWebhookServer(t, 1024*1024)
+	defer db.Close()
+	defer bw.Close()
+
+	ctx := context.Background()
+	route := &model.Route{
+		Name:                 "header-query-validated-webhook",
+		Type:                 model.RouteTypeInbound,
+		Mode:                 model.RouteModeAsync,
+		Path:                 "/api/v1/webhook/hq-validated",
+		DestinationURL:       "https://internal.service/hq",
+		SignatureProvider:    model.SignatureProviderNone,
+		MaxAttempts:          3,
+		TimeoutMS:            5000,
+		RetryBackoffStrategy: model.RetryStrategyExponential,
+		ValidationRules: []model.ValidationRule{
+			{Source: model.RuleSourceHeader, Key: "X-Auth-Token", Operator: model.RuleOperatorEquals, Value: "token-xyz"},
+			{Source: model.RuleSourceQuery, Key: "source", Operator: model.RuleOperatorEquals, Value: "partner"},
+		},
+	}
+	if err := registry.Create(ctx, route); err != nil {
+		t.Fatalf("failed to create route: %v", err)
+	}
+
+	t.Run("Valid header and query passes", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/hq-validated?source=partner", bytes.NewBufferString(`{"status":"ok"}`))
+		req.Header.Set("X-Auth-Token", "token-xyz")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("Missing header rejected with 401 and zero DB insert", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/hq-validated?source=partner", bytes.NewBufferString(`{"status":"ok"}`))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("Wrong query param rejected with 401", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/hq-validated?source=wrong", bytes.NewBufferString(`{"status":"ok"}`))
+		req.Header.Set("X-Auth-Token", "token-xyz")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestWebhookIngest_ValidationRules_BodyJSON(t *testing.T) {
+	db, registry, bw, handler, _, _ := setupTestWebhookServer(t, 1024*1024)
+	defer db.Close()
+	defer bw.Close()
+
+	ctx := context.Background()
+	route := &model.Route{
+		Name:                 "body-json-validated-webhook",
+		Type:                 model.RouteTypeInbound,
+		Mode:                 model.RouteModeAsync,
+		Path:                 "/api/v1/webhook/body-json-validated",
+		DestinationURL:       "https://internal.service/body-json",
+		SignatureProvider:    model.SignatureProviderNone,
+		MaxAttempts:          3,
+		TimeoutMS:            5000,
+		RetryBackoffStrategy: model.RetryStrategyExponential,
+		ValidationRules: []model.ValidationRule{
+			{Source: model.RuleSourceBodyJSON, Key: "event.name", Operator: model.RuleOperatorEquals, Value: "payment.completed"},
+			{Source: model.RuleSourceBodyJSON, Key: "event.data.amount", Operator: model.RuleOperatorExists},
+		},
+	}
+	if err := registry.Create(ctx, route); err != nil {
+		t.Fatalf("failed to create route: %v", err)
+	}
+
+	t.Run("Valid JSON body passes", func(t *testing.T) {
+		payload := `{"event":{"name":"payment.completed","data":{"amount":5000}}}`
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/body-json-validated", bytes.NewBufferString(payload))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("Mismatch JSON body field rejected with 401", func(t *testing.T) {
+		payload := `{"event":{"name":"payment.failed","data":{"amount":5000}}}`
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/body-json-validated", bytes.NewBufferString(payload))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("Malformed JSON rejected with 400 Bad Request", func(t *testing.T) {
+		payload := `not-a-valid-json`
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/body-json-validated", bytes.NewBufferString(payload))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestWebhookIngest_Ed25519(t *testing.T) {
+	db, registry, bw, handler, _, _ := setupTestWebhookServer(t, 1024*1024)
+	defer db.Close()
+	defer bw.Close()
+
+	pubKey, privKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate ed25519 key: %v", err)
+	}
+	pubKeyB64 := base64.StdEncoding.EncodeToString(pubKey)
+
+	ctx := context.Background()
+	route := &model.Route{
+		Name:                 "ed25519-webhook",
+		Type:                 model.RouteTypeInbound,
+		Mode:                 model.RouteModeAsync,
+		Path:                 "/api/v1/webhook/ed25519-webhook",
+		DestinationURL:       "https://internal.service/ed25519",
+		SignatureProvider:    model.SignatureProviderEd25519,
+		SignatureSecret:      pubKeyB64,
+		MaxAttempts:          3,
+		TimeoutMS:            5000,
+		RetryBackoffStrategy: model.RetryStrategyExponential,
+	}
+	if err := registry.Create(ctx, route); err != nil {
+		t.Fatalf("failed to create route: %v", err)
+	}
+
+	payload := `{"event":"ed25519.test","amount":100}`
+	msgID := "msg_ed_123"
+	timestamp := "1710000000"
+	signedContent := fmt.Sprintf("%s.%s.%s", msgID, timestamp, payload)
+	sig := ed25519.Sign(privKey, []byte(signedContent))
+	sigB64 := base64.StdEncoding.EncodeToString(sig)
+
+	t.Run("Valid Standard Webhooks Ed25519 returns 200 OK", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/ed25519-webhook", bytes.NewBufferString(payload))
+		req.Header.Set("webhook-id", msgID)
+		req.Header.Set("webhook-timestamp", timestamp)
+		req.Header.Set("webhook-signature", fmt.Sprintf("v1a,%s", sigB64))
+
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("Invalid signature returns 401 Unauthorized", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/ed25519-webhook", bytes.NewBufferString(payload))
+		req.Header.Set("webhook-id", msgID)
+		req.Header.Set("webhook-timestamp", timestamp)
+		dummySig := base64.StdEncoding.EncodeToString(make([]byte, 64))
+		req.Header.Set("webhook-signature", fmt.Sprintf("v1a,%s", dummySig))
+
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestWebhookIngest_RSASHA256(t *testing.T) {
+	db, registry, bw, handler, _, _ := setupTestWebhookServer(t, 1024*1024)
+	defer db.Close()
+	defer bw.Close()
+
+	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate rsa key: %v", err)
+	}
+
+	pubDER, err := x509.MarshalPKIXPublicKey(&privKey.PublicKey)
+	if err != nil {
+		t.Fatalf("failed to marshal rsa public key: %v", err)
+	}
+	pubKeyPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}))
+
+	ctx := context.Background()
+	route := &model.Route{
+		Name:                 "rsa-webhook",
+		Type:                 model.RouteTypeInbound,
+		Mode:                 model.RouteModeAsync,
+		Path:                 "/api/v1/webhook/rsa-webhook",
+		DestinationURL:       "https://internal.service/rsa",
+		SignatureProvider:    model.SignatureProviderRSASHA256,
+		SignatureSecret:      pubKeyPEM,
+		MaxAttempts:          3,
+		TimeoutMS:            5000,
+		RetryBackoffStrategy: model.RetryStrategyExponential,
+	}
+	if err := registry.Create(ctx, route); err != nil {
+		t.Fatalf("failed to create route: %v", err)
+	}
+
+	// Canonical SNS message
+	msgType := "Notification"
+	msgText := "Hello SNS Webhook"
+	msgID := "sns-msg-1234"
+	timestamp := "2026-10-14T12:00:00.000Z"
+	topicArn := "arn:aws:sns:us-east-1:123456789012:test-topic"
+
+	canonicalStr := fmt.Sprintf("Message\n%s\nMessageId\n%s\nTimestamp\n%s\nTopicArn\n%s\nType\n%s\n",
+		msgText, msgID, timestamp, topicArn, msgType)
+	h := sha256.Sum256([]byte(canonicalStr))
+	sigBytes, err := rsa.SignPKCS1v15(rand.Reader, privKey, crypto.SHA256, h[:])
+	if err != nil {
+		t.Fatalf("failed to sign sns: %v", err)
+	}
+	sigB64 := base64.StdEncoding.EncodeToString(sigBytes)
+
+	snsPayload := map[string]string{
+		"Type":             msgType,
+		"Message":          msgText,
+		"MessageId":        msgID,
+		"Timestamp":        timestamp,
+		"TopicArn":         topicArn,
+		"SigningCertURL":   "https://sns.us-east-1.amazonaws.com/test.pem",
+		"Signature":        sigB64,
+		"SignatureVersion": "2",
+	}
+	rawJSON, _ := json.Marshal(snsPayload)
+
+	t.Run("Valid RSA AWS SNS returns 200 OK", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/rsa-webhook", bytes.NewReader(rawJSON))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("Tampered RSA AWS SNS returns 401 Unauthorized", func(t *testing.T) {
+		tampered := map[string]string{
+			"Type":             msgType,
+			"Message":          "TAMPERED MESSAGE",
+			"MessageId":        msgID,
+			"Timestamp":        timestamp,
+			"TopicArn":         topicArn,
+			"SigningCertURL":   "https://sns.us-east-1.amazonaws.com/test.pem",
+			"Signature":        sigB64,
+			"SignatureVersion": "2",
+		}
+		tamperedJSON, _ := json.Marshal(tampered)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhook/rsa-webhook", bytes.NewReader(tamperedJSON))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
 }

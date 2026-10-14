@@ -34,6 +34,8 @@ var (
 	defaultStripeVerifier      = &stripeVerifier{}
 	defaultGitHubVerifier      = &githubVerifier{}
 	defaultGenericHMACVerifier = &genericHMACVerifier{}
+	defaultEd25519Verifier     = &ed25519Verifier{}
+	defaultRSAVerifier         = &rsaVerifier{certCache: defaultCertCache}
 )
 
 // ForProvider returns the Verifier implementation corresponding to the given provider.
@@ -47,6 +49,10 @@ func ForProvider(provider model.SignatureProvider) (Verifier, error) {
 		return defaultGitHubVerifier, nil
 	case model.SignatureProviderHMACSHA256:
 		return defaultGenericHMACVerifier, nil
+	case model.SignatureProviderEd25519:
+		return defaultEd25519Verifier, nil
+	case model.SignatureProviderRSASHA256:
+		return defaultRSAVerifier, nil
 	default:
 		return nil, ErrUnsupportedProvider
 	}
