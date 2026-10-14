@@ -1,7 +1,7 @@
 # Asymmetric Signature Verification & Custom Validation Pipeline Design Specification
 
 > **Document:** Design Specification  
-> **Status:** Draft / Under Review  
+> **Status:** Approved  
 > **Author:** phuong  
 > **Date:** 2026-10-14  
 > **Target Packages:** `internal/signature`, `internal/api`, `internal/model`, `internal/storage/sqlite`  
