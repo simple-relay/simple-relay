@@ -188,21 +188,40 @@ func (c *RelayClient) ListRoutes(ctx context.Context) (map[string]string, error)
 		return nil, fmt.Errorf("list routes returned status %d", resp.StatusCode)
 	}
 
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read routes response: %w", err)
+	}
+
+	result := make(map[string]string)
+
+	// Try decoding as raw array []*Route
+	var routeList []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(bodyBytes, &routeList); err == nil {
+		for _, r := range routeList {
+			result[r.ID] = r.Name
+		}
+		return result, nil
+	}
+
+	// Fallback to wrapped object {"routes": [...]}
 	var data struct {
 		Routes []struct {
 			ID   string `json:"id"`
 			Name string `json:"name"`
 		} `json:"routes"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("failed to decode routes: %w", err)
+	if err := json.Unmarshal(bodyBytes, &data); err == nil {
+		for _, r := range data.Routes {
+			result[r.ID] = r.Name
+		}
+		return result, nil
 	}
 
-	result := make(map[string]string, len(data.Routes))
-	for _, r := range data.Routes {
-		result[r.ID] = r.Name
-	}
-	return result, nil
+	return nil, fmt.Errorf("failed to decode routes response")
 }
 
 // ListDLQ fetches items currently present in the Dead Letter Queue.
