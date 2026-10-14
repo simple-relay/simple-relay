@@ -305,8 +305,10 @@ While Simple Relay is designed as a standalone single-binary application, produc
 ```text
 simple-relay/
 ├── cmd/
-│   └── relay/
-│       └── main.go                 # App entry point, flags, graceful shutdown
+│   ├── relay/
+│   │   └── main.go                 # App entry point, flags, graceful shutdown
+│   └── relay-cli/
+│       └── main.go                 # CLI inspection and operator triage tool
 ├── internal/
 │   ├── api/                        # HTTP routers, middlewares, handlers
 │   │   ├── handler_webhook.go      # Inbound webhook ingestion
@@ -314,6 +316,7 @@ simple-relay/
 │   │   ├── handler_job.go          # Outbound async jobs
 │   │   ├── handler_ui.go           # Web UI server
 │   │   └── middleware/             # Auth, Logging, CSRF, Signature verification
+│   ├── cli/                        # CLI command hierarchy, client, formatters
 │   ├── engine/                     # Core Delivery Engine
 │   │   ├── batch_writer.go         # Single-writer SQLite ingestion worker
 │   │   ├── dispatcher.go           # Polls/listens for due jobs
