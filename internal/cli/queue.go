@@ -45,17 +45,19 @@ func runQueue(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	out := cmd.OutOrStdout()
+	isTerm := IsTerminal(out)
 	headers := []string{"QUEUE DEPTH", "PENDING", "IN-FLIGHT", "STATUS"}
 	rows := [][]string{
 		{
 			fmt.Sprintf("%d", queueDepth),
 			fmt.Sprintf("%d", pending),
 			fmt.Sprintf("%d", inFlight),
-			FormatStatus(status, true),
+			FormatStatus(status, isTerm),
 		},
 	}
 
-	if err := RenderTable(cmd.OutOrStdout(), headers, rows); err != nil {
+	if err := RenderTable(out, headers, rows); err != nil {
 		return err
 	}
 

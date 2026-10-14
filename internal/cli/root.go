@@ -65,6 +65,12 @@ func NewRootCmd() *cobra.Command {
 	defaultServer := getEnvOrDefault("RELAY_SERVER_URL", "http://127.0.0.1:8080")
 	defaultAPIKey := os.Getenv("RELAY_API_KEY")
 	defaultOutput := getEnvOrDefault("RELAY_OUTPUT", "table")
+	defaultTimeout := 10 * time.Second
+	if envTimeout := os.Getenv("RELAY_TIMEOUT"); envTimeout != "" {
+		if d, err := time.ParseDuration(envTimeout); err == nil {
+			defaultTimeout = d
+		}
+	}
 
 	cmd := &cobra.Command{
 		Use:   "relay-cli",
@@ -77,7 +83,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&flagServer, "server", "s", defaultServer, "Simple Relay daemon base URL (env: RELAY_SERVER_URL)")
 	cmd.PersistentFlags().StringVarP(&flagAPIKey, "api-key", "k", defaultAPIKey, "Admin API key for authentication (env: RELAY_API_KEY)")
 	cmd.PersistentFlags().StringVarP(&flagOutput, "output", "o", defaultOutput, "Output format: table or json (env: RELAY_OUTPUT)")
-	cmd.PersistentFlags().DurationVar(&flagTimeout, "timeout", 10*time.Second, "HTTP client timeout (env: RELAY_TIMEOUT)")
+	cmd.PersistentFlags().DurationVar(&flagTimeout, "timeout", defaultTimeout, "HTTP client timeout (env: RELAY_TIMEOUT)")
 
 	// Register subcommands
 	cmd.AddCommand(newHealthCmd())
@@ -95,6 +101,9 @@ func Execute() error {
 	if err != nil {
 		var ec ExitCodeError
 		if errorsAsExitCode(err, &ec) {
+			if ec.ExitCode() != 2 && ec.Error() != "" {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", ec)
+			}
 			os.Exit(ec.ExitCode())
 		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

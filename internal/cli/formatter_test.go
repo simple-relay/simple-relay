@@ -53,6 +53,12 @@ func TestTruncate(t *testing.T) {
 	if got := Truncate("01ja2b3c4d5e6f7g8h9j0k1m2n", 10); got != "01ja2b3c4d..." {
 		t.Fatalf("expected truncated string with ellipsis, got %q", got)
 	}
+
+	// Test multi-byte UTF-8 string truncation
+	unicodeStr := "xin chào việt nam"
+	if got := Truncate(unicodeStr, 8); got != "xin chào..." {
+		t.Fatalf("expected rune-safe truncated string, got %q", got)
+	}
 }
 
 func TestRenderTable(t *testing.T) {

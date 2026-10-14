@@ -182,12 +182,12 @@ func TestClient_ListDLQ(t *testing.T) {
 	defer ts.Close()
 
 	client := NewClient(ts.URL, "", 2*time.Second)
-	items, err := client.ListDLQ(context.Background(), 10)
+	items, total, err := client.ListDLQ(context.Background(), 10)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(items) != 1 || items[0].ID != "req_dlq_1" {
-		t.Fatalf("unexpected items: %+v", items)
+	if len(items) != 1 || items[0].ID != "req_dlq_1" || total != 1 {
+		t.Fatalf("unexpected items or total: items=%+v, total=%d", items, total)
 	}
 }
 
@@ -206,11 +206,11 @@ func TestClient_InspectRequest(t *testing.T) {
 			"attempts_count": 2,
 			"attempts": []map[string]any{
 				{
-					"attempt_number": 1,
-					"status_code":    500,
-					"duration_ms":    150,
-					"error_message":  "server error",
-					"attempted_at":   "2026-10-14T12:00:00Z",
+					"attempt_number":       1,
+					"response_status_code": 500,
+					"duration_ms":          150,
+					"error_message":        "server error",
+					"executed_at":          "2026-10-14T12:00:00Z",
 				},
 			},
 		})
@@ -224,6 +224,13 @@ func TestClient_InspectRequest(t *testing.T) {
 	}
 	if reqDetail.ID != "req_123" || len(reqDetail.Attempts) != 1 {
 		t.Fatalf("unexpected request detail: %+v", reqDetail)
+	}
+	att := reqDetail.Attempts[0]
+	if att.GetStatusCode() != 500 {
+		t.Fatalf("expected status code 500 via getter, got %d", att.GetStatusCode())
+	}
+	if att.GetAttemptedAt().IsZero() {
+		t.Fatalf("expected non-zero executed_at via getter")
 	}
 }
 

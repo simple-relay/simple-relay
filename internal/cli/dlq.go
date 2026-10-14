@@ -44,7 +44,7 @@ func runDLQList(cmd *cobra.Command, args []string) error {
 	client := getClient()
 	ctx := cmd.Context()
 
-	items, err := client.ListDLQ(ctx, flagDLQLimit)
+	items, _, err := client.ListDLQ(ctx, flagDLQLimit)
 	if err != nil {
 		return &statusError{code: 1, err: err}
 	}
@@ -112,11 +112,12 @@ func runDLQInspect(cmd *cobra.Command, args []string) error {
 	}
 
 	out := cmd.OutOrStdout()
+	isTerm := IsTerminal(out)
 	fmt.Fprintf(out, "Request ID:    %s\n", detail.ID)
 	fmt.Fprintf(out, "Route ID:      %s\n", detail.RouteID)
 	fmt.Fprintf(out, "Method:        %s\n", detail.Method)
 	fmt.Fprintf(out, "Destination:   %s\n", detail.URL)
-	fmt.Fprintf(out, "Status:        %s\n", FormatStatus(detail.Status, true))
+	fmt.Fprintf(out, "Status:        %s\n", FormatStatus(detail.Status, isTerm))
 	fmt.Fprintf(out, "Created At:    %s\n", detail.CreatedAt)
 
 	lastErr := "-"
@@ -135,10 +136,18 @@ func runDLQInspect(cmd *cobra.Command, args []string) error {
 			if att.ErrorMessage != nil && *att.ErrorMessage != "" {
 				errStr = Truncate(*att.ErrorMessage, 40)
 			}
+			statusStr := "-"
+			if sc := att.GetStatusCode(); sc > 0 {
+				statusStr = strconv.Itoa(sc)
+			}
+			timeStr := "-"
+			if t := att.GetAttemptedAt(); !t.IsZero() {
+				timeStr = t.Format("2006-01-02 15:04:05")
+			}
 			rows = append(rows, []string{
 				strconv.Itoa(att.AttemptNumber),
-				att.AttemptedAt.Format("2006-01-02 15:04:05"),
-				strconv.Itoa(att.StatusCode),
+				timeStr,
+				statusStr,
 				fmt.Sprintf("%dms", att.DurationMS),
 				errStr,
 			})
@@ -204,12 +213,12 @@ func runDLQReplayAll(cmd *cobra.Command, args []string) error {
 		}
 
 		// In TTY: inspect total DLQ items to prompt user
-		items, err := client.ListDLQ(ctx, 1)
+		_, total, err := client.ListDLQ(ctx, 1)
 		if err != nil {
 			return &statusError{code: 1, err: err}
 		}
 
-		prompt := fmt.Sprintf("Found %d+ items in DLQ. Requeue all for delivery? [y/N]: ", len(items))
+		prompt := fmt.Sprintf("Found %d items in DLQ. Requeue all for delivery? [y/N]: ", total)
 		fmt.Fprint(cmd.OutOrStdout(), prompt)
 
 		reader := bufio.NewReader(os.Stdin)

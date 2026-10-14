@@ -29,11 +29,14 @@ func runHealth(cmd *cobra.Command, args []string) error {
 
 	isJSON := strings.ToLower(flagOutput) == "json"
 
+	out := cmd.OutOrStdout()
+	isTerm := IsTerminal(out)
+
 	if err != nil {
 		if health != nil {
 			// Server responded with non-OK / degraded status
 			if isJSON {
-				_ = RenderJSON(cmd.OutOrStdout(), map[string]any{
+				_ = RenderJSON(out, map[string]any{
 					"status":     health.Status,
 					"latency_ms": latency.Milliseconds(),
 					"url":        flagServer,
@@ -43,13 +46,13 @@ func runHealth(cmd *cobra.Command, args []string) error {
 				headers := []string{"STATUS", "LATENCY", "SERVER TIME", "URL"}
 				rows := [][]string{
 					{
-						FormatStatus(health.Status, true),
+						FormatStatus(health.Status, isTerm),
 						fmt.Sprintf("%.2fms", float64(latency.Microseconds())/1000.0),
 						health.Timestamp,
 						flagServer,
 					},
 				}
-				_ = RenderTable(cmd.OutOrStdout(), headers, rows)
+				_ = RenderTable(out, headers, rows)
 			}
 			return &statusError{code: 2, err: err}
 		}
@@ -58,7 +61,7 @@ func runHealth(cmd *cobra.Command, args []string) error {
 	}
 
 	if isJSON {
-		return RenderJSON(cmd.OutOrStdout(), map[string]any{
+		return RenderJSON(out, map[string]any{
 			"status":     health.Status,
 			"latency_ms": latency.Milliseconds(),
 			"timestamp":  health.Timestamp,
@@ -69,11 +72,11 @@ func runHealth(cmd *cobra.Command, args []string) error {
 	headers := []string{"STATUS", "LATENCY", "SERVER TIME", "URL"}
 	rows := [][]string{
 		{
-			FormatStatus(health.Status, true),
+			FormatStatus(health.Status, isTerm),
 			fmt.Sprintf("%.2fms", float64(latency.Microseconds())/1000.0),
 			health.Timestamp,
 			flagServer,
 		},
 	}
-	return RenderTable(cmd.OutOrStdout(), headers, rows)
+	return RenderTable(out, headers, rows)
 }

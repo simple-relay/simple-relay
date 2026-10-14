@@ -220,3 +220,15 @@ func TestCommands_DLQ(t *testing.T) {
 		}
 	})
 }
+
+func TestRootCmd_TimeoutEnv(t *testing.T) {
+	t.Setenv("RELAY_TIMEOUT", "45s")
+	cmd := NewRootCmd()
+	timeoutFlag := cmd.PersistentFlags().Lookup("timeout")
+	if timeoutFlag == nil {
+		t.Fatalf("timeout flag not found")
+	}
+	if timeoutFlag.DefValue != "45s" {
+		t.Fatalf("expected default timeout 45s from env, got %s", timeoutFlag.DefValue)
+	}
+}

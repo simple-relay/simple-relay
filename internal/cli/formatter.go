@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+
+	"github.com/mattn/go-isatty"
 )
 
 const (
@@ -16,6 +18,14 @@ const (
 	ansiYellow = "\033[33m"
 	ansiBold   = "\033[1m"
 )
+
+// IsTerminal returns true if w is connected to an active terminal file descriptor.
+func IsTerminal(w io.Writer) bool {
+	if f, ok := w.(*os.File); ok {
+		return isatty.IsTerminal(f.Fd())
+	}
+	return false
+}
 
 // FormatStatus returns colored status text if terminal colors are enabled.
 func FormatStatus(status string, isTerminal bool) string {
@@ -36,15 +46,16 @@ func FormatStatus(status string, isTerminal bool) string {
 	}
 }
 
-// Truncate shortens a string to maxLen and appends an ellipsis.
+// Truncate shortens a string to maxLen runes and appends an ellipsis.
 func Truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	r := []rune(s)
+	if len(r) <= maxLen {
 		return s
 	}
 	if maxLen <= 0 {
 		return ""
 	}
-	return s[:maxLen] + "..."
+	return string(r[:maxLen]) + "..."
 }
 
 // RenderTable prints aligned tabular data using standard tabwriter.

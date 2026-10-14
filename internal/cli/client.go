@@ -39,11 +39,29 @@ type DLQItem struct {
 
 // AttemptDetail represents an individual outbound delivery attempt.
 type AttemptDetail struct {
-	AttemptNumber int       `json:"attempt_number"`
-	StatusCode    int       `json:"status_code"`
-	DurationMS    int64     `json:"duration_ms"`
-	ErrorMessage  *string   `json:"error_message,omitempty"`
-	AttemptedAt   time.Time `json:"attempted_at"`
+	AttemptNumber      int       `json:"attempt_number"`
+	ResponseStatusCode *int      `json:"response_status_code,omitempty"`
+	StatusCode         int       `json:"status_code,omitempty"`
+	DurationMS         int64     `json:"duration_ms"`
+	ErrorMessage       *string   `json:"error_message,omitempty"`
+	ExecutedAt         time.Time `json:"executed_at,omitempty"`
+	AttemptedAt        time.Time `json:"attempted_at,omitempty"`
+}
+
+// GetStatusCode returns the HTTP status code of the attempt if present, or 0.
+func (a *AttemptDetail) GetStatusCode() int {
+	if a.ResponseStatusCode != nil && *a.ResponseStatusCode > 0 {
+		return *a.ResponseStatusCode
+	}
+	return a.StatusCode
+}
+
+// GetAttemptedAt returns the timestamp when the attempt occurred.
+func (a *AttemptDetail) GetAttemptedAt() time.Time {
+	if !a.ExecutedAt.IsZero() {
+		return a.ExecutedAt
+	}
+	return a.AttemptedAt
 }
 
 // RequestDetail represents full request metadata and audit attempt history.
@@ -225,19 +243,19 @@ func (c *RelayClient) ListRoutes(ctx context.Context) (map[string]string, error)
 }
 
 // ListDLQ fetches items currently present in the Dead Letter Queue.
-func (c *RelayClient) ListDLQ(ctx context.Context, limit int) ([]DLQItem, error) {
+func (c *RelayClient) ListDLQ(ctx context.Context, limit int) ([]DLQItem, int64, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 	path := fmt.Sprintf("/api/v1/dlq?limit=%d", limit)
 	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list dlq: %w", err)
+		return nil, 0, fmt.Errorf("failed to list dlq: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("list dlq returned status %d", resp.StatusCode)
+		return nil, 0, fmt.Errorf("list dlq returned status %d", resp.StatusCode)
 	}
 
 	var data struct {
@@ -245,10 +263,10 @@ func (c *RelayClient) ListDLQ(ctx context.Context, limit int) ([]DLQItem, error)
 		Total int64     `json:"total"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("failed to decode dlq items: %w", err)
+		return nil, 0, fmt.Errorf("failed to decode dlq items: %w", err)
 	}
 
-	return data.Items, nil
+	return data.Items, data.Total, nil
 }
 
 // InspectRequest fetches comprehensive details and attempts for a specific request.
