@@ -28,8 +28,8 @@ var (
 )
 
 const (
-	defaultCertTTL     = 24 * time.Hour
-	maxCertSizeBytes   = 1024 * 1024 // 1 MB limit to prevent memory bloat
+	defaultCertTTL      = 24 * time.Hour
+	maxCertSizeBytes    = 1024 * 1024 // 1 MB limit to prevent memory bloat
 	certDownloadTimeout = 3 * time.Second
 )
 
