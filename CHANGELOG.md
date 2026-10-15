@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.0](https://github.com/simple-relay/simple-relay/compare/v0.5.0...v0.6.0) (2026-10-15)
+
+
+### Features
+
+* **cli:** implement relay inspection binary cmd/relay-cli ([#62](https://github.com/simple-relay/simple-relay/issues/62)) ([8bacf5e](https://github.com/simple-relay/simple-relay/commit/8bacf5e088866f9d14d80f463d07b0a6de3383d6))
+* **signature:** add asymmetric verification and custom validation pipeline ([#61](https://github.com/simple-relay/simple-relay/issues/61)) ([34e741f](https://github.com/simple-relay/simple-relay/commit/34e741f698c76329a09023296f5f21332a81780c))
+* **ui:** add custom validation option for routes ([#65](https://github.com/simple-relay/simple-relay/issues/65)) ([442dfa8](https://github.com/simple-relay/simple-relay/commit/442dfa8d710ac3acbfc6fd87fc283e9576f48262))
+
+
+### Documentation
+
+* **readme:** add logo beside project name in header ([#57](https://github.com/simple-relay/simple-relay/issues/57)) ([63d6bb5](https://github.com/simple-relay/simple-relay/commit/63d6bb5df5ee9ce20e105a33dd3d82ae0921f4f1))
+* **specs:** add api key authentication design spec ([#63](https://github.com/simple-relay/simple-relay/issues/63)) ([c6daf31](https://github.com/simple-relay/simple-relay/commit/c6daf310e9a45d251a5c12d9dbaa016d092a0941))
+
 ## [0.5.0](https://github.com/simple-relay/simple-relay/compare/v0.4.0...v0.5.0) (2026-10-13)
 
 
