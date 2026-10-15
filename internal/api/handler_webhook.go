@@ -57,6 +57,18 @@ func NewWebhookHandler(
 			return
 		}
 
+		// Stage 1: Evaluate cheap O(1) header and query parameter validation rules
+		if len(route.ValidationRules) > 0 {
+			if err := EvaluateHeaderQueryRules(r, route.ValidationRules); err != nil {
+				logger.Warn("inbound webhook header/query validation rule failed",
+					"route", routeName,
+					"error", err,
+				)
+				writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+		}
+
 		bodyBytes, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 		if err != nil {
 			var maxBytesErr *http.MaxBytesError
@@ -68,9 +80,9 @@ func NewWebhookHandler(
 			return
 		}
 
-		// Verify signature if required by route configuration
+		// Stage 2: Verify cryptographic signature (Symmetric & Asymmetric)
 		if route.SignatureProvider != model.SignatureProviderNone && route.SignatureProvider != "" {
-			if strings.TrimSpace(route.SignatureSecret) == "" {
+			if route.SignatureProvider != model.SignatureProviderRSASHA256 && strings.TrimSpace(route.SignatureSecret) == "" {
 				logger.Error("route misconfiguration: signature_secret is empty", "route", routeName, "provider", route.SignatureProvider)
 				writeJSONError(w, http.StatusInternalServerError, "route signature misconfiguration")
 				return
@@ -93,6 +105,26 @@ func NewWebhookHandler(
 					writeJSONError(w, http.StatusUnauthorized, "invalid webhook signature")
 					return
 				}
+			}
+		}
+
+		// Stage 3: Evaluate JSON body validation rules on authenticated payload
+		if len(route.ValidationRules) > 0 {
+			if err := EvaluateBodyJSONRules(bodyBytes, route.ValidationRules); err != nil {
+				if errors.Is(err, ErrInvalidJSONPayload) {
+					logger.Warn("inbound webhook body json payload is invalid",
+						"route", routeName,
+						"error", err,
+					)
+					writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+					return
+				}
+				logger.Warn("inbound webhook body validation rule failed",
+					"route", routeName,
+					"error", err,
+				)
+				writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+				return
 			}
 		}
 

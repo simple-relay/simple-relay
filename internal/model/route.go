@@ -28,7 +28,32 @@ const (
 	SignatureProviderStripe     SignatureProvider = "stripe"
 	SignatureProviderGitHub     SignatureProvider = "github"
 	SignatureProviderHMACSHA256 SignatureProvider = "hmac_sha256"
+	SignatureProviderEd25519    SignatureProvider = "ed25519"
+	SignatureProviderRSASHA256  SignatureProvider = "rsa_sha256"
 )
+
+type RuleSource string
+
+const (
+	RuleSourceHeader   RuleSource = "header"
+	RuleSourceQuery    RuleSource = "query"
+	RuleSourceBodyJSON RuleSource = "body_json"
+)
+
+type RuleOperator string
+
+const (
+	RuleOperatorEquals RuleOperator = "equals"
+	RuleOperatorExists RuleOperator = "exists"
+)
+
+// ValidationRule defines an incoming pre-persistence validation constraint.
+type ValidationRule struct {
+	Source   RuleSource   `json:"source"`
+	Key      string       `json:"key"`
+	Operator RuleOperator `json:"operator"`
+	Value    string       `json:"value,omitempty"`
+}
 
 type RetryStrategy string
 
@@ -47,6 +72,7 @@ type Route struct {
 	DestinationURL       string            `json:"destination_url"`
 	SignatureProvider    SignatureProvider `json:"signature_provider"`
 	SignatureSecret      string            `json:"signature_secret,omitempty"`
+	ValidationRules      []ValidationRule  `json:"validation_rules,omitempty"`
 	MaxAttempts          int               `json:"max_attempts"`
 	TimeoutMS            int               `json:"timeout_ms"`
 	RetryBackoffStrategy RetryStrategy     `json:"retry_backoff_strategy"`
@@ -55,16 +81,20 @@ type Route struct {
 }
 
 var (
-	ErrRouteNameRequired             = errors.New("route name is required")
-	ErrRoutePathRequired             = errors.New("route path is required")
-	ErrRouteDestinationRequired      = errors.New("destination_url is required")
-	ErrRouteInvalidURL               = errors.New("destination_url must be a valid absolute HTTP/HTTPS URL")
-	ErrRouteInvalidType              = errors.New("invalid route type; must be 'inbound' or 'outbound'")
-	ErrRouteInvalidMode              = errors.New("invalid route mode; must be 'sync' or 'async'")
-	ErrRouteInvalidMaxAttempts       = errors.New("max_attempts must be at least 1")
-	ErrRouteInvalidTimeout           = errors.New("timeout_ms must be greater than 0")
-	ErrRouteSignatureSecretRequired  = errors.New("signature_secret is required when signature_provider is enabled")
-	ErrRouteInvalidSignatureProvider = errors.New("invalid signature_provider")
+	ErrRouteNameRequired               = errors.New("route name is required")
+	ErrRoutePathRequired               = errors.New("route path is required")
+	ErrRouteDestinationRequired        = errors.New("destination_url is required")
+	ErrRouteInvalidURL                 = errors.New("destination_url must be a valid absolute HTTP/HTTPS URL")
+	ErrRouteInvalidType                = errors.New("invalid route type; must be 'inbound' or 'outbound'")
+	ErrRouteInvalidMode                = errors.New("invalid route mode; must be 'sync' or 'async'")
+	ErrRouteInvalidMaxAttempts         = errors.New("max_attempts must be at least 1")
+	ErrRouteInvalidTimeout             = errors.New("timeout_ms must be greater than 0")
+	ErrRouteSignatureSecretRequired    = errors.New("signature_secret is required when signature_provider is enabled")
+	ErrRouteInvalidSignatureProvider   = errors.New("invalid signature_provider")
+	ErrRouteValidationRulesInboundOnly = errors.New("validation_rules are only supported on inbound routes")
+	ErrRouteInvalidRuleSource          = errors.New("invalid validation rule source; must be 'header', 'query', or 'body_json'")
+	ErrRouteInvalidRuleOperator        = errors.New("invalid validation rule operator; must be 'equals' or 'exists'")
+	ErrRouteInvalidRuleKey             = errors.New("validation rule key is required")
 )
 
 // Validate checks the route's fields for logical correctness.
@@ -94,14 +124,38 @@ func (r *Route) Validate() error {
 	if r.TimeoutMS <= 0 {
 		return ErrRouteInvalidTimeout
 	}
+
+	if len(r.ValidationRules) > 0 {
+		if r.Type != RouteTypeInbound {
+			return ErrRouteValidationRulesInboundOnly
+		}
+		for _, rule := range r.ValidationRules {
+			if strings.TrimSpace(rule.Key) == "" {
+				return ErrRouteInvalidRuleKey
+			}
+			switch rule.Source {
+			case RuleSourceHeader, RuleSourceQuery, RuleSourceBodyJSON:
+			default:
+				return ErrRouteInvalidRuleSource
+			}
+			switch rule.Operator {
+			case RuleOperatorEquals, RuleOperatorExists:
+			default:
+				return ErrRouteInvalidRuleOperator
+			}
+		}
+	}
+
 	if r.Type == RouteTypeInbound {
 		switch r.SignatureProvider {
 		case SignatureProviderNone, "":
 			// Valid: no signature verification required
-		case SignatureProviderStripe, SignatureProviderGitHub, SignatureProviderHMACSHA256:
+		case SignatureProviderStripe, SignatureProviderGitHub, SignatureProviderHMACSHA256, SignatureProviderEd25519:
 			if strings.TrimSpace(r.SignatureSecret) == "" {
 				return ErrRouteSignatureSecretRequired
 			}
+		case SignatureProviderRSASHA256:
+			// SignatureSecret is optional for RSA-SHA256 (defaults to dynamic AWS SNS cert download with cache)
 		default:
 			return ErrRouteInvalidSignatureProvider
 		}
