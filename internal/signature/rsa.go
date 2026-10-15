@@ -267,7 +267,9 @@ func parseRSAPublicKey(secret string) (*rsa.PublicKey, error) {
 	}
 
 	if cached, ok := rsaKeyCache.Load(trimmed); ok {
-		return cached.(*rsa.PublicKey), nil
+		if pk, ok := cached.(*rsa.PublicKey); ok {
+			return pk, nil
+		}
 	}
 
 	pubKey, err := parseRSAPublicKeyUncached(trimmed)
