@@ -59,7 +59,9 @@ func parseEd25519PublicKey(secret string) (ed25519.PublicKey, error) {
 	}
 
 	if cached, ok := ed25519KeyCache.Load(trimmed); ok {
-		return cached.(ed25519.PublicKey), nil
+		if pk, ok := cached.(ed25519.PublicKey); ok {
+			return pk, nil
+		}
 	}
 
 	pk, err := parseEd25519PublicKeyUncached(trimmed)

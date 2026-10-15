@@ -49,4 +49,6 @@ jobs:
         run: go test -v -race ./...
 
       - name: Verify static compilation (no CGO)
-        run: CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /dev/null ./cmd/relay
+        run: |
+          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /dev/null ./cmd/relay
+          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /dev/null ./cmd/relay-cli

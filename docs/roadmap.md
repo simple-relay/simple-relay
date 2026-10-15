@@ -213,7 +213,7 @@
 
 ### Phase 4 — CLI, Observability & Alerting
 
-- [ ] **CLI Inspection Binary (`cmd/relay-cli`)** ([#21](https://github.com/simple-relay/simple-relay/issues/21))
+- [x] **CLI Inspection Binary (`cmd/relay-cli`)** ([#21](https://github.com/simple-relay/simple-relay/issues/21))
   - Command-line tool to inspect relay health, active routes, and queue depth.
   - Query in-flight jobs and Dead Letter Queue directly from terminal.
 - [x] **Webhook Alert Notifications on DLQ Threshold Breaches** ([#22]

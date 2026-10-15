@@ -699,3 +699,36 @@ func (r *RequestRepo) ListRequests(ctx context.Context, filter storage.RequestFi
 
 	return results, total, nil
 }
+
+// GetQueueStats aggregates count of pending and processing requests in a single round-trip.
+func (r *RequestRepo) GetQueueStats(ctx context.Context) (pending, inFlight int64, err error) {
+	query := `
+		SELECT status, COUNT(*) 
+		FROM requests 
+		WHERE status IN ('pending', 'processing') 
+		GROUP BY status;
+	`
+	rows, err := r.db.Reader().QueryContext(ctx, query)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to aggregate queue stats: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var status string
+		var count int64
+		if err := rows.Scan(&status, &count); err != nil {
+			return 0, 0, fmt.Errorf("failed to scan queue stats row: %w", err)
+		}
+		switch status {
+		case "pending":
+			pending = count
+		case "processing":
+			inFlight = count
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, 0, fmt.Errorf("queue stats iteration error: %w", err)
+	}
+	return pending, inFlight, nil
+}

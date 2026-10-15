@@ -94,6 +94,10 @@ func (m *mockDispatcherRepo) ReplayAllDLQRequests(ctx context.Context, routeID s
 	return nil, nil
 }
 
+func (m *mockDispatcherRepo) GetQueueStats(ctx context.Context) (int64, int64, error) {
+	return 0, 0, nil
+}
+
 func TestDispatcher_WakeupSignal(t *testing.T) {
 	repo := &mockDispatcherRepo{
 		pending: []*model.Request{

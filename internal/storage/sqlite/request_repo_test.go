@@ -674,3 +674,41 @@ func TestRequestRepo_ListRequests(t *testing.T) {
 		t.Fatalf("expected 2 paged items, got %d", len(pagedItems))
 	}
 }
+
+func TestRequestRepo_GetQueueStats(t *testing.T) {
+	db, _, reqRepo, route := setupTestDBWithRoute(t)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	// Initial stats should be zero
+	p, inflight, err := reqRepo.GetQueueStats(ctx)
+	if err != nil {
+		t.Fatalf("failed to get initial queue stats: %v", err)
+	}
+	if p != 0 || inflight != 0 {
+		t.Fatalf("expected 0/0, got pending=%d, inFlight=%d", p, inflight)
+	}
+
+	// Insert 2 pending, 1 processing, 1 success, 1 failed
+	reqs := []*model.Request{
+		{RouteID: route.ID, Method: "POST", URL: "http://example.com/1", Status: model.RequestStatusPending, Headers: map[string]string{}},
+		{RouteID: route.ID, Method: "POST", URL: "http://example.com/2", Status: model.RequestStatusPending, Headers: map[string]string{}},
+		{RouteID: route.ID, Method: "POST", URL: "http://example.com/3", Status: model.RequestStatusProcessing, Headers: map[string]string{}},
+		{RouteID: route.ID, Method: "POST", URL: "http://example.com/4", Status: model.RequestStatusSuccess, Headers: map[string]string{}},
+		{RouteID: route.ID, Method: "POST", URL: "http://example.com/5", Status: model.RequestStatusFailed, Headers: map[string]string{}},
+	}
+	for _, req := range reqs {
+		if err := reqRepo.CreateRequest(ctx, req); err != nil {
+			t.Fatalf("failed to create request: %v", err)
+		}
+	}
+
+	p, inflight, err = reqRepo.GetQueueStats(ctx)
+	if err != nil {
+		t.Fatalf("failed to get queue stats: %v", err)
+	}
+	if p != 2 || inflight != 1 {
+		t.Fatalf("expected pending=2, inFlight=1, got pending=%d, inFlight=%d", p, inflight)
+	}
+}

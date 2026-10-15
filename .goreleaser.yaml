@@ -30,6 +30,29 @@ builds:
       - goos: windows
         goarch: arm64
 
+  - id: relay-cli
+    main: ./cmd/relay-cli
+    binary: relay-cli
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/simple-relay/simple-relay/internal/version.Version={{ .Version }}
+      - -X github.com/simple-relay/simple-relay/internal/version.GitCommit={{ .Commit }}
+      - -X github.com/simple-relay/simple-relay/internal/version.BuildDate={{ .Date }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
 archives:
   - id: default
     format: tar.gz
@@ -51,6 +74,9 @@ dockers:
       - "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:latest-amd64"
     dockerfile: Dockerfile
     use: buildx
+    builds:
+      - simple-relay
+      - relay-cli
     build_flag_templates:
       - "--platform=linux/amd64"
       - "--label=org.opencontainers.image.title={{ .ProjectName }}"
@@ -64,6 +90,9 @@ dockers:
       - "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:latest-arm64"
     dockerfile: Dockerfile
     use: buildx
+    builds:
+      - simple-relay
+      - relay-cli
     build_flag_templates:
       - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.title={{ .ProjectName }}"

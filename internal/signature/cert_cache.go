@@ -28,10 +28,10 @@ var (
 )
 
 const (
-	defaultCertTTL       = 24 * time.Hour
-	maxCertSizeBytes     = 1024 * 1024 // 1 MB limit to prevent memory bloat
-	maxCertCacheEntries  = 100
-	certDownloadTimeout  = 3 * time.Second
+	defaultCertTTL      = 24 * time.Hour
+	maxCertSizeBytes    = 1024 * 1024 // 1 MB limit to prevent memory bloat
+	maxCertCacheEntries = 100
+	certDownloadTimeout = 3 * time.Second
 )
 
 type cachedCert struct {
