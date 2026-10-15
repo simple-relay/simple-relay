@@ -66,18 +66,18 @@ func (a *AttemptDetail) GetAttemptedAt() time.Time {
 
 // RequestDetail represents full request metadata and audit attempt history.
 type RequestDetail struct {
-	ID            string           `json:"id"`
-	RouteID       string           `json:"route_id"`
-	Method        string           `json:"method"`
-	URL           string           `json:"url"`
+	ID            string            `json:"id"`
+	RouteID       string            `json:"route_id"`
+	Method        string            `json:"method"`
+	URL           string            `json:"url"`
 	Headers       map[string]string `json:"headers"`
-	Body          string           `json:"body"`
-	Status        string           `json:"status"`
-	AttemptsCount int              `json:"attempts_count"`
-	LastError     *string          `json:"last_error,omitempty"`
-	CreatedAt     string           `json:"created_at"`
-	UpdatedAt     string           `json:"updated_at"`
-	Attempts      []*AttemptDetail `json:"attempts"`
+	Body          string            `json:"body"`
+	Status        string            `json:"status"`
+	AttemptsCount int               `json:"attempts_count"`
+	LastError     *string           `json:"last_error,omitempty"`
+	CreatedAt     string            `json:"created_at"`
+	UpdatedAt     string            `json:"updated_at"`
+	Attempts      []*AttemptDetail  `json:"attempts"`
 }
 
 // RelayClient provides programmatic HTTP interactions with a Simple Relay daemon.

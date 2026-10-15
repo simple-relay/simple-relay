@@ -73,9 +73,9 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:   "relay-cli",
-		Short: "Simple Relay command-line inspection and operational management tool",
-		Long:  "relay-cli enables operators and automated pipelines to inspect health, monitor queue depth, and triage/replay Dead Letter Queue messages.",
+		Use:           "relay-cli",
+		Short:         "Simple Relay command-line inspection and operational management tool",
+		Long:          "relay-cli enables operators and automated pipelines to inspect health, monitor queue depth, and triage/replay Dead Letter Queue messages.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
