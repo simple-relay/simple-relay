@@ -238,10 +238,10 @@
 - [ ] **Multi-node Worker Clustering with Leader Election** ([#26](https://github.com/simple-relay/simple-relay/issues/26))
   - Support multi-instance relay deployments sharing centralized storage.
   - Distributed leader election and advisory locking to prevent duplicate worker dispatches.
-- [ ] **Asymmetric Public-Key Webhook Verification** ([#30](https://github.com/simple-relay/simple-relay/issues/30))
+- [x] **Asymmetric Public-Key Webhook Verification** ([#30](https://github.com/simple-relay/simple-relay/issues/30))
   - Support Ed25519 public-key signature verification adapter (e.g. DocuSign, Standard Webhooks).
   - Support RSA-SHA256 signature verification adapter with certificate validation (e.g. AWS SNS).
   - In-memory caching for public keys and X.509 certificates with TTL to eliminate network latency overhead.
   - Reject invalid signatures at HTTP boundary with `401 Unauthorized` before SQLite persistence.
   - Route configuration support for public keys or certificate trust settings.
-  - See design specification: [2026-10-09-signature-verification-adapters-design.md](specs/2026-10-09-signature-verification-adapters-design.md).
+  - See design specification: [2026-10-14-asymmetric-and-custom-validation-design.md](specs/2026-10-14-asymmetric-and-custom-validation-design.md).

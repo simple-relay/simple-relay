@@ -582,9 +582,16 @@
               <div class="flex items-center justify-between pb-2 border-b border-gray-800">
                 <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center space-x-1.5">
                   <span>🔒</span>
-                  <span>Webhook Signature Verification</span>
+                  <span>Webhook Verification</span>
                 </h3>
-                <span class="text-[10px] text-gray-500">HMAC-SHA256</span>
+                <span class="text-[10px] text-gray-500 font-mono" x-text="{
+                  'none': 'None',
+                  'stripe': 'HMAC-SHA256',
+                  'github': 'HMAC-SHA256',
+                  'hmac_sha256': 'HMAC-SHA256',
+                  'ed25519': 'Ed25519',
+                  'rsa_sha256': 'RSA-SHA256'
+                }[routeForm.signature_provider] || 'None'"></span>
               </div>
 
               <div class="bg-gray-950 p-4 rounded-xl border border-gray-800 space-y-3.5">
@@ -596,6 +603,8 @@
                     <option value="stripe">Stripe (Stripe-Signature timestamp & v1 HMAC)</option>
                     <option value="github">GitHub (X-Hub-Signature-256 HMAC-SHA256)</option>
                     <option value="hmac_sha256">Generic HMAC-SHA256 (X-Signature)</option>
+                    <option value="ed25519">Ed25519 (Standard Webhooks / Raw)</option>
+                    <option value="rsa_sha256">RSA-SHA256 (AWS SNS / Generic RSA)</option>
                   </select>
                   <p class="text-[11px] text-gray-500 mt-1">
                     Validates cryptographic authenticity against raw payload bytes before queuing.
@@ -604,15 +613,22 @@
 
                 <div x-show="routeForm.signature_provider && routeForm.signature_provider !== 'none'">
                   <div class="flex items-center justify-between mb-1.5">
-                    <label class="block text-gray-300 font-medium">Webhook Secret / Signing Key</label>
+                    <label class="block text-gray-300 font-medium">
+                      <span x-show="!routeForm.signature_provider || ['stripe', 'github', 'hmac_sha256'].includes(routeForm.signature_provider)">Webhook Secret / Signing Key</span>
+                      <span x-show="routeForm.signature_provider === 'ed25519'">Ed25519 Public Key</span>
+                      <span x-show="routeForm.signature_provider === 'rsa_sha256'">RSA Public Key (Optional)</span>
+                    </label>
                     <button type="button" @click="showSecret = !showSecret" class="text-[11px] text-indigo-400 hover:text-indigo-300">
                       <span x-text="showSecret ? 'Hide Secret' : 'Show Secret'"></span>
                     </button>
                   </div>
-                  <input :type="showSecret ? 'text' : 'password'" x-model="routeForm.signature_secret" placeholder="whsec_... or secret token"
+                  <input :type="showSecret ? 'text' : 'password'" x-model="routeForm.signature_secret"
+                         :placeholder="routeForm.signature_provider === 'ed25519' ? 'Base64, Hex or PEM public key' : (routeForm.signature_provider === 'rsa_sha256' ? 'Optional PEM public key (leave empty for AWS SNS dynamic cert)' : 'whsec_... or secret token')"
                          class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white font-mono placeholder-gray-500 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
                   <p class="text-[11px] text-gray-500 mt-1">
-                    Used to compute HMAC. Never exposed or transmitted upstream.
+                    <span x-show="!routeForm.signature_provider || ['stripe', 'github', 'hmac_sha256'].includes(routeForm.signature_provider)">Used to compute HMAC. Never exposed or transmitted upstream.</span>
+                    <span x-show="routeForm.signature_provider === 'ed25519'">32-byte Ed25519 public key in Base64, Hex, or PEM format.</span>
+                    <span x-show="routeForm.signature_provider === 'rsa_sha256'">Optional static PEM public key. If omitted, automatically fetches and caches AWS SNS certificates.</span>
                   </p>
                 </div>
               </div>

@@ -159,3 +159,95 @@ func TestRouteRepo_CRUD(t *testing.T) {
 		t.Fatalf("expected ErrNotFound deleting non-existent, got: %v", err)
 	}
 }
+
+func TestRouteRepo_ValidationRules(t *testing.T) {
+	db, repo := setupTestDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	route := &model.Route{
+		Name:                 "custom-validated-route",
+		Type:                 model.RouteTypeInbound,
+		Mode:                 model.RouteModeAsync,
+		Path:                 "/api/v1/webhook/custom",
+		DestinationURL:       "https://api.internal/custom",
+		SignatureProvider:    model.SignatureProviderNone,
+		MaxAttempts:          3,
+		TimeoutMS:            5000,
+		RetryBackoffStrategy: model.RetryStrategyExponential,
+		ValidationRules: []model.ValidationRule{
+			{Source: model.RuleSourceHeader, Key: "X-Auth-Token", Operator: model.RuleOperatorEquals, Value: "secret-token"},
+			{Source: model.RuleSourceQuery, Key: "token", Operator: model.RuleOperatorExists},
+			{Source: model.RuleSourceBodyJSON, Key: "event.name", Operator: model.RuleOperatorEquals, Value: "order.paid"},
+		},
+	}
+
+	if err := repo.CreateRoute(ctx, route); err != nil {
+		t.Fatalf("failed to create route with validation rules: %v", err)
+	}
+
+	fetched, err := repo.GetRouteByID(ctx, route.ID)
+	if err != nil {
+		t.Fatalf("failed to get route: %v", err)
+	}
+
+	if len(fetched.ValidationRules) != 3 {
+		t.Fatalf("expected 3 validation rules, got %d", len(fetched.ValidationRules))
+	}
+	if fetched.ValidationRules[0].Key != "X-Auth-Token" || fetched.ValidationRules[0].Value != "secret-token" {
+		t.Fatalf("unexpected rule 0: %+v", fetched.ValidationRules[0])
+	}
+	if fetched.ValidationRules[2].Source != model.RuleSourceBodyJSON || fetched.ValidationRules[2].Value != "order.paid" {
+		t.Fatalf("unexpected rule 2: %+v", fetched.ValidationRules[2])
+	}
+
+	// Update rules
+	route.ValidationRules = []model.ValidationRule{
+		{Source: model.RuleSourceHeader, Key: "X-Updated", Operator: model.RuleOperatorExists},
+	}
+	if err := repo.UpdateRoute(ctx, route); err != nil {
+		t.Fatalf("failed to update route: %v", err)
+	}
+
+	updated, err := repo.GetRouteByID(ctx, route.ID)
+	if err != nil {
+		t.Fatalf("failed to get updated route: %v", err)
+	}
+	if len(updated.ValidationRules) != 1 || updated.ValidationRules[0].Key != "X-Updated" {
+		t.Fatalf("unexpected updated rules: %+v", updated.ValidationRules)
+	}
+}
+
+func TestRouteRepo_CorruptedValidationRules(t *testing.T) {
+	db, repo := setupTestDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	routeID := model.NewULID()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err := db.Writer().ExecContext(ctx, `
+		INSERT INTO routes (
+			id, name, type, mode, path, destination_url,
+			signature_provider, validation_rules, max_attempts,
+			timeout_ms, retry_backoff_strategy, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, routeID, "corrupt-route", "inbound", "async", "/api/v1/webhook/corrupt", "https://example.com",
+		"none", "{invalid-json-rules", 5, 10000, "exp", now, now)
+	if err != nil {
+		t.Fatalf("failed to insert corrupt route row: %v", err)
+	}
+
+	// GetRouteByID should fail-fast with unmarshal error
+	_, err = repo.GetRouteByID(ctx, routeID)
+	if err == nil {
+		t.Fatal("expected error on corrupt validation rules, got nil")
+	}
+
+	// ListRoutes should also fail-fast with error
+	_, err = repo.ListRoutes(ctx)
+	if err == nil {
+		t.Fatal("expected error on ListRoutes with corrupt validation rules, got nil")
+	}
+}
