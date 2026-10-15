@@ -15,10 +15,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -365,6 +368,38 @@ func TestEd25519Verifier(t *testing.T) {
 		}
 	})
 
+	t.Run("Standard Webhooks invalid non-numeric timestamp", func(t *testing.T) {
+		hdr := http.Header{}
+		hdr.Set("webhook-id", "msg_test")
+		hdr.Set("webhook-timestamp", "not-a-number")
+		hdr.Set("webhook-signature", "v1a,someSig")
+		if err := v.Verify(hdr, pubKeyHex, rawBody); err != ErrInvalidSignatureFormat {
+			t.Fatalf("expected ErrInvalidSignatureFormat, got: %v", err)
+		}
+	})
+
+	t.Run("Standard Webhooks candidates capped at 5", func(t *testing.T) {
+		msgID := "msg_cap"
+		timestamp := "1710000010"
+		signedPayload := fmt.Sprintf("%s.%s.%s", msgID, timestamp, string(rawBody))
+		sig := ed25519.Sign(privKey, []byte(signedPayload))
+		sigB64 := base64.StdEncoding.EncodeToString(sig)
+		dummySigB64 := base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
+
+		// 5 dummy candidates + valid candidate at index 6
+		sigHeaderVal := fmt.Sprintf("v1a,%s v1a,%s v1a,%s v1a,%s v1a,%s v1a,%s",
+			dummySigB64, dummySigB64, dummySigB64, dummySigB64, dummySigB64, sigB64)
+
+		hdr := http.Header{}
+		hdr.Set("webhook-id", msgID)
+		hdr.Set("webhook-timestamp", timestamp)
+		hdr.Set("webhook-signature", sigHeaderVal)
+
+		if err := v.Verify(hdr, pubKeyHex, rawBody); err != ErrSignatureMismatch {
+			t.Fatalf("expected ErrSignatureMismatch due to candidate capping, got: %v", err)
+		}
+	})
+
 	t.Run("Generic Ed25519 with PEM public key", func(t *testing.T) {
 		sig := ed25519.Sign(privKey, rawBody)
 		sigB64 := base64.StdEncoding.EncodeToString(sig)
@@ -579,6 +614,136 @@ func TestRSAVerifier(t *testing.T) {
 		tamperedPayload := []byte(`{"event":"tampered"}`)
 		if err := v.Verify(hdr, pubKeyPEM, tamperedPayload); err != ErrSignatureMismatch {
 			t.Fatalf("expected ErrSignatureMismatch, got: %v", err)
+		}
+	})
+
+	t.Run("AWS SNS with invalid timestamp format", func(t *testing.T) {
+		msg := snsMessage{
+			Type:             "Notification",
+			Message:          "Hello AWS SNS",
+			MessageId:        "msg-sns-bad-time",
+			Timestamp:        "invalid-timestamp-format",
+			TopicArn:         "arn:aws:sns:us-east-1:123456789012:test-topic",
+			SigningCertURL:   validSNSCertURL,
+			Signature:        "AAAA",
+			SignatureVersion: "2",
+		}
+		rawBody, _ := json.Marshal(msg)
+		hdr := http.Header{}
+		if err := v.Verify(hdr, "", rawBody); err != ErrInvalidSignatureFormat {
+			t.Fatalf("expected ErrInvalidSignatureFormat for invalid timestamp, got: %v", err)
+		}
+	})
+
+	t.Run("Generic RSA with Base64 signature length check", func(t *testing.T) {
+		rawPayload := []byte(`{"event":"generic.rsa.b64check"}`)
+		h := sha256.Sum256(rawPayload)
+		sigBytes, err := rsa.SignPKCS1v15(rand.Reader, privKey, crypto.SHA256, h[:])
+		if err != nil {
+			t.Fatalf("failed to sign raw body: %v", err)
+		}
+		sigB64 := base64.StdEncoding.EncodeToString(sigBytes)
+
+		hdr := http.Header{}
+		hdr.Set("X-Signature", sigB64)
+
+		if err := v.Verify(hdr, pubKeyPEM, rawPayload); err != nil {
+			t.Fatalf("expected valid verification for Base64 signature, got: %v", err)
+		}
+	})
+}
+
+func TestCertCache_Hardening(t *testing.T) {
+	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate rsa key: %v", err)
+	}
+	certPEM := generateTestCertPEM(t, privKey)
+	validSNSCertURL := "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-valid.pem"
+
+	t.Run("Singleflight deduplication on concurrent fetches", func(t *testing.T) {
+		var fetchCount int64
+		mockClient := &http.Client{
+			Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+				atomic.AddInt64(&fetchCount, 1)
+				time.Sleep(30 * time.Millisecond)
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader(certPEM)),
+					Header:     make(http.Header),
+				}, nil
+			}),
+		}
+		cache := NewCertCache(time.Hour, mockClient)
+
+		var wg sync.WaitGroup
+		concurrency := 10
+		errorsCh := make(chan error, concurrency)
+
+		for i := 0; i < concurrency; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				pk, err := cache.GetOrFetch(validSNSCertURL)
+				if err != nil {
+					errorsCh <- err
+					return
+				}
+				if pk == nil {
+					errorsCh <- errors.New("nil public key returned")
+				}
+			}()
+		}
+
+		wg.Wait()
+		close(errorsCh)
+
+		for err := range errorsCh {
+			t.Fatalf("concurrent GetOrFetch returned error: %v", err)
+		}
+
+		if count := atomic.LoadInt64(&fetchCount); count != 1 {
+			t.Fatalf("expected singleflight to execute exactly 1 HTTP dial, got %d", count)
+		}
+	})
+
+	t.Run("SSRF URL whitelist and query parameter rejection", func(t *testing.T) {
+		cache := NewCertCache(time.Hour, nil)
+
+		tests := []string{
+			"https://sns.us-east-1.amazonaws.com/cert.pem?leak=1",
+			"https://sns.us-east-1.amazonaws.com/cert.pem#fragment",
+			"https://sns.us-east-1.amazonaws.com/cert.txt",
+			"http://sns.us-east-1.amazonaws.com/cert.pem",
+			"https://evil-server.com/cert.pem",
+			"https://sns.us-east-1.amazonaws.com.evil.com/cert.pem",
+		}
+
+		for _, url := range tests {
+			_, err := cache.GetOrFetch(url)
+			if err != ErrUntrustedCertURL {
+				t.Fatalf("expected ErrUntrustedCertURL for %s, got: %v", url, err)
+			}
+		}
+	})
+
+	t.Run("Redirect blocking", func(t *testing.T) {
+		redirectURL := "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-redirect.pem"
+		mockClient := &http.Client{
+			Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusFound,
+					Header: http.Header{
+						"Location": []string{"http://169.254.169.254/metadata"},
+					},
+					Body: io.NopCloser(bytes.NewReader(nil)),
+				}, nil
+			}),
+		}
+		cache := NewCertCache(time.Hour, mockClient)
+		_, err := cache.GetOrFetch(redirectURL)
+		if err == nil {
+			t.Fatal("expected error on HTTP 302 redirect, got nil")
 		}
 	})
 }

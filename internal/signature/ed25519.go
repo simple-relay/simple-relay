@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 )
 
 var (
@@ -21,7 +23,11 @@ var (
 		"X-Signature",
 		"X-Ed25519-Signature",
 	}
+
+	ed25519KeyCache sync.Map
 )
+
+const maxSignatureCandidates = 5
 
 type ed25519Verifier struct{}
 
@@ -48,7 +54,24 @@ func (v *ed25519Verifier) Verify(header http.Header, secret string, rawBody []by
 
 func parseEd25519PublicKey(secret string) (ed25519.PublicKey, error) {
 	trimmed := strings.TrimSpace(secret)
+	if trimmed == "" {
+		return nil, ErrInvalidPublicKey
+	}
 
+	if cached, ok := ed25519KeyCache.Load(trimmed); ok {
+		return cached.(ed25519.PublicKey), nil
+	}
+
+	pk, err := parseEd25519PublicKeyUncached(trimmed)
+	if err != nil {
+		return nil, err
+	}
+
+	ed25519KeyCache.Store(trimmed, pk)
+	return pk, nil
+}
+
+func parseEd25519PublicKeyUncached(trimmed string) (ed25519.PublicKey, error) {
 	// Attempt 1: PEM format
 	if strings.Contains(trimmed, "BEGIN PUBLIC KEY") {
 		block, _ := pem.Decode([]byte(trimmed))
@@ -90,6 +113,9 @@ func verifyStandardWebhooksEd25519(header http.Header, pubKey ed25519.PublicKey,
 	if msgID == "" || timestamp == "" {
 		return ErrInvalidSignatureFormat
 	}
+	if _, err := strconv.ParseInt(timestamp, 10, 64); err != nil {
+		return ErrInvalidSignatureFormat
+	}
 
 	signedPayload := fmt.Sprintf("%s.%s.%s", msgID, timestamp, string(rawBody))
 	signedBytes := []byte(signedPayload)
@@ -99,6 +125,9 @@ func verifyStandardWebhooksEd25519(header http.Header, pubKey ed25519.PublicKey,
 	var candidates [][]byte
 
 	for _, token := range tokens {
+		if len(candidates) >= maxSignatureCandidates {
+			break
+		}
 		parts := strings.SplitN(token, ",", 2)
 		if len(parts) == 2 && parts[0] == "v1a" {
 			sigCandidate := parts[1]

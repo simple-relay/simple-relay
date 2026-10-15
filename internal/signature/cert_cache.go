@@ -24,13 +24,14 @@ var (
 	ErrInvalidCertificate = errors.New("invalid rsa certificate")
 
 	// snsCertURLPattern strictly enforces https and official AWS SNS domain format.
-	snsCertURLPattern = regexp.MustCompile(`^https://sns\.[a-z0-9\-]+\.amazonaws\.com/`)
+	snsCertURLPattern = regexp.MustCompile(`^https://sns\.[a-z0-9\-]+(\.amazonaws\.com|\.amazonaws\.com\.cn)/[^?#]+\.pem$`)
 )
 
 const (
-	defaultCertTTL      = 24 * time.Hour
-	maxCertSizeBytes    = 1024 * 1024 // 1 MB limit to prevent memory bloat
-	certDownloadTimeout = 3 * time.Second
+	defaultCertTTL       = 24 * time.Hour
+	maxCertSizeBytes     = 1024 * 1024 // 1 MB limit to prevent memory bloat
+	maxCertCacheEntries  = 100
+	certDownloadTimeout  = 3 * time.Second
 )
 
 type cachedCert struct {
@@ -38,12 +39,20 @@ type cachedCert struct {
 	expiresAt time.Time
 }
 
+type flightCall struct {
+	wg  sync.WaitGroup
+	val *rsa.PublicKey
+	err error
+}
+
 // CertCache provides thread-safe in-memory caching of X.509 public keys with TTL.
 type CertCache struct {
-	mu      sync.RWMutex
-	entries map[string]cachedCert
-	ttl     time.Duration
-	client  *http.Client
+	mu       sync.RWMutex
+	entries  map[string]cachedCert
+	ttl      time.Duration
+	client   *http.Client
+	flightMu sync.Mutex
+	flight   map[string]*flightCall
 }
 
 // NewCertCache creates an initialized CertCache.
@@ -54,12 +63,20 @@ func NewCertCache(ttl time.Duration, client *http.Client) *CertCache {
 	if client == nil {
 		client = &http.Client{
 			Timeout: certDownloadTimeout,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+	} else if client.CheckRedirect == nil {
+		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
 		}
 	}
 	return &CertCache{
 		entries: make(map[string]cachedCert),
 		ttl:     ttl,
 		client:  client,
+		flight:  make(map[string]*flightCall),
 	}
 }
 
@@ -82,24 +99,55 @@ func (c *CertCache) GetOrFetch(certURL string) (*rsa.PublicKey, error) {
 	}
 	c.mu.RUnlock()
 
-	// Slow write path
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Recheck after acquiring exclusive lock
-	entry, ok = c.entries[certURL]
-	if ok && entry.expiresAt.After(now) {
-		return entry.pubKey, nil
+	// Singleflight deduplication to avoid concurrent duplicate dials
+	c.flightMu.Lock()
+	if call, active := c.flight[certURL]; active {
+		c.flightMu.Unlock()
+		call.wg.Wait()
+		return call.val, call.err
 	}
 
+	call := &flightCall{}
+	call.wg.Add(1)
+	c.flight[certURL] = call
+	c.flightMu.Unlock()
+
+	// Perform HTTP dial outside any locks
 	pubKey, err := c.fetchAndParse(certURL)
+
+	c.flightMu.Lock()
+	delete(c.flight, certURL)
+	call.val = pubKey
+	call.err = err
+	call.wg.Done()
+	c.flightMu.Unlock()
+
 	if err != nil {
 		return nil, err
 	}
 
+	// Update cache under write lock with size bounds
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(c.entries) >= maxCertCacheEntries {
+		cleanTime := time.Now()
+		for k, v := range c.entries {
+			if v.expiresAt.Before(cleanTime) {
+				delete(c.entries, k)
+			}
+		}
+		if len(c.entries) >= maxCertCacheEntries {
+			for k := range c.entries {
+				delete(c.entries, k)
+				break
+			}
+		}
+	}
+
 	c.entries[certURL] = cachedCert{
 		pubKey:    pubKey,
-		expiresAt: now.Add(c.ttl),
+		expiresAt: time.Now().Add(c.ttl),
 	}
 
 	return pubKey, nil

@@ -14,6 +14,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 )
 
 var (
@@ -24,6 +26,8 @@ var (
 		"X-Signature-RSA",
 		"X-Signature",
 	}
+
+	rsaKeyCache sync.Map
 )
 
 type rsaVerifier struct {
@@ -83,6 +87,15 @@ func (v *rsaVerifier) verifyAWSSNS(msg *snsMessage, secret string) error {
 	canonicalStr := buildSNSCanonicalString(msg)
 	if canonicalStr == "" {
 		return ErrInvalidSignatureFormat
+	}
+
+	if strings.TrimSpace(msg.Timestamp) == "" {
+		return ErrInvalidSignatureFormat
+	}
+	if _, err := time.Parse(time.RFC3339Nano, msg.Timestamp); err != nil {
+		if _, err := time.Parse(time.RFC3339, msg.Timestamp); err != nil {
+			return ErrInvalidSignatureFormat
+		}
 	}
 
 	sigBytes, err := base64.StdEncoding.DecodeString(msg.Signature)
@@ -213,9 +226,11 @@ func (v *rsaVerifier) verifyGenericRSA(header http.Header, secret string, rawBod
 
 	var sigBytes []byte
 
-	// Try Hex
-	if b, err := hex.DecodeString(sigHeader); err == nil {
-		sigBytes = b
+	// Try Hex (must match pubKey.Size() * 2 hex characters)
+	if len(sigHeader) == pubKey.Size()*2 {
+		if b, err := hex.DecodeString(sigHeader); err == nil && len(b) == pubKey.Size() {
+			sigBytes = b
+		}
 	}
 
 	// Try Base64
@@ -226,7 +241,7 @@ func (v *rsaVerifier) verifyGenericRSA(header http.Header, secret string, rawBod
 			base64.RawStdEncoding,
 			base64.RawURLEncoding,
 		} {
-			if b, err := enc.DecodeString(sigHeader); err == nil {
+			if b, err := enc.DecodeString(sigHeader); err == nil && len(b) == pubKey.Size() {
 				sigBytes = b
 				break
 			}
@@ -247,6 +262,24 @@ func (v *rsaVerifier) verifyGenericRSA(header http.Header, secret string, rawBod
 
 func parseRSAPublicKey(secret string) (*rsa.PublicKey, error) {
 	trimmed := strings.TrimSpace(secret)
+	if trimmed == "" {
+		return nil, ErrInvalidRSAPublicKey
+	}
+
+	if cached, ok := rsaKeyCache.Load(trimmed); ok {
+		return cached.(*rsa.PublicKey), nil
+	}
+
+	pubKey, err := parseRSAPublicKeyUncached(trimmed)
+	if err != nil {
+		return nil, err
+	}
+
+	rsaKeyCache.Store(trimmed, pubKey)
+	return pubKey, nil
+}
+
+func parseRSAPublicKeyUncached(trimmed string) (*rsa.PublicKey, error) {
 	block, _ := pem.Decode([]byte(trimmed))
 	var derBytes []byte
 	if block != nil {

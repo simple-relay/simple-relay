@@ -163,7 +163,9 @@ func (r *RouteRepo) ListRoutes(ctx context.Context) ([]*model.Route, error) {
 			rt.SignatureSecret = secret.String
 		}
 		if rules.Valid && strings.TrimSpace(rules.String) != "" {
-			_ = json.Unmarshal([]byte(rules.String), &rt.ValidationRules)
+			if err := json.Unmarshal([]byte(rules.String), &rt.ValidationRules); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal validation rules for route %s: %w", rt.ID, err)
+			}
 		}
 		rt.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
 		rt.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updatedAt)
@@ -298,7 +300,9 @@ func (r *RouteRepo) scanRoute(row *sql.Row) (*model.Route, error) {
 		rt.SignatureSecret = secret.String
 	}
 	if rules.Valid && strings.TrimSpace(rules.String) != "" {
-		_ = json.Unmarshal([]byte(rules.String), &rt.ValidationRules)
+		if err := json.Unmarshal([]byte(rules.String), &rt.ValidationRules); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal validation rules for route %s: %w", rt.ID, err)
+		}
 	}
 	rt.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
 	rt.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updatedAt)

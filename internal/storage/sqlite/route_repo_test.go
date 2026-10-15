@@ -218,3 +218,36 @@ func TestRouteRepo_ValidationRules(t *testing.T) {
 		t.Fatalf("unexpected updated rules: %+v", updated.ValidationRules)
 	}
 }
+
+func TestRouteRepo_CorruptedValidationRules(t *testing.T) {
+	db, repo := setupTestDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	routeID := model.NewULID()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err := db.Writer().ExecContext(ctx, `
+		INSERT INTO routes (
+			id, name, type, mode, path, destination_url,
+			signature_provider, validation_rules, max_attempts,
+			timeout_ms, retry_backoff_strategy, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, routeID, "corrupt-route", "inbound", "async", "/api/v1/webhook/corrupt", "https://example.com",
+		"none", "{invalid-json-rules", 5, 10000, "exp", now, now)
+	if err != nil {
+		t.Fatalf("failed to insert corrupt route row: %v", err)
+	}
+
+	// GetRouteByID should fail-fast with unmarshal error
+	_, err = repo.GetRouteByID(ctx, routeID)
+	if err == nil {
+		t.Fatal("expected error on corrupt validation rules, got nil")
+	}
+
+	// ListRoutes should also fail-fast with error
+	_, err = repo.ListRoutes(ctx)
+	if err == nil {
+		t.Fatal("expected error on ListRoutes with corrupt validation rules, got nil")
+	}
+}
