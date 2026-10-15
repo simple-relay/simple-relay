@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS requests (
 CREATE INDEX IF NOT EXISTS idx_requests_dispatcher ON requests (status, next_attempt_at) 
 WHERE status IN ('pending', 'failed');
 
+CREATE INDEX IF NOT EXISTS idx_requests_processing ON requests (status)
+WHERE status = 'processing';
+
 CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests (created_at);
 
 CREATE TABLE IF NOT EXISTS attempts (

@@ -73,6 +73,10 @@ func (m *mockRequestRepo) ReplayAllDLQRequests(ctx context.Context, routeID stri
 	return nil, nil
 }
 
+func (m *mockRequestRepo) GetQueueStats(ctx context.Context) (int64, int64, error) {
+	return 0, 0, nil
+}
+
 func TestBatchWriter_BatchSizeFlush(t *testing.T) {
 	repo := &mockRequestRepo{}
 	var wakeCalled int32

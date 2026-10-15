@@ -92,6 +92,29 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 			mux.HandleFunc("GET /api/v1/requests", requestsHandler.ListRequests)
 			mux.HandleFunc("GET /api/v1/requests/{id}", requestsHandler.GetRequest)
 
+			mux.HandleFunc("GET /api/v1/queue/stats", func(w http.ResponseWriter, r *http.Request) {
+				pending, inFlight, err := opt.RequestRepo.GetQueueStats(r.Context())
+				if err != nil {
+					logger.Error("failed to get queue stats", "error", err)
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusInternalServerError)
+					_ = json.NewEncoder(w).Encode(map[string]any{"error": "failed to get queue stats"})
+					return
+				}
+				status := "HEALTHY"
+				if pending+inFlight >= 1000 {
+					status = "BACKLOG"
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"pending":     pending,
+					"in_flight":   inFlight,
+					"queue_depth": pending + inFlight,
+					"status":      status,
+				})
+			})
+
 			dlqHandler := NewDLQHandler(opt.RequestRepo, opt.RouteRegistry, opt.WakeFn, logger)
 			mux.HandleFunc("GET /api/v1/dlq", dlqHandler.ListDLQ)
 			mux.HandleFunc("POST /api/v1/dlq/{request_id}/replay", dlqHandler.ReplaySingle)

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -98,6 +99,16 @@ func NewClient(baseURL, apiKey string, timeout time.Duration) *RelayClient {
 		apiKey:  strings.TrimSpace(apiKey),
 		httpClient: &http.Client{
 			Timeout: timeout,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 10 {
+					return errors.New("stopped after 10 redirects")
+				}
+				if len(via) > 0 && req.URL.Host != via[0].URL.Host {
+					req.Header.Del("X-API-Key")
+					req.Header.Del("Authorization")
+				}
+				return nil
+			},
 		},
 	}
 }
@@ -153,8 +164,32 @@ func (c *RelayClient) Health(ctx context.Context) (*HealthResponse, time.Duratio
 	return &health, latency, nil
 }
 
-// GetQueueStats queries pending and processing counts from the requests API.
+// GetQueueStats queries pending and processing counts.
+// It prefers the single round-trip /api/v1/queue/stats endpoint, falling back to /api/v1/requests if running against an older server.
 func (c *RelayClient) GetQueueStats(ctx context.Context) (pending, inFlight int64, err error) {
+	type queueStatsResp struct {
+		Pending    int64  `json:"pending"`
+		InFlight   int64  `json:"in_flight"`
+		QueueDepth int64  `json:"queue_depth"`
+		Status     string `json:"status"`
+	}
+
+	resp, err := c.doRequest(ctx, http.MethodGet, "/api/v1/queue/stats", nil)
+	if err == nil {
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			var stats queueStatsResp
+			if err := json.NewDecoder(resp.Body).Decode(&stats); err == nil {
+				return stats.Pending, stats.InFlight, nil
+			}
+		} else if resp.StatusCode != http.StatusNotFound {
+			return 0, 0, fmt.Errorf("query queue stats returned status %d", resp.StatusCode)
+		}
+	} else if !strings.Contains(err.Error(), "404") {
+		return 0, 0, err
+	}
+
+	// Fallback to legacy requests queries if endpoint is not found
 	type countResp struct {
 		Total int64 `json:"total"`
 	}
@@ -206,7 +241,8 @@ func (c *RelayClient) ListRoutes(ctx context.Context) (map[string]string, error)
 		return nil, fmt.Errorf("list routes returned status %d", resp.StatusCode)
 	}
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	// Constrain memory consumption on route listing to 4 MB
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read routes response: %w", err)
 	}
@@ -271,7 +307,11 @@ func (c *RelayClient) ListDLQ(ctx context.Context, limit int) ([]DLQItem, int64,
 
 // InspectRequest fetches comprehensive details and attempts for a specific request.
 func (c *RelayClient) InspectRequest(ctx context.Context, id string) (*RequestDetail, error) {
-	path := fmt.Sprintf("/api/v1/requests/%s", id)
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, errors.New("request id cannot be empty")
+	}
+	path := fmt.Sprintf("/api/v1/requests/%s", url.PathEscape(id))
 	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect request %s: %w", id, err)
@@ -295,7 +335,11 @@ func (c *RelayClient) InspectRequest(ctx context.Context, id string) (*RequestDe
 
 // ReplayDLQ requeues a single failed message back to pending.
 func (c *RelayClient) ReplayDLQ(ctx context.Context, id string) error {
-	path := fmt.Sprintf("/api/v1/dlq/%s/replay", id)
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return errors.New("request id cannot be empty")
+	}
+	path := fmt.Sprintf("/api/v1/dlq/%s/replay", url.PathEscape(id))
 	resp, err := c.doRequest(ctx, http.MethodPost, path, nil)
 	if err != nil {
 		return fmt.Errorf("failed to replay dlq request %s: %w", id, err)
@@ -310,9 +354,14 @@ func (c *RelayClient) ReplayDLQ(ctx context.Context, id string) error {
 
 // ReplayAllDLQ requeues all failed DLQ messages in chunked batches complying with the 1,000 server cap.
 func (c *RelayClient) ReplayAllDLQ(ctx context.Context) (int, error) {
+	const maxReplayBatches = 100
 	totalReplayed := 0
 
-	for {
+	for batch := 0; batch < maxReplayBatches; batch++ {
+		if err := ctx.Err(); err != nil {
+			return totalReplayed, err
+		}
+
 		payload, err := json.Marshal(map[string]any{"limit": 1000})
 		if err != nil {
 			return totalReplayed, fmt.Errorf("failed to serialize replay request: %w", err)

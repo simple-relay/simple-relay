@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -78,8 +80,17 @@ func TestCommands_Health(t *testing.T) {
 
 func TestCommands_Queue(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		status := r.URL.Query().Get("status")
 		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/v1/queue/stats" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"pending":     10,
+				"in_flight":   2,
+				"queue_depth": 12,
+				"status":      "HEALTHY",
+			})
+			return
+		}
+		status := r.URL.Query().Get("status")
 		if status == "pending" {
 			_ = json.NewEncoder(w).Encode(map[string]any{"total": 10})
 		} else {
@@ -231,4 +242,106 @@ func TestRootCmd_TimeoutEnv(t *testing.T) {
 	if timeoutFlag.DefValue != "45s" {
 		t.Fatalf("expected default timeout 45s from env, got %s", timeoutFlag.DefValue)
 	}
+}
+
+func TestCommands_DLQ_OptimizationAndSanitization(t *testing.T) {
+	var listRoutesCalled int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/v1/routes" {
+			atomic.AddInt32(&listRoutesCalled, 1)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"routes": []map[string]any{
+					{"id": "route_1", "name": "stripe-webhook"},
+				},
+			})
+			return
+		}
+		if r.URL.Path == "/api/v1/dlq" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []map[string]any{
+					{
+						"id":             "req_pwned_1",
+						"route_id":       "route_1",
+						"method":         "POST",
+						"url":            "http://target/webhook",
+						"status":         "failed",
+						"attempts_count": 3,
+						"last_error":     "\x1b[31m502 Bad Gateway\x1b[0m\x1b]0;Title\x07",
+						"created_at":     "2026-10-14T12:00:00Z",
+						"updated_at":     "2026-10-14T12:05:00Z",
+					},
+				},
+				"total": 1,
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+
+	t.Run("json output skips ListRoutes", func(t *testing.T) {
+		atomic.StoreInt32(&listRoutesCalled, 0)
+		var outBuf, errBuf bytes.Buffer
+		err := ExecuteCommand([]string{"dlq", "list", "--server", ts.URL, "-o", "json"}, &outBuf, &errBuf)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if atomic.LoadInt32(&listRoutesCalled) != 0 {
+			t.Fatalf("expected ListRoutes NOT to be called when output is json, got called %d times", listRoutesCalled)
+		}
+	})
+
+	t.Run("table output sanitizes ANSI escapes", func(t *testing.T) {
+		atomic.StoreInt32(&listRoutesCalled, 0)
+		var outBuf, errBuf bytes.Buffer
+		err := ExecuteCommand([]string{"dlq", "list", "--server", ts.URL}, &outBuf, &errBuf)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		out := outBuf.String()
+		if strings.Contains(out, "\x1b[31m") || strings.Contains(out, "\x1b]0;") {
+			t.Fatalf("expected raw ANSI sequences to be stripped from output table, got:\n%q", out)
+		}
+		if !strings.Contains(out, "502 Bad Gateway") {
+			t.Fatalf("expected clean error message, got:\n%s", out)
+		}
+	})
+}
+
+func TestCommands_ParallelExecution_ZeroRaces(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/healthz":
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "timestamp": "2026-10-14T14:00:00Z"})
+		case "/api/v1/queue/stats":
+			_ = json.NewEncoder(w).Encode(map[string]any{"pending": 5, "in_flight": 2, "queue_depth": 7, "status": "HEALTHY"})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	const concurrency = 20
+	var wg sync.WaitGroup
+	wg.Add(concurrency)
+
+	for i := 0; i < concurrency; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			var outBuf, errBuf bytes.Buffer
+			var err error
+			if idx%2 == 0 {
+				err = ExecuteCommand([]string{"health", "--server", ts.URL, "-o", "json"}, &outBuf, &errBuf)
+			} else {
+				err = ExecuteCommand([]string{"queue", "--server", ts.URL, "-o", "table"}, &outBuf, &errBuf)
+			}
+			if err != nil {
+				t.Errorf("parallel run %d failed: %v", idx, err)
+			}
+		}(i)
+	}
+
+	wg.Wait()
 }

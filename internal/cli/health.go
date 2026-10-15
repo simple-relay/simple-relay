@@ -24,10 +24,12 @@ func newStatusCmd() *cobra.Command {
 }
 
 func runHealth(cmd *cobra.Command, args []string) error {
-	client := getClient()
-	health, latency, err := client.Health(cmd.Context())
+	ctx := cmd.Context()
+	opts := GetOptions(ctx)
+	client := getClient(ctx)
+	health, latency, err := client.Health(ctx)
 
-	isJSON := strings.ToLower(flagOutput) == "json"
+	isJSON := strings.ToLower(opts.Output) == "json"
 
 	out := cmd.OutOrStdout()
 	isTerm := IsTerminal(out)
@@ -39,7 +41,7 @@ func runHealth(cmd *cobra.Command, args []string) error {
 				_ = RenderJSON(out, map[string]any{
 					"status":     health.Status,
 					"latency_ms": latency.Milliseconds(),
-					"url":        flagServer,
+					"url":        opts.Server,
 					"error":      err.Error(),
 				})
 			} else {
@@ -49,7 +51,7 @@ func runHealth(cmd *cobra.Command, args []string) error {
 						FormatStatus(health.Status, isTerm),
 						fmt.Sprintf("%.2fms", float64(latency.Microseconds())/1000.0),
 						health.Timestamp,
-						flagServer,
+						opts.Server,
 					},
 				}
 				_ = RenderTable(out, headers, rows)
@@ -65,7 +67,7 @@ func runHealth(cmd *cobra.Command, args []string) error {
 			"status":     health.Status,
 			"latency_ms": latency.Milliseconds(),
 			"timestamp":  health.Timestamp,
-			"url":        flagServer,
+			"url":        opts.Server,
 		})
 	}
 
@@ -75,7 +77,7 @@ func runHealth(cmd *cobra.Command, args []string) error {
 			FormatStatus(health.Status, isTerm),
 			fmt.Sprintf("%.2fms", float64(latency.Microseconds())/1000.0),
 			health.Timestamp,
-			flagServer,
+			opts.Server,
 		},
 	}
 	return RenderTable(out, headers, rows)

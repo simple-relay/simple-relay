@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -45,13 +46,36 @@ func errorsAsExitCode(err error, target *ExitCodeError) bool {
 	return false
 }
 
-// Global flag variables
-var (
-	flagServer  string
-	flagAPIKey  string
-	flagOutput  string
-	flagTimeout time.Duration
-)
+// GlobalOptions encapsulates persistent CLI configuration flags.
+type GlobalOptions struct {
+	Server  string
+	APIKey  string
+	Output  string
+	Timeout time.Duration
+}
+
+type optionsKey struct{}
+
+func contextWithOptions(ctx context.Context, opts *GlobalOptions) context.Context {
+	return context.WithValue(ctx, optionsKey{}, opts)
+}
+
+// GetOptions extracts GlobalOptions from context, or returns sensible defaults.
+func GetOptions(ctx context.Context) *GlobalOptions {
+	if opts, ok := ctx.Value(optionsKey{}).(*GlobalOptions); ok && opts != nil {
+		return opts
+	}
+	return &GlobalOptions{
+		Server:  "http://127.0.0.1:8080",
+		Output:  "table",
+		Timeout: 10 * time.Second,
+	}
+}
+
+func getClient(ctx context.Context) *RelayClient {
+	opts := GetOptions(ctx)
+	return NewClient(opts.Server, opts.APIKey, opts.Timeout)
+}
 
 func getEnvOrDefault(key, fallback string) string {
 	if val := os.Getenv(key); val != "" {
@@ -62,13 +86,15 @@ func getEnvOrDefault(key, fallback string) string {
 
 // NewRootCmd initializes the root Cobra command and its persistent flags.
 func NewRootCmd() *cobra.Command {
-	defaultServer := getEnvOrDefault("RELAY_SERVER_URL", "http://127.0.0.1:8080")
-	defaultAPIKey := os.Getenv("RELAY_API_KEY")
-	defaultOutput := getEnvOrDefault("RELAY_OUTPUT", "table")
-	defaultTimeout := 10 * time.Second
+	opts := &GlobalOptions{
+		Server:  getEnvOrDefault("RELAY_SERVER_URL", "http://127.0.0.1:8080"),
+		APIKey:  os.Getenv("RELAY_API_KEY"),
+		Output:  getEnvOrDefault("RELAY_OUTPUT", "table"),
+		Timeout: 10 * time.Second,
+	}
 	if envTimeout := os.Getenv("RELAY_TIMEOUT"); envTimeout != "" {
 		if d, err := time.ParseDuration(envTimeout); err == nil {
-			defaultTimeout = d
+			opts.Timeout = d
 		}
 	}
 
@@ -78,12 +104,15 @@ func NewRootCmd() *cobra.Command {
 		Long:          "relay-cli enables operators and automated pipelines to inspect health, monitor queue depth, and triage/replay Dead Letter Queue messages.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		PersistentPreRun: func(c *cobra.Command, args []string) {
+			c.SetContext(contextWithOptions(c.Context(), opts))
+		},
 	}
 
-	cmd.PersistentFlags().StringVarP(&flagServer, "server", "s", defaultServer, "Simple Relay daemon base URL (env: RELAY_SERVER_URL)")
-	cmd.PersistentFlags().StringVarP(&flagAPIKey, "api-key", "k", defaultAPIKey, "Admin API key for authentication (env: RELAY_API_KEY)")
-	cmd.PersistentFlags().StringVarP(&flagOutput, "output", "o", defaultOutput, "Output format: table or json (env: RELAY_OUTPUT)")
-	cmd.PersistentFlags().DurationVar(&flagTimeout, "timeout", defaultTimeout, "HTTP client timeout (env: RELAY_TIMEOUT)")
+	cmd.PersistentFlags().StringVarP(&opts.Server, "server", "s", opts.Server, "Simple Relay daemon base URL (env: RELAY_SERVER_URL)")
+	cmd.PersistentFlags().StringVarP(&opts.APIKey, "api-key", "k", opts.APIKey, "Admin API key for authentication (env: RELAY_API_KEY)")
+	cmd.PersistentFlags().StringVarP(&opts.Output, "output", "o", opts.Output, "Output format: table or json (env: RELAY_OUTPUT)")
+	cmd.PersistentFlags().DurationVar(&opts.Timeout, "timeout", opts.Timeout, "HTTP client timeout (env: RELAY_TIMEOUT)")
 
 	// Register subcommands
 	cmd.AddCommand(newHealthCmd())
@@ -119,8 +148,4 @@ func ExecuteCommand(args []string, out, errOut io.Writer) error {
 	cmd.SetOut(out)
 	cmd.SetErr(errOut)
 	return cmd.Execute()
-}
-
-func getClient() *RelayClient {
-	return NewClient(flagServer, flagAPIKey, flagTimeout)
 }

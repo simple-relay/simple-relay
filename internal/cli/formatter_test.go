@@ -61,6 +61,39 @@ func TestTruncate(t *testing.T) {
 	}
 }
 
+func TestSanitizeTerminal(t *testing.T) {
+	t.Run("strips ANSI color escapes", func(t *testing.T) {
+		input := "\x1b[31m502 Bad Gateway\x1b[0m"
+		expected := "502 Bad Gateway"
+		if got := SanitizeTerminal(input); got != expected {
+			t.Fatalf("expected %q, got %q", expected, got)
+		}
+	})
+
+	t.Run("strips OSC window title injection", func(t *testing.T) {
+		input := "\x1b]0;Pwned Terminal\x07504 Gateway Timeout"
+		expected := "504 Gateway Timeout"
+		if got := SanitizeTerminal(input); got != expected {
+			t.Fatalf("expected %q, got %q", expected, got)
+		}
+	})
+
+	t.Run("replaces control characters with spaces", func(t *testing.T) {
+		input := "Connection\r\nrefused:\tport 8080\x00"
+		expected := "Connection  refused: port 8080"
+		if got := SanitizeTerminal(input); got != expected {
+			t.Fatalf("expected %q, got %q", expected, got)
+		}
+	})
+
+	t.Run("preserves valid unicode text", func(t *testing.T) {
+		input := "Lỗi kết nối máy chủ upstream"
+		if got := SanitizeTerminal(input); got != input {
+			t.Fatalf("expected %q, got %q", input, got)
+		}
+	})
+}
+
 func TestRenderTable(t *testing.T) {
 	var buf bytes.Buffer
 	headers := []string{"ID", "STATUS", "LATENCY"}

@@ -16,8 +16,10 @@ func newQueueCmd() *cobra.Command {
 }
 
 func runQueue(cmd *cobra.Command, args []string) error {
-	client := getClient()
-	pending, inFlight, err := client.GetQueueStats(cmd.Context())
+	ctx := cmd.Context()
+	opts := GetOptions(ctx)
+	client := getClient(ctx)
+	pending, inFlight, err := client.GetQueueStats(ctx)
 	if err != nil {
 		return &statusError{code: 1, err: err}
 	}
@@ -30,7 +32,7 @@ func runQueue(cmd *cobra.Command, args []string) error {
 		exitCode = 2
 	}
 
-	if strings.ToLower(flagOutput) == "json" {
+	if strings.ToLower(opts.Output) == "json" {
 		if err := RenderJSON(cmd.OutOrStdout(), map[string]any{
 			"queue_depth": queueDepth,
 			"pending":     pending,

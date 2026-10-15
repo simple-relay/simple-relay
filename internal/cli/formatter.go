@@ -5,11 +5,30 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/mattn/go-isatty"
 )
+
+var ansiRegex = regexp.MustCompile(`\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[PX^_][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]|\x1b.`)
+
+// SanitizeTerminal strips ANSI escape sequences and replaces non-printable control
+// characters with spaces to prevent terminal control injection from untrusted input.
+func SanitizeTerminal(s string) string {
+	cleaned := ansiRegex.ReplaceAllString(s, "")
+	var b strings.Builder
+	b.Grow(len(cleaned))
+	for _, r := range cleaned {
+		if r < 0x20 || r == 0x7F {
+			b.WriteRune(' ')
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
 
 const (
 	ansiReset  = "\033[0m"

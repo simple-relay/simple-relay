@@ -11,11 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	flagDLQLimit int
-	flagDLQYes   bool
-)
-
 func newDLQCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dlq",
@@ -36,32 +31,34 @@ func newDLQListCmd() *cobra.Command {
 		Short: "List failed requests preserved in the Dead Letter Queue",
 		RunE:  runDLQList,
 	}
-	cmd.Flags().IntVar(&flagDLQLimit, "limit", 50, "Maximum number of DLQ records to fetch")
+	cmd.Flags().Int("limit", 50, "Maximum number of DLQ records to fetch")
 	return cmd
 }
 
 func runDLQList(cmd *cobra.Command, args []string) error {
-	client := getClient()
 	ctx := cmd.Context()
+	opts := GetOptions(ctx)
+	client := getClient(ctx)
 
-	items, _, err := client.ListDLQ(ctx, flagDLQLimit)
+	limit, _ := cmd.Flags().GetInt("limit")
+	items, _, err := client.ListDLQ(ctx, limit)
 	if err != nil {
 		return &statusError{code: 1, err: err}
 	}
 
-	// Resolve route names
-	routesMap, _ := client.ListRoutes(ctx)
-	if routesMap == nil {
-		routesMap = make(map[string]string)
-	}
-
-	if strings.ToLower(flagOutput) == "json" {
+	if strings.ToLower(opts.Output) == "json" {
 		return RenderJSON(cmd.OutOrStdout(), items)
 	}
 
 	if len(items) == 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "Dead Letter Queue is empty.")
 		return nil
+	}
+
+	// Resolve route names only when formatting tabular output and DLQ has items
+	routesMap, _ := client.ListRoutes(ctx)
+	if routesMap == nil {
+		routesMap = make(map[string]string)
 	}
 
 	headers := []string{"REQUEST ID", "ROUTE", "ATTEMPTS", "FAILED AT", "LAST ERROR"}
@@ -75,7 +72,7 @@ func runDLQList(cmd *cobra.Command, args []string) error {
 
 		lastErr := "-"
 		if item.LastError != nil && *item.LastError != "" {
-			lastErr = Truncate(*item.LastError, 45)
+			lastErr = Truncate(SanitizeTerminal(*item.LastError), 45)
 		}
 
 		rows = append(rows, []string{
@@ -101,13 +98,15 @@ func newDLQInspectCmd() *cobra.Command {
 
 func runDLQInspect(cmd *cobra.Command, args []string) error {
 	reqID := args[0]
-	client := getClient()
-	detail, err := client.InspectRequest(cmd.Context(), reqID)
+	ctx := cmd.Context()
+	opts := GetOptions(ctx)
+	client := getClient(ctx)
+	detail, err := client.InspectRequest(ctx, reqID)
 	if err != nil {
 		return &statusError{code: 1, err: err}
 	}
 
-	if strings.ToLower(flagOutput) == "json" {
+	if strings.ToLower(opts.Output) == "json" {
 		return RenderJSON(cmd.OutOrStdout(), detail)
 	}
 
@@ -122,7 +121,7 @@ func runDLQInspect(cmd *cobra.Command, args []string) error {
 
 	lastErr := "-"
 	if detail.LastError != nil && *detail.LastError != "" {
-		lastErr = *detail.LastError
+		lastErr = SanitizeTerminal(*detail.LastError)
 	}
 	fmt.Fprintf(out, "Last Error:    %s\n", lastErr)
 	fmt.Fprintln(out)
@@ -134,7 +133,7 @@ func runDLQInspect(cmd *cobra.Command, args []string) error {
 		for _, att := range detail.Attempts {
 			errStr := "-"
 			if att.ErrorMessage != nil && *att.ErrorMessage != "" {
-				errStr = Truncate(*att.ErrorMessage, 40)
+				errStr = Truncate(SanitizeTerminal(*att.ErrorMessage), 40)
 			}
 			statusStr := "-"
 			if sc := att.GetStatusCode(); sc > 0 {
@@ -171,12 +170,14 @@ func newDLQReplayCmd() *cobra.Command {
 
 func runDLQReplay(cmd *cobra.Command, args []string) error {
 	reqID := args[0]
-	client := getClient()
-	if err := client.ReplayDLQ(cmd.Context(), reqID); err != nil {
+	ctx := cmd.Context()
+	opts := GetOptions(ctx)
+	client := getClient(ctx)
+	if err := client.ReplayDLQ(ctx, reqID); err != nil {
 		return &statusError{code: 1, err: err}
 	}
 
-	if strings.ToLower(flagOutput) == "json" {
+	if strings.ToLower(opts.Output) == "json" {
 		return RenderJSON(cmd.OutOrStdout(), map[string]any{
 			"status":     "requeued",
 			"request_id": reqID,
@@ -193,18 +194,20 @@ func newDLQReplayAllCmd() *cobra.Command {
 		Short: "Requeue all Dead Letter Queue messages for delivery retry",
 		RunE:  runDLQReplayAll,
 	}
-	cmd.Flags().BoolVarP(&flagDLQYes, "yes", "y", false, "Bypass interactive confirmation prompt")
+	cmd.Flags().BoolP("yes", "y", false, "Bypass interactive confirmation prompt")
 	return cmd
 }
 
 func runDLQReplayAll(cmd *cobra.Command, args []string) error {
-	client := getClient()
 	ctx := cmd.Context()
+	opts := GetOptions(ctx)
+	client := getClient(ctx)
+	yes, _ := cmd.Flags().GetBool("yes")
 
 	// Check interactive TTY
 	isTerm := isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
 
-	if !flagDLQYes {
+	if !yes {
 		if !isTerm {
 			return &statusError{
 				code: 1,
@@ -235,7 +238,7 @@ func runDLQReplayAll(cmd *cobra.Command, args []string) error {
 		return &statusError{code: 1, err: err}
 	}
 
-	if strings.ToLower(flagOutput) == "json" {
+	if strings.ToLower(opts.Output) == "json" {
 		return RenderJSON(cmd.OutOrStdout(), map[string]any{
 			"status":         "requeued",
 			"replayed_count": replayedCount,
