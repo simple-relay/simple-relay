@@ -150,7 +150,7 @@
                   <td class="px-6 py-4 font-mono text-xs text-indigo-400" x-text="r.path"></td>
                   <td class="px-6 py-4 font-mono text-xs text-gray-400 truncate max-w-xs" :title="r.destination_url" x-text="r.destination_url"></td>
                   <td class="px-6 py-4 text-xs">
-                    <span class="px-2 py-0.5 rounded bg-gray-800 text-gray-300" x-text="r.signature_provider"></span>
+                    <span class="px-2 py-0.5 rounded bg-gray-800 text-gray-300 font-mono" x-text="getRouteVerificationLabel(r)"></span>
                   </td>
                   <td class="px-6 py-4 text-xs text-gray-400">
                     <span x-text="r.max_attempts + ' max'"></span> • <span x-text="(r.timeout_ms / 1000) + 's'"></span>
@@ -590,7 +590,8 @@
                   'github': 'HMAC-SHA256',
                   'hmac_sha256': 'HMAC-SHA256',
                   'ed25519': 'Ed25519',
-                  'rsa_sha256': 'RSA-SHA256'
+                  'rsa_sha256': 'RSA-SHA256',
+                  'custom': 'Custom Rule'
                 }[routeForm.signature_provider] || 'None'"></span>
               </div>
 
@@ -605,13 +606,15 @@
                     <option value="hmac_sha256">Generic HMAC-SHA256 (X-Signature)</option>
                     <option value="ed25519">Ed25519 (Standard Webhooks / Raw)</option>
                     <option value="rsa_sha256">RSA-SHA256 (AWS SNS / Generic RSA)</option>
+                    <option value="custom">Custom (Header, Query Parameter, or JSON Body matching)</option>
                   </select>
                   <p class="text-[11px] text-gray-500 mt-1">
-                    Validates cryptographic authenticity against raw payload bytes before queuing.
+                    Validates cryptographic authenticity or incoming token/field rules before queuing.
                   </p>
                 </div>
 
-                <div x-show="routeForm.signature_provider && routeForm.signature_provider !== 'none'">
+                <!-- Webhook Secret / Public Key (for cryptographic providers) -->
+                <div x-show="routeForm.signature_provider && !['none', 'custom'].includes(routeForm.signature_provider)">
                   <div class="flex items-center justify-between mb-1.5">
                     <label class="block text-gray-300 font-medium">
                       <span x-show="!routeForm.signature_provider || ['stripe', 'github', 'hmac_sha256'].includes(routeForm.signature_provider)">Webhook Secret / Signing Key</span>
@@ -629,6 +632,39 @@
                     <span x-show="!routeForm.signature_provider || ['stripe', 'github', 'hmac_sha256'].includes(routeForm.signature_provider)">Used to compute HMAC. Never exposed or transmitted upstream.</span>
                     <span x-show="routeForm.signature_provider === 'ed25519'">32-byte Ed25519 public key in Base64, Hex, or PEM format.</span>
                     <span x-show="routeForm.signature_provider === 'rsa_sha256'">Optional static PEM public key. If omitted, automatically fetches and caches AWS SNS certificates.</span>
+                  </p>
+                </div>
+
+                <!-- Custom Pre-Persistence Validation Rule -->
+                <div x-show="routeForm.signature_provider === 'custom'" class="space-y-3.5 pt-1 border-t border-gray-800">
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label class="block text-gray-300 mb-1.5 font-medium">Validation Source</label>
+                      <select x-model="customRule.source"
+                              class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="header">HTTP Header</option>
+                        <option value="query">Query Parameter</option>
+                        <option value="body_json">JSON Body Field</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-gray-300 mb-1.5 font-medium">
+                        <span x-show="customRule.source === 'header'">Header Name</span>
+                        <span x-show="customRule.source === 'query'">Parameter Key</span>
+                        <span x-show="customRule.source === 'body_json'">JSON Path (Dot notation)</span>
+                      </label>
+                      <input type="text" x-model="customRule.key"
+                             :placeholder="customRule.source === 'header' ? 'e.g. X-Webhook-Token' : (customRule.source === 'query' ? 'e.g. token' : 'e.g. webhook.secret')"
+                             class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono placeholder-gray-500 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                      <label class="block text-gray-300 mb-1.5 font-medium">Expected Value</label>
+                      <input type="text" x-model="customRule.value" placeholder="e.g. secret_token_123"
+                             class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono placeholder-gray-500 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                  </div>
+                  <p class="text-[11px] text-gray-500">
+                    Evaluated before persistence. Uses constant-time comparison. Unmatched requests return HTTP 401 Unauthorized before writing to SQLite WAL.
                   </p>
                 </div>
               </div>
@@ -715,6 +751,7 @@
         isEditingRoute: false,
         showSecret: false,
         routeForm: {},
+        customRule: { source: 'header', key: '', value: '' },
         drawerOpen: false,
         requestDetail: null,
 
@@ -722,6 +759,16 @@
           this.fetchRoutes();
           this.fetchRequests(0);
           this.fetchDLQ();
+        },
+
+        getRouteVerificationLabel(r) {
+          if (r.signature_provider && r.signature_provider !== 'none') {
+            return r.signature_provider;
+          }
+          if (r.validation_rules && r.validation_rules.length > 0) {
+            return 'custom';
+          }
+          return 'none';
         },
 
         setTab(tab) {
@@ -766,6 +813,7 @@
         openCreateRouteDrawer() {
           this.isEditingRoute = false;
           this.showSecret = false;
+          this.customRule = { source: 'header', key: '', value: '' };
           this.routeForm = {
             name: '',
             type: 'inbound',
@@ -774,6 +822,7 @@
             destination_url: '',
             signature_provider: 'none',
             signature_secret: '',
+            validation_rules: [],
             max_attempts: 5,
             timeout_ms: 10000,
             retry_backoff_strategy: 'exp'
@@ -790,6 +839,19 @@
           this.isEditingRoute = true;
           this.showSecret = false;
           this.routeForm = JSON.parse(JSON.stringify(r));
+          if (this.routeForm.validation_rules && this.routeForm.validation_rules.length > 0) {
+            const rule = this.routeForm.validation_rules[0];
+            this.customRule = {
+              source: rule.source || 'header',
+              key: rule.key || '',
+              value: rule.value || ''
+            };
+            if (!this.routeForm.signature_provider || this.routeForm.signature_provider === 'none') {
+              this.routeForm.signature_provider = 'custom';
+            }
+          } else {
+            this.customRule = { source: 'header', key: '', value: '' };
+          }
           this.routeDrawerOpen = true;
           this.routeModalOpen = true;
         },
@@ -810,6 +872,7 @@
           } else {
             this.routeForm.signature_provider = 'none';
             this.routeForm.signature_secret = '';
+            this.routeForm.validation_rules = [];
             if (!this.routeForm.mode) this.routeForm.mode = 'async';
           }
           this.updateDefaultPath();
@@ -838,19 +901,37 @@
 
         async saveRoute() {
           try {
-            if (this.routeForm.type === 'inbound') {
-              this.routeForm.mode = 'async';
+            const payload = JSON.parse(JSON.stringify(this.routeForm));
+            if (payload.type === 'inbound') {
+              payload.mode = 'async';
+              if (payload.signature_provider === 'custom') {
+                if (!this.customRule.key || !this.customRule.key.trim()) {
+                  this.showToast('error', 'Validation rule key/field name is required');
+                  return;
+                }
+                payload.signature_provider = 'none';
+                payload.signature_secret = '';
+                payload.validation_rules = [{
+                  source: this.customRule.source,
+                  key: this.customRule.key.trim(),
+                  operator: 'equals',
+                  value: this.customRule.value || ''
+                }];
+              } else {
+                payload.validation_rules = [];
+              }
             } else {
-              this.routeForm.signature_provider = 'none';
-              this.routeForm.signature_secret = '';
+              payload.signature_provider = 'none';
+              payload.signature_secret = '';
+              payload.validation_rules = [];
             }
 
             const method = this.isEditingRoute ? 'PUT' : 'POST';
-            const url = this.isEditingRoute ? `/api/v1/routes/${this.routeForm.id}` : '/api/v1/routes';
+            const url = this.isEditingRoute ? `/api/v1/routes/${payload.id}` : '/api/v1/routes';
             const res = await fetch(url, {
               method,
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(this.routeForm)
+              body: JSON.stringify(payload)
             });
 
             if (!res.ok) {
