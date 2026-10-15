@@ -37,3 +37,26 @@ func TestIndexHTML_VersionAnnotation(t *testing.T) {
 		t.Errorf("expected hardcoded v0.2.0 to be removed from index.html")
 	}
 }
+
+func TestIndexHTML_CustomValidationOption(t *testing.T) {
+	data, err := FS.ReadFile("index.html")
+	if err != nil {
+		t.Fatalf("failed to read index.html: %v", err)
+	}
+
+	content := string(data)
+	expectedSubstrings := []string{
+		`<option value="custom">Custom (Header, Query Parameter, or JSON Body matching)</option>`,
+		`x-show="routeForm.signature_provider === 'custom'"`,
+		`x-model="customRule.source"`,
+		`x-model="customRule.key"`,
+		`x-model="customRule.value"`,
+		`getRouteVerificationLabel(r)`,
+	}
+
+	for _, substr := range expectedSubstrings {
+		if !strings.Contains(content, substr) {
+			t.Errorf("expected index.html to contain %q", substr)
+		}
+	}
+}
