@@ -90,10 +90,12 @@ type Storage interface {
 	RouteRepository
 	RequestRepository
 	AttemptRepository
+	APIKeyRepository
 	RetentionRepository
 
 	Ping(ctx context.Context) error
 	Close() error
 }
+
 
 
