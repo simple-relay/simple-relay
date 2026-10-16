@@ -28,7 +28,9 @@ type RouterOptions struct {
 	MaxBodyBytes  int64
 	SessionStore  *SessionStore
 	RateLimiter   *RateLimiter
+	APIKeyRepo    storage.APIKeyRepository
 }
+
 
 // NewRouter creates and configures the HTTP routing using Go 1.22+ standard library ServeMux.
 func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) http.Handler {
@@ -150,7 +152,15 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 		mux.HandleFunc("POST /api/v1/dlq/replay-all", dlqHandler.ReplayAll)
 	}
 
+	if opt.APIKeyRepo != nil {
+		apiKeysHandler := NewAPIKeysHandler(opt.APIKeyRepo, logger)
+		mux.HandleFunc("POST /api/v1/api-keys", apiKeysHandler.CreateKey)
+		mux.HandleFunc("GET /api/v1/api-keys", apiKeysHandler.ListKeys)
+		mux.HandleFunc("DELETE /api/v1/api-keys/{id}", apiKeysHandler.RevokeKey)
+	}
+
 	handler := authMiddleware(cfg.AdminPassword, sessionStore, mux)
+
 
 	// Wrap mux with standard logging & panic recovery middleware
 	return loggingMiddleware(logger, recoveryMiddleware(logger, handler))
