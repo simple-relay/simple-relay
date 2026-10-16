@@ -6,20 +6,26 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/simple-relay/simple-relay/internal/model"
 	"github.com/simple-relay/simple-relay/internal/storage"
 )
 
-// APIKeyRepo implements storage.APIKeyRepository for SQLite.
+// APIKeyRepo implements storage.APIKeyRepository for SQLite with in-memory caching.
 type APIKeyRepo struct {
-	db *DB
+	db    *DB
+	mu    sync.RWMutex
+	cache map[string]*model.APIKey
 }
 
 // NewAPIKeyRepo creates a new SQLite API key repository.
 func NewAPIKeyRepo(db *DB) *APIKeyRepo {
-	return &APIKeyRepo{db: db}
+	return &APIKeyRepo{
+		db:    db,
+		cache: make(map[string]*model.APIKey),
+	}
 }
 
 // CreateAPIKey inserts a new API key record into SQLite using writer pool.
@@ -64,6 +70,14 @@ func (r *APIKeyRepo) CreateAPIKey(ctx context.Context, key *model.APIKey) error 
 
 // GetAPIKeyByHash looks up an active (non-revoked) key by its SHA-256 hash.
 func (r *APIKeyRepo) GetAPIKeyByHash(ctx context.Context, keyHash string) (*model.APIKey, error) {
+	r.mu.RLock()
+	if cached, ok := r.cache[keyHash]; ok {
+		r.mu.RUnlock()
+		copyKey := *cached
+		return &copyKey, nil
+	}
+	r.mu.RUnlock()
+
 	query := `
 		SELECT id, name, key_hash, masked_key, created_at, revoked_at
 		FROM api_keys
@@ -71,7 +85,17 @@ func (r *APIKeyRepo) GetAPIKeyByHash(ctx context.Context, keyHash string) (*mode
 	`
 
 	row := r.db.Reader().QueryRowContext(ctx, query, keyHash)
-	return r.scanKey(row)
+	key, err := r.scanKey(row)
+	if err != nil {
+		return nil, err
+	}
+
+	r.mu.Lock()
+	r.cache[keyHash] = key
+	r.mu.Unlock()
+
+	copyKey := *key
+	return &copyKey, nil
 }
 
 // ListAPIKeys retrieves all API keys (both active and revoked), ordered by created_at DESC.
@@ -144,6 +168,10 @@ func (r *APIKeyRepo) RevokeAPIKey(ctx context.Context, id string) error {
 	if rows == 0 {
 		return storage.ErrNotFound
 	}
+
+	r.mu.Lock()
+	r.cache = make(map[string]*model.APIKey)
+	r.mu.Unlock()
 
 	return nil
 }

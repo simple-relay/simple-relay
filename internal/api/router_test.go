@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,8 +12,9 @@ import (
 	"time"
 
 	"github.com/simple-relay/simple-relay/internal/config"
+	"github.com/simple-relay/simple-relay/internal/model"
+	"github.com/simple-relay/simple-relay/internal/storage"
 )
-
 
 func TestHealthzEndpoint(t *testing.T) {
 	cfg := config.DefaultConfig()
@@ -310,4 +312,39 @@ func TestRouter_QueueStatsProtected(t *testing.T) {
 	}
 }
 
+type failingAPIKeyRepo struct {
+	storage.APIKeyRepository
+	err error
+}
 
+func (m *failingAPIKeyRepo) GetAPIKeyByHash(ctx context.Context, keyHash string) (*model.APIKey, error) {
+	return nil, m.err
+}
+
+func TestRouter_InternalDBError_Returns500(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfgAuth := config.DefaultConfig()
+	cfgAuth.AdminPassword = "adminpassword123"
+
+	failingRepo := &failingAPIKeyRepo{err: errors.New("sqlite connection lost / disk I/O error")}
+	router := NewRouter(cfgAuth, logger, RouterOptions{
+		APIKeyRepo: failingRepo,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	req.Header.Set("X-API-Key", "sr_live_testkey123")
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 Internal Server Error on database failure, got %d", rr.Code)
+	}
+
+	var body map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if body["error"] != "Internal database error during authentication" {
+		t.Fatalf("unexpected error response: %s", body["error"])
+	}
+}

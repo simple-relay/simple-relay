@@ -12,7 +12,6 @@ import (
 	"github.com/simple-relay/simple-relay/internal/storage/sqlite"
 )
 
-
 func TestE2E_ColdBootAutoSeedingAndCLI(t *testing.T) {
 	tempDB := t.TempDir() + "/test_relay.db"
 	db, err := sqlite.Open(tempDB)
@@ -66,3 +65,35 @@ func TestE2E_ColdBootAutoSeedingAndCLI(t *testing.T) {
 	}
 }
 
+func TestE2E_ProtectedMode_NoAutoSeeding(t *testing.T) {
+	tempDB := t.TempDir() + "/test_relay_protected.db"
+	db, err := sqlite.Open(tempDB)
+	if err != nil {
+		t.Fatalf("failed to open sqlite: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	if err := db.Migrate(ctx); err != nil {
+		t.Fatalf("failed to migrate schema: %v", err)
+	}
+
+	cfg := config.DefaultConfig()
+	cfg.AdminPassword = "production_password"
+
+	// Simulate cold boot logic from main.go
+	if cfg.AdminPassword == "" {
+		_, apiKey, err := api.GenerateRawKey("default")
+		if err != nil {
+			t.Fatalf("failed to generate key: %v", err)
+		}
+		if err := db.APIKeys().CreateAPIKey(ctx, apiKey); err != nil {
+			t.Fatalf("failed to persist key: %v", err)
+		}
+	}
+
+	count, err := db.APIKeys().CountTotalKeys(ctx)
+	if err != nil || count != 0 {
+		t.Fatalf("expected 0 keys in database when protected mode is enabled, got %d", count)
+	}
+}

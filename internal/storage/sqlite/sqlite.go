@@ -125,4 +125,3 @@ func (db *DB) Close() error {
 func (db *DB) APIKeys() storage.APIKeyRepository {
 	return db.APIKeyRepo
 }
-

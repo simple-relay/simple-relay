@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -31,7 +32,6 @@ type RouterOptions struct {
 	RateLimiter   *RateLimiter
 	APIKeyRepo    storage.APIKeyRepository
 }
-
 
 // NewRouter creates and configures the HTTP routing using Go 1.22+ standard library ServeMux.
 func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) http.Handler {
@@ -160,13 +160,13 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 		mux.HandleFunc("DELETE /api/v1/api-keys/{id}", apiKeysHandler.RevokeKey)
 	}
 
-	handler := authMiddleware(cfg.AdminPassword, sessionStore, opt.APIKeyRepo, mux)
+	handler := authMiddleware(cfg.AdminPassword, sessionStore, opt.APIKeyRepo, logger, mux)
 
 	// Wrap mux with standard logging & panic recovery middleware
 	return loggingMiddleware(logger, recoveryMiddleware(logger, handler))
 }
 
-func authMiddleware(adminPassword string, sessionStore *SessionStore, apiKeyRepo storage.APIKeyRepository, next http.Handler) http.Handler {
+func authMiddleware(adminPassword string, sessionStore *SessionStore, apiKeyRepo storage.APIKeyRepository, logger *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		if !isProtectedPath(r.Method, path) {
@@ -179,7 +179,19 @@ func authMiddleware(adminPassword string, sessionStore *SessionStore, apiKeyRepo
 			if apiKeyRepo != nil {
 				hash := HashKey(key)
 				apiKey, err := apiKeyRepo.GetAPIKeyByHash(r.Context(), hash)
-				if err == nil && apiKey != nil && apiKey.RevokedAt == nil && subtle.ConstantTimeCompare([]byte(apiKey.KeyHash), []byte(hash)) == 1 {
+				if err != nil {
+					if !errors.Is(err, storage.ErrNotFound) {
+						if logger != nil {
+							logger.Error("internal database error during api key verification", "error", err)
+						}
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusInternalServerError)
+						_ = json.NewEncoder(w).Encode(map[string]string{
+							"error": "Internal database error during authentication",
+						})
+						return
+					}
+				} else if apiKey != nil && apiKey.RevokedAt == nil && subtle.ConstantTimeCompare([]byte(apiKey.KeyHash), []byte(hash)) == 1 {
 					next.ServeHTTP(w, r)
 					return
 				}

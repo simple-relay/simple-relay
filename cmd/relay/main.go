@@ -60,22 +60,24 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("failed to apply database migrations: %w", err)
 	}
 
-	// Auto-seed initial default API key on cold boot if database has zero keys
-	totalKeys, err := db.APIKeys().CountTotalKeys(ctx)
-	if err != nil {
-		logger.Error("failed to query api keys count", "error", err)
-	} else if totalKeys == 0 {
-		rawKey, apiKey, err := api.GenerateRawKey("default")
+	// Auto-seed initial default API key on cold boot in dev mode if database has zero keys
+	if cfg.AdminPassword == "" {
+		totalKeys, err := db.APIKeys().CountTotalKeys(ctx)
 		if err != nil {
-			logger.Error("failed to generate default api key", "error", err)
-		} else if err := db.APIKeys().CreateAPIKey(ctx, apiKey); err != nil {
-			logger.Error("failed to persist default api key", "error", err)
-		} else {
-			logger.Info("no API keys found; generated default bootstrap key",
-				"name", "default",
-				"key", rawKey,
-				"masked", apiKey.MaskedKey,
-			)
+			logger.Error("failed to query api keys count", "error", err)
+		} else if totalKeys == 0 {
+			rawKey, apiKey, err := api.GenerateRawKey("default")
+			if err != nil {
+				logger.Error("failed to generate default api key", "error", err)
+			} else if err := db.APIKeys().CreateAPIKey(ctx, apiKey); err != nil {
+				logger.Error("failed to persist default api key", "error", err)
+			} else {
+				logger.Info("no API keys found; generated default bootstrap key for dev mode",
+					"name", "default",
+					"key", rawKey,
+					"masked", apiKey.MaskedKey,
+				)
+			}
 		}
 	}
 
@@ -156,7 +158,6 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 		WakeFn:        dispatcher.Wake,
 		APIKeyRepo:    db.APIKeys(),
 	})
-
 
 	srv := &http.Server{
 		Addr:              cfg.Address(),

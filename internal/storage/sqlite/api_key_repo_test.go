@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -84,5 +85,53 @@ func TestAPIKeyRepo_CRUD(t *testing.T) {
 	_, err = repo.GetAPIKeyByHash(ctx, key.KeyHash)
 	if err != storage.ErrNotFound {
 		t.Fatalf("expected ErrNotFound for revoked key, got: %v", err)
+	}
+}
+
+func TestAPIKeyRepo_CacheInvalidationOnRevocation(t *testing.T) {
+	db, _ := setupTestDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	repo := db.APIKeys()
+
+	key := &model.APIKey{
+		ID:        model.NewULID(),
+		Name:      "cached-key",
+		KeyHash:   "cachedhash1234567890abcdef1234567890abcdef1234567890abcdef12345678",
+		MaskedKey: "sr_live_cach*****abcd",
+		CreatedAt: time.Now().UTC(),
+	}
+	if err := repo.CreateAPIKey(ctx, key); err != nil {
+		t.Fatalf("failed to create api key: %v", err)
+	}
+
+	// First lookup (cache miss -> loads from DB into cache)
+	k1, err := repo.GetAPIKeyByHash(ctx, key.KeyHash)
+	if err != nil {
+		t.Fatalf("expected key on first lookup, got error: %v", err)
+	}
+	if k1.ID != key.ID {
+		t.Fatalf("key id mismatch: %s != %s", k1.ID, key.ID)
+	}
+
+	// Second lookup (cache hit)
+	k2, err := repo.GetAPIKeyByHash(ctx, key.KeyHash)
+	if err != nil {
+		t.Fatalf("expected key on second lookup, got error: %v", err)
+	}
+	if k2.ID != key.ID {
+		t.Fatalf("key id mismatch: %s != %s", k2.ID, key.ID)
+	}
+
+	// Revoke key (must invalidate in-memory cache)
+	if err := repo.RevokeAPIKey(ctx, key.ID); err != nil {
+		t.Fatalf("failed to revoke key: %v", err)
+	}
+
+	// Third lookup must return ErrNotFound, not stale cached key
+	_, err = repo.GetAPIKeyByHash(ctx, key.KeyHash)
+	if !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound after revocation, got: %v", err)
 	}
 }

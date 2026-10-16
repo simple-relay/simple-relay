@@ -67,10 +67,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     revoked_at DATETIME NULL
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_lookup ON api_keys(key_hash) WHERE revoked_at IS NULL;
 `
-
 
 // Migrate executes initial schema creation on SQLite writer connection.
 func (db *DB) Migrate(ctx context.Context) error {
