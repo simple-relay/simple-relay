@@ -10,6 +10,8 @@ func TestEmbeddedAssets(t *testing.T) {
 		"index.html",
 		"static/js/alpine.min.js",
 		"static/css/tailwind.min.css",
+		"static/logo.svg",
+		"static/favicon.ico",
 	}
 
 	for _, file := range requiredFiles {
