@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.0](https://github.com/simple-relay/simple-relay/compare/v0.6.0...v0.7.0) (2026-10-16)
+
+
+### Features
+
+* **auth:** implement admin password session auth and login rate limiter ([1158fee](https://github.com/simple-relay/simple-relay/commit/1158fee65167a7ad5aa9d2d11720784186b15f4e))
+
+
+### Bug Fixes
+
+* **ci:** replace builds with ids in goreleaser docker config ([#67](https://github.com/simple-relay/simple-relay/issues/67)) ([739621e](https://github.com/simple-relay/simple-relay/commit/739621e65b0a4516f36a1d848a65bee67765e6dd))
+
+
+### Maintenance & Dependencies
+
+* synchronize roadmap with issue status [skip ci] ([3d57521](https://github.com/simple-relay/simple-relay/commit/3d575216e99d88b30e519be5ca73665f422c4838))
+
 ## [0.6.0](https://github.com/simple-relay/simple-relay/compare/v0.5.0...v0.6.0) (2026-10-15)
 
 
