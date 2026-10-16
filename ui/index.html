@@ -151,14 +151,9 @@
         <div class="pt-4 border-t border-gray-900 space-y-1.5">
           <button @click="setTab('api-keys')"
                   :class="currentTab === 'api-keys' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:bg-gray-800 hover:text-white'"
-                  class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors">
-            <div class="flex items-center space-x-3">
-              <span>🔑</span>
-              <span>API Keys</span>
-            </div>
-            <span class="px-2 py-0.5 text-xs rounded-full bg-gray-800 text-gray-300"
-                  :class="currentTab === 'api-keys' ? 'bg-indigo-700 text-white' : ''"
-                  x-text="apiKeys.length">0</span>
+                  class="w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors">
+            <span>🔑</span>
+            <span>API Keys</span>
           </button>
         </div>
       </nav>
