@@ -217,7 +217,7 @@
   - Query in-flight jobs and Dead Letter Queue directly from terminal.
 - [x] **Webhook Alert Notifications on DLQ Threshold Breaches** ([#22]
   - Push alert notifications to external webhooks (Slack, Discord, Email) when DLQ item count exceeds configured threshold.
-- [ ] **API Key Authentication for Programmatic Management** ([#23](https://github.com/simple-relay/simple-relay/issues/23))
+- [x] **API Key Authentication for Programmatic Management** ([#23](https://github.com/simple-relay/simple-relay/issues/23))
   - Secure API endpoints using API keys for machine-to-machine route management and job querying.
 - [ ] **Prometheus Metrics Exporter Endpoint (`GET /metrics`)** ([#24](https://github.com/simple-relay/simple-relay/issues/24))
   - Expose Prometheus metrics tracking ingestion rate, delivery latency histograms, retry counts, and worker saturation.
