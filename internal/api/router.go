@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"io/fs"
 	"log/slog"
@@ -178,7 +179,7 @@ func authMiddleware(adminPassword string, sessionStore *SessionStore, apiKeyRepo
 			if apiKeyRepo != nil {
 				hash := HashKey(key)
 				apiKey, err := apiKeyRepo.GetAPIKeyByHash(r.Context(), hash)
-				if err == nil && apiKey != nil && apiKey.RevokedAt == nil {
+				if err == nil && apiKey != nil && apiKey.RevokedAt == nil && subtle.ConstantTimeCompare([]byte(apiKey.KeyHash), []byte(hash)) == 1 {
 					next.ServeHTTP(w, r)
 					return
 				}
@@ -230,6 +231,7 @@ func extractAPIKey(r *http.Request) string {
 func isProtectedPath(method, path string) bool {
 	if strings.HasPrefix(path, "/api/v1/routes") ||
 		strings.HasPrefix(path, "/api/v1/requests") ||
+		strings.HasPrefix(path, "/api/v1/queue") ||
 		strings.HasPrefix(path, "/api/v1/dlq") ||
 		strings.HasPrefix(path, "/api/v1/api-keys") {
 		return true

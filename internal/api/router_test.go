@@ -268,3 +268,46 @@ func TestRouter_DualAuth(t *testing.T) {
 	}
 }
 
+func TestRouter_QueueStatsProtected(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	db := setupTestAPIKeysDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	rawKey, apiKey, err := GenerateRawKey("ci-key")
+	if err != nil {
+		t.Fatalf("failed to generate raw key: %v", err)
+	}
+	if err := db.APIKeys().CreateAPIKey(ctx, apiKey); err != nil {
+		t.Fatalf("failed to create api key: %v", err)
+	}
+
+	cfgAuth := config.DefaultConfig()
+	cfgAuth.AdminPassword = "adminpassword123"
+	sessionStore := NewSessionStore(24 * time.Hour)
+
+	router := NewRouter(cfgAuth, logger, RouterOptions{
+		SessionStore: sessionStore,
+		APIKeyRepo:   db.APIKeys(),
+		RequestRepo:  db.RequestRepo,
+	})
+
+	// Unauthenticated request to /api/v1/queue/stats should be rejected with 401
+	reqUnauth := httptest.NewRequest(http.MethodGet, "/api/v1/queue/stats", nil)
+	rrUnauth := httptest.NewRecorder()
+	router.ServeHTTP(rrUnauth, reqUnauth)
+	if rrUnauth.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unauthenticated /api/v1/queue/stats, got %d", rrUnauth.Code)
+	}
+
+	// Authenticated request to /api/v1/queue/stats should be allowed
+	reqAuth := httptest.NewRequest(http.MethodGet, "/api/v1/queue/stats", nil)
+	reqAuth.Header.Set("X-API-Key", rawKey)
+	rrAuth := httptest.NewRecorder()
+	router.ServeHTTP(rrAuth, reqAuth)
+	if rrAuth.Code == http.StatusUnauthorized {
+		t.Fatalf("expected authenticated access for /api/v1/queue/stats, got 401")
+	}
+}
+
+

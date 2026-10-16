@@ -328,7 +328,7 @@ func (h *AuthHandler) isAuthenticated(r *http.Request) bool {
 	if h.apiKeyRepo != nil {
 		if key := extractAPIKey(r); key != "" {
 			hash := HashKey(key)
-			if apiKey, err := h.apiKeyRepo.GetAPIKeyByHash(r.Context(), hash); err == nil && apiKey != nil && apiKey.RevokedAt == nil {
+			if apiKey, err := h.apiKeyRepo.GetAPIKeyByHash(r.Context(), hash); err == nil && apiKey != nil && apiKey.RevokedAt == nil && subtle.ConstantTimeCompare([]byte(apiKey.KeyHash), []byte(hash)) == 1 {
 				return true
 			}
 			return false
