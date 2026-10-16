@@ -57,6 +57,16 @@ type AttemptRepository interface {
 	ListAttemptsByRequestID(ctx context.Context, requestID string) ([]*model.Attempt, error)
 }
 
+// APIKeyRepository defines storage operations for administrative API keys.
+type APIKeyRepository interface {
+	CreateAPIKey(ctx context.Context, key *model.APIKey) error
+	GetAPIKeyByHash(ctx context.Context, keyHash string) (*model.APIKey, error)
+	ListAPIKeys(ctx context.Context) ([]*model.APIKey, error)
+	RevokeAPIKey(ctx context.Context, id string) error
+	CountTotalKeys(ctx context.Context) (int64, error)
+	CountActiveKeys(ctx context.Context) (int64, error)
+}
+
 // RetentionRepository defines maintenance operations for storage lifecycle management.
 // Designed as an adapter interface to support SQLite, PostgreSQL, and MySQL backends.
 type RetentionRepository interface {
@@ -85,3 +95,5 @@ type Storage interface {
 	Ping(ctx context.Context) error
 	Close() error
 }
+
+
