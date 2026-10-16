@@ -59,6 +59,16 @@ go test -race ./...
 CGO_ENABLED=0 go build -o /dev/null ./cmd/relay
 ```
 
+### Running the E2E Webhook & Relay Simulator
+To simulate real-world webhook traffic (e.g., Stripe, GitHub, query/header auth), test retry loops, and visually evaluate the Simple Relay Web UI:
+
+```bash
+# Start the standalone simulator server and embedded Web UI (default: http://localhost:9099)
+go run ./scripts/simulator
+# Or via Makefile:
+make simulate
+```
+
 ---
 
 ## 4. Submitting a Pull Request

@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Relay — E2E Traffic & Webhook Simulator</title>
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Alpine.js via CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans antialiased" x-data="simulatorApp()" x-cloak>
+  <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-30 px-6 py-3.5 flex items-center justify-between shadow-sm">
+    <div class="flex items-center space-x-3">
+      <div class="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-indigo-500/20 shadow-md">
+        ⚡
+      </div>
+      <div>
+        <h1 class="text-base font-semibold text-white tracking-tight leading-none">Simple Relay Simulator</h1>
+        <p class="text-xs text-slate-400 mt-0.5">E2E Traffic Generator & Mock Upstream Receiver</p>
+      </div>
+    </div>
+
+    <!-- Connection Status -->
+    <div class="flex items-center space-x-4">
+      <div class="flex items-center space-x-2 text-xs font-medium px-2.5 py-1 rounded-full border"
+           :class="wsConnected ? 'bg-emerald-950/40 border-emerald-800 text-emerald-400' : 'bg-rose-950/40 border-rose-800 text-rose-400'">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+                :class="wsConnected ? 'bg-emerald-400' : 'bg-rose-400'"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2"
+                :class="wsConnected ? 'bg-emerald-500' : 'bg-rose-500'"></span>
+        </span>
+        <span x-text="wsConnected ? 'Live Stream Connected' : 'Disconnected (Reconnecting...)'"></span>
+      </div>
+      <a href="http://localhost:8080" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center space-x-1 font-medium transition">
+        <span>Open Relay UI</span>
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-800 overflow-hidden">
+
+    <!-- LEFT PANEL: Sender -->
+    <section class="p-6 overflow-y-auto max-h-[calc(100vh-61px)] flex flex-col space-y-5">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+        <div>
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-indigo-400">Sender Panel</h2>
+          <p class="text-xs text-slate-400">Generate & dispatch requests to Simple Relay</p>
+        </div>
+      </div>
+
+      <!-- Preset Selector -->
+      <div class="space-y-1.5">
+        <label class="text-xs font-semibold text-slate-300">Quick-Fill Preset Template</label>
+        <div class="flex space-x-2">
+          <select x-model="selectedPresetId" @change="applyPreset()" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+            <template x-for="p in presets" :key="p.id">
+              <option :value="p.id" x-text="p.name"></option>
+            </template>
+          </select>
+          <button @click="applyPreset()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 rounded-lg transition border border-slate-700">
+            Reset Preset
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-400" x-text="currentPresetDescription"></p>
+      </div>
+
+      <!-- URL & Method -->
+      <div class="space-y-1.5">
+        <label class="text-xs font-semibold text-slate-300">Target URL & Method</label>
+        <div class="flex space-x-2">
+          <select x-model="form.method" class="w-24 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-200 focus:outline-none focus:border-indigo-500">
+            <option>POST</option>
+            <option>PUT</option>
+            <option>PATCH</option>
+            <option>GET</option>
+          </select>
+          <input type="text" x-model="form.url" placeholder="http://localhost:8080/api/v1/webhook/..." class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
+        </div>
+      </div>
+
+      <!-- Cryptographic Signature Options -->
+      <div class="p-3.5 bg-slate-950/60 rounded-xl border border-slate-800/80 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-300">Dynamic Signature Generator</span>
+          <span class="text-[11px] text-slate-400">Computes valid HMAC upon send</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Provider Adapter</label>
+            <select x-model="form.sign_provider" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+              <option value="">None (Standard Request)</option>
+              <option value="stripe">Stripe (Stripe-Signature)</option>
+              <option value="github">GitHub (X-Hub-Signature-256)</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Signing Secret</label>
+            <input type="text" x-model="form.sign_secret" :disabled="!form.sign_provider" placeholder="whsec_..." class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-40">
+          </div>
+        </div>
+      </div>
+
+      <!-- Headers Editor -->
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-semibold text-slate-300">Custom Request Headers (JSON)</label>
+          <button @click="resetHeaders()" class="text-[11px] text-indigo-400 hover:text-indigo-300">Default Headers</button>
+        </div>
+        <textarea x-model="headersRaw" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500" placeholder='{"Content-Type": "application/json"}'></textarea>
+      </div>
+
+      <!-- Payload Editor -->
+      <div class="space-y-1.5 flex-1 flex flex-col">
+        <label class="text-xs font-semibold text-slate-300">Raw Request Body</label>
+        <textarea x-model="form.body" rows="7" class="w-full flex-1 bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500" placeholder='{"event": "test"}'></textarea>
+      </div>
+
+      <!-- Dispatch Action Button -->
+      <div>
+        <button @click="dispatchRequest()" :disabled="sending" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-900/50 text-white rounded-lg font-medium text-sm flex items-center justify-center space-x-2 transition shadow-lg shadow-indigo-600/20">
+          <svg x-show="sending" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+          <span x-text="sending ? 'Dispatching to Relay...' : '⚡ Send Request to Simple Relay'"></span>
+        </button>
+      </div>
+
+      <!-- Last Sent Result -->
+      <div x-show="lastResult" class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Relay Response</span>
+            <span class="px-2 py-0.5 rounded text-xs font-bold"
+                  :class="lastResult && lastResult.status_code >= 200 && lastResult.status_code < 300 ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'"
+                  x-text="lastResult ? lastResult.status_code + ' ' + (lastResult.status_code === 200 ? 'OK' : lastResult.status_code === 202 ? 'Accepted' : 'Error') : ''"></span>
+          </div>
+          <span class="text-xs font-mono text-slate-400" x-text="lastResult ? lastResult.duration_ms.toFixed(1) + 'ms' : ''"></span>
+        </div>
+
+        <div x-show="lastResult && lastResult.error" class="p-2.5 bg-rose-950/50 border border-rose-900 rounded text-xs text-rose-300 font-mono" x-text="lastResult ? lastResult.error : ''"></div>
+
+        <pre x-show="lastResult && lastResult.body" class="p-2.5 bg-slate-900 rounded-lg text-xs font-mono text-slate-300 overflow-x-auto max-h-40 border border-slate-800" x-text="formatJSON(lastResult ? lastResult.body : '')"></pre>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: Live Receiver -->
+    <section class="p-6 overflow-y-auto max-h-[calc(100vh-61px)] flex flex-col space-y-5 bg-slate-900/60">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+        <div>
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-emerald-400">Receiver Panel</h2>
+          <p class="text-xs text-slate-400">Mock destination receiving forwarded requests from Simple Relay</p>
+        </div>
+        <button @click="clearEvents()" class="px-2.5 py-1 text-xs text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 rounded border border-slate-800 hover:border-rose-900 transition">
+          Clear Events
+        </button>
+      </div>
+
+      <!-- Destination Upstream Settings Card -->
+      <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-300">Mock Destination Endpoint</span>
+          <span class="text-[11px] text-slate-400 font-mono" x-text="destinationEndpoint"></span>
+        </div>
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          Configure routes in Simple Relay with <code class="text-indigo-400 bg-slate-900 px-1 py-0.5 rounded border border-slate-800" x-text="destinationEndpoint"></code> as their Destination URL.
+        </p>
+
+        <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Return Status Code</label>
+            <select x-model.number="mockConfig.status_code" @change="saveMockConfig()" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-200 focus:outline-none focus:border-indigo-500">
+              <option value="200">200 OK (Success Delivery)</option>
+              <option value="500">500 Internal Error (Trigger Retries)</option>
+              <option value="429">429 Rate Limit (Retry-After: 3s)</option>
+              <option value="503">503 Service Unavailable</option>
+              <option value="400">400 Bad Request</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Simulated Latency (ms)</label>
+            <input type="number" x-model.number="mockConfig.delay_ms" @change="saveMockConfig()" min="0" step="50" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+      </div>
+
+      <!-- Events Stream Container -->
+      <div class="space-y-3 flex-1">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            Received Deliveries (<span x-text="events.length"></span>)
+          </h3>
+          <span class="text-[11px] text-slate-400" x-show="events.length > 0">Click card to expand headers & body</span>
+        </div>
+
+        <!-- Empty State -->
+        <div x-show="events.length === 0" class="p-8 border border-dashed border-slate-800 rounded-xl text-center space-y-2">
+          <div class="text-2xl">📡</div>
+          <p class="text-xs text-slate-300 font-medium">Waiting for forwarded requests...</p>
+          <p class="text-[11px] text-slate-400 max-w-sm mx-auto">
+            When Simple Relay delivers an inbound webhook or async job to <span class="font-mono text-slate-300">/destination</span>, it will appear here in real time.
+          </p>
+        </div>
+
+        <!-- Event Cards -->
+        <template x-for="(evt, idx) in events" :key="evt.id">
+          <div class="bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl overflow-hidden transition shadow-sm"
+               x-data="{ expanded: idx === 0 }">
+            <!-- Card Header -->
+            <div @click="expanded = !expanded" class="p-3.5 flex items-center justify-between cursor-pointer select-none bg-slate-950 hover:bg-slate-900/60 transition">
+              <div class="flex items-center space-x-2.5">
+                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider"
+                      :class="evt.response_status_returned >= 200 && evt.response_status_returned < 300 ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'"
+                      x-text="evt.response_status_returned"></span>
+                <span class="text-xs font-bold text-slate-200" x-text="evt.method"></span>
+                <span class="text-xs font-mono text-slate-400" x-text="evt.path"></span>
+              </div>
+              <div class="flex items-center space-x-3 text-xs text-slate-400">
+                <span class="font-mono text-[11px] text-indigo-400 font-medium" x-text="evt.headers['X-Relay-Request-Id'] || evt.headers['X-Relay-Request-ID'] || 'No Relay ID'"></span>
+                <span class="text-[11px]" x-text="formatTime(evt.received_at)"></span>
+                <svg class="w-3.5 h-3.5 transform transition-transform" :class="expanded ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+            </div>
+
+            <!-- Card Expanded Body -->
+            <div x-show="expanded" class="p-4 border-t border-slate-800/80 bg-slate-900/40 space-y-3 text-xs">
+              <!-- Query Parameters -->
+              <div x-show="Object.keys(evt.query_params || {}).length > 0" class="space-y-1">
+                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Query Parameters</span>
+                <div class="bg-slate-950 rounded p-2 border border-slate-800 space-y-1 font-mono text-[11px]">
+                  <template x-for="(val, key) in evt.query_params" :key="key">
+                    <div class="flex"><span class="text-indigo-400 w-32 shrink-0" x-text="key"></span>: <span class="text-slate-300 ml-2" x-text="val"></span></div>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Headers -->
+              <div class="space-y-1">
+                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Relayed Headers</span>
+                <div class="bg-slate-950 rounded p-2 border border-slate-800 space-y-1 font-mono text-[11px] max-h-36 overflow-y-auto">
+                  <template x-for="(val, key) in evt.headers" :key="key">
+                    <div class="flex"><span class="text-slate-400 w-44 shrink-0 truncate" x-text="key"></span>: <span class="text-slate-200 ml-2 break-all" x-text="val"></span></div>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Raw Body -->
+              <div class="space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Raw Body</span>
+                  <button @click.stop="copyText(evt.body)" class="text-[10px] text-indigo-400 hover:text-indigo-300">Copy Body</button>
+                </div>
+                <pre class="bg-slate-950 p-2.5 rounded border border-slate-800 font-mono text-[11px] text-slate-200 overflow-x-auto max-h-48 whitespace-pre-wrap" x-text="formatJSON(evt.body)"></pre>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    function simulatorApp() {
+      return {
+        wsConnected: false,
+        socket: null,
+        presets: [],
+        selectedPresetId: 'stripe_webhook',
+        currentPresetDescription: '',
+        destinationEndpoint: window.location.origin + '/destination',
+        sending: false,
+        lastResult: null,
+        headersRaw: '{\n  "Content-Type": "application/json"\n}',
+        form: {
+          url: 'http://localhost:8080/api/v1/webhook/stripe-test',
+          method: 'POST',
+          sign_provider: 'stripe',
+          sign_secret: 'whsec_test_secret123',
+          body: ''
+        },
+        mockConfig: {
+          status_code: 200,
+          delay_ms: 0
+        },
+        events: [],
+
+        init() {
+          this.fetchTemplates();
+          this.fetchMockConfig();
+          this.fetchEvents();
+          this.connectWebSocket();
+        },
+
+        async fetchTemplates() {
+          try {
+            const resp = await fetch('/api/templates');
+            if (resp.ok) {
+              this.presets = await resp.json();
+              this.applyPreset();
+            }
+          } catch (e) {
+            console.error('Failed to load templates:', e);
+          }
+        },
+
+        applyPreset() {
+          const preset = this.presets.find(p => p.id === this.selectedPresetId);
+          if (preset) {
+            this.form.url = preset.url;
+            this.form.method = preset.method;
+            this.form.sign_provider = preset.sign_provider || '';
+            this.form.sign_secret = preset.sign_secret || '';
+            this.headersRaw = JSON.stringify(preset.headers || { "Content-Type": "application/json" }, null, 2);
+            this.form.body = preset.body || '';
+            this.currentPresetDescription = preset.description || '';
+          }
+        },
+
+        resetHeaders() {
+          this.headersRaw = '{\n  "Content-Type": "application/json"\n}';
+        },
+
+        async fetchMockConfig() {
+          try {
+            const resp = await fetch('/api/mock-config');
+            if (resp.ok) {
+              this.mockConfig = await resp.json();
+            }
+          } catch (e) {
+            console.error('Failed to fetch mock config:', e);
+          }
+        },
+
+        async saveMockConfig() {
+          try {
+            await fetch('/api/mock-config', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.mockConfig)
+            });
+          } catch (e) {
+            console.error('Failed to save mock config:', e);
+          }
+        },
+
+        async fetchEvents() {
+          try {
+            const resp = await fetch('/api/events');
+            if (resp.ok) {
+              this.events = (await resp.json()) || [];
+              this.events.reverse(); // Newest first
+            }
+          } catch (e) {
+            console.error('Failed to fetch events:', e);
+          }
+        },
+
+        async clearEvents() {
+          try {
+            await fetch('/api/events', { method: 'DELETE' });
+            this.events = [];
+          } catch (e) {
+            console.error('Failed to clear events:', e);
+          }
+        },
+
+        connectWebSocket() {
+          if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+            return;
+          }
+
+          const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const wsUrl = `${proto}//${window.location.host}/ws`;
+          this.socket = new WebSocket(wsUrl);
+
+          this.socket.onopen = () => {
+            this.wsConnected = true;
+          };
+
+          this.socket.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              if (!this.events.some(e => e.id === data.id)) {
+                this.events.unshift(data); // Prepend newest event
+              }
+            } catch (e) {
+              console.error('Error parsing WS message:', e);
+            }
+          };
+
+          this.socket.onclose = () => {
+            this.wsConnected = false;
+            if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = setTimeout(() => this.connectWebSocket(), 2000); // Auto reconnect
+          };
+
+          this.socket.onerror = () => {
+            this.socket.close();
+          };
+        },
+
+        async dispatchRequest() {
+          this.sending = true;
+          this.lastResult = null;
+
+          let headersObj = {};
+          try {
+            headersObj = JSON.parse(this.headersRaw);
+          } catch (e) {
+            alert('Invalid Headers JSON format');
+            this.sending = false;
+            return;
+          }
+
+          const payload = {
+            url: this.form.url,
+            method: this.form.method,
+            headers: headersObj,
+            body: this.form.body,
+            sign_provider: this.form.sign_provider,
+            sign_secret: this.form.sign_secret
+          };
+
+          try {
+            const resp = await fetch('/api/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            this.lastResult = await resp.json();
+          } catch (e) {
+            this.lastResult = {
+              status_code: 0,
+              error: e.toString(),
+              duration_ms: 0
+            };
+          } finally {
+            this.sending = false;
+          }
+        },
+
+        formatJSON(str) {
+          if (!str) return '';
+          try {
+            const obj = JSON.parse(str);
+            return JSON.stringify(obj, null, 2);
+          } catch (e) {
+            return str;
+          }
+        },
+
+        formatTime(isoStr) {
+          if (!isoStr) return '';
+          try {
+            const d = new Date(isoStr);
+            return d.toLocaleTimeString();
+          } catch (e) {
+            return isoStr;
+          }
+        },
+
+        copyText(text) {
+          navigator.clipboard.writeText(text);
+        }
+      }
+    }
+  </script>
+</body>
+</html>
