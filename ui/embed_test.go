@@ -62,3 +62,32 @@ func TestIndexHTML_CustomValidationOption(t *testing.T) {
 		}
 	}
 }
+
+func TestIndexHTML_APIKeysManagement(t *testing.T) {
+	data, err := FS.ReadFile("index.html")
+	if err != nil {
+		t.Fatalf("failed to read index.html: %v", err)
+	}
+
+	content := string(data)
+	expectedSubstrings := []string{
+		`setTab('api-keys')`,
+		`x-show="currentTab === 'api-keys'"`,
+		`openCreateKeyModal()`,
+		`createKeyModalOpen`,
+		`createdKeyModalOpen`,
+		`revokeKeyModalOpen`,
+		`fetchAPIKeys()`,
+		`submitCreateKey()`,
+		`submitRevokeKey()`,
+		`k.masked_key`,
+		`k.created_at`,
+		`/api/v1/api-keys`,
+	}
+
+	for _, substr := range expectedSubstrings {
+		if !strings.Contains(content, substr) {
+			t.Errorf("expected index.html to contain %q", substr)
+		}
+	}
+}

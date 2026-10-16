@@ -112,39 +112,50 @@
       </div>
 
       <!-- Navigation Tabs -->
-      <nav class="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
-        <button @click="setTab('routes')"
-                :class="currentTab === 'routes' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:bg-gray-800 hover:text-white'"
-                class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors">
-          <div class="flex items-center space-x-3">
-            <span>⚡</span>
-            <span>Routes</span>
-          </div>
-          <span class="px-2 py-0.5 text-xs rounded-full bg-gray-800 text-gray-300"
-                :class="currentTab === 'routes' ? 'bg-indigo-700 text-white' : ''"
-                x-text="routes.length">0</span>
-        </button>
+      <nav class="flex-1 px-4 py-6 flex flex-col justify-between overflow-y-auto">
+        <div class="space-y-1.5">
+          <button @click="setTab('routes')"
+                  :class="currentTab === 'routes' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:bg-gray-800 hover:text-white'"
+                  class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors">
+            <div class="flex items-center space-x-3">
+              <span>⚡</span>
+              <span>Routes</span>
+            </div>
+            <span class="px-2 py-0.5 text-xs rounded-full bg-gray-800 text-gray-300"
+                  :class="currentTab === 'routes' ? 'bg-indigo-700 text-white' : ''"
+                  x-text="routes.length">0</span>
+          </button>
 
-        <button @click="setTab('requests')"
-                :class="currentTab === 'requests' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:bg-gray-800 hover:text-white'"
-                class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors">
-          <div class="flex items-center space-x-3">
-            <span>📋</span>
-            <span>Requests</span>
-          </div>
-        </button>
+          <button @click="setTab('requests')"
+                  :class="currentTab === 'requests' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:bg-gray-800 hover:text-white'"
+                  class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors">
+            <div class="flex items-center space-x-3">
+              <span>📋</span>
+              <span>Requests</span>
+            </div>
+          </button>
 
-        <button @click="setTab('dlq')"
-                :class="currentTab === 'dlq' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:bg-gray-800 hover:text-white'"
-                class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors">
-          <div class="flex items-center space-x-3">
-            <span>💀</span>
-            <span>DLQ</span>
-          </div>
-          <span class="px-2 py-0.5 text-xs rounded-full font-semibold"
-                :class="dlqTotal > 0 ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-800 text-gray-400'"
-                x-text="dlqTotal">0</span>
-        </button>
+          <button @click="setTab('dlq')"
+                  :class="currentTab === 'dlq' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:bg-gray-800 hover:text-white'"
+                  class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors">
+            <div class="flex items-center space-x-3">
+              <span>💀</span>
+              <span>DLQ</span>
+            </div>
+            <span class="px-2 py-0.5 text-xs rounded-full font-semibold"
+                  :class="dlqTotal > 0 ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-800 text-gray-400'"
+                  x-text="dlqTotal">0</span>
+          </button>
+        </div>
+
+        <div class="pt-4 border-t border-gray-900 space-y-1.5">
+          <button @click="setTab('api-keys')"
+                  :class="currentTab === 'api-keys' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:bg-gray-800 hover:text-white'"
+                  class="w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors">
+            <span>🔑</span>
+            <span>API Keys</span>
+          </button>
+        </div>
       </nav>
 
       <!-- Sidebar Footer -->
@@ -407,6 +418,76 @@
               <tr x-show="dlqItems.length === 0">
                 <td colspan="6" class="px-6 py-10 text-center text-gray-500">
                   🎉 DLQ is completely empty! All webhooks successfully delivered.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 4: API KEYS -->
+      <!-- ========================================== -->
+      <section x-show="currentTab === 'api-keys'" class="p-8 space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-bold text-white tracking-tight">API Keys</h1>
+            <p class="text-sm text-gray-400 mt-1">Manage programmatic authentication tokens for automated services and CLI access.</p>
+          </div>
+          <button @click="openCreateKeyModal()"
+                  class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center space-x-2 shadow transition">
+            <span>+</span>
+            <span>Create API Key</span>
+          </button>
+        </div>
+
+        <!-- API Keys Table -->
+        <div class="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden shadow">
+          <table class="min-w-full divide-y divide-gray-800 text-left text-sm">
+            <thead class="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider font-semibold">
+              <tr>
+                <th class="px-6 py-3.5">Name</th>
+                <th class="px-6 py-3.5">Masked Key</th>
+                <th class="px-6 py-3.5">Created At</th>
+                <th class="px-6 py-3.5">Status</th>
+                <th class="px-6 py-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800 text-gray-300">
+              <template x-for="k in apiKeys" :key="k.id">
+                <tr class="hover:bg-gray-900 transition-colors">
+                  <td class="px-6 py-4 font-semibold text-white" x-text="k.name"></td>
+                  <td class="px-6 py-4 font-mono text-xs text-indigo-400">
+                    <div class="flex items-center space-x-2">
+                      <span x-text="k.masked_key"></span>
+                      <button @click="copy(k.masked_key)" class="text-gray-500 hover:text-gray-300 text-xs p-1" title="Copy masked key">
+                        📋
+                      </button>
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 text-xs text-gray-400" x-text="formatDate(k.created_at)"></td>
+                  <td class="px-6 py-4 text-xs">
+                    <span x-show="!k.revoked_at" class="px-2 py-0.5 rounded text-xs font-medium bg-green-950 text-green-300 border border-green-800">
+                      Active
+                    </span>
+                    <span x-show="k.revoked_at" class="px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-gray-400 border border-gray-700" :title="'Revoked at ' + formatDate(k.revoked_at)">
+                      Revoked
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 text-right space-x-2">
+                    <button x-show="!k.revoked_at" @click="openRevokeKeyModal(k)" class="text-red-400 hover:text-red-300 text-xs font-medium">
+                      Revoke
+                    </button>
+                    <span x-show="k.revoked_at" class="text-xs text-gray-500">—</span>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="apiKeys.length === 0">
+                <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                  <div class="space-y-1">
+                    <p class="text-base text-gray-400 font-medium">No API keys found</p>
+                    <p class="text-xs text-gray-500">Create an API key to allow scripts or relay-cli to authenticate with Simple Relay.</p>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -788,6 +869,125 @@
     </div>
   </div>
 
+  <!-- ========================================== -->
+  <!-- MODAL: CREATE API KEY -->
+  <!-- ========================================== -->
+  <div x-show="createKeyModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" x-cloak>
+    <div class="bg-gray-950 border border-gray-800 rounded-2xl p-6 max-w-md w-full shadow-2xl relative" @click.away="createKeyModalOpen = false">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+          <span>🔑</span>
+          <span>Create API Key</span>
+        </h3>
+        <button @click="createKeyModalOpen = false" class="text-gray-400 hover:text-white text-lg font-bold p-1">✕</button>
+      </div>
+
+      <form @submit.prevent="submitCreateKey()" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">Key Name / Description</label>
+          <input type="text"
+                 x-model="newKeyName"
+                 placeholder="e.g. ci-cd-worker or backup-script"
+                 class="w-full px-3.5 py-2.5 rounded-lg bg-gray-900 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm">
+          <p class="text-[11px] text-gray-500 mt-1">A descriptive label to identify this key.</p>
+        </div>
+
+        <div class="flex items-center justify-end space-x-3 pt-2">
+          <button type="button" @click="createKeyModalOpen = false"
+                  class="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium text-xs transition">
+            Cancel
+          </button>
+          <button type="submit"
+                  :disabled="createKeyLoading"
+                  class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium text-xs shadow transition flex items-center space-x-1.5">
+            <span x-show="createKeyLoading" class="animate-spin text-xs">⏳</span>
+            <span>Generate Key</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: DISPLAY GENERATED KEY -->
+  <!-- ========================================== -->
+  <div x-show="createdKeyModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" x-cloak>
+    <div class="bg-gray-950 border border-gray-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative">
+      <div class="flex items-center space-x-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-green-950 border border-green-800 flex items-center justify-center font-bold text-green-400 shadow-lg text-lg">
+          ✓
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-white">API Key Generated</h3>
+          <p class="text-xs text-gray-400" x-text="'Key Name: ' + (createdKeyData?.name || '')"></p>
+        </div>
+      </div>
+
+      <div class="p-3.5 rounded-xl bg-yellow-950/40 border border-yellow-800/60 text-yellow-300 text-xs mb-4 flex items-start space-x-2">
+        <span class="text-base leading-none">⚠️</span>
+        <span>Make sure to copy your API key now. For your security, this raw secret will <strong>never be shown again</strong>.</span>
+      </div>
+
+      <div class="space-y-2 mb-6">
+        <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider">Your API Key Token</label>
+        <div class="flex items-center space-x-2">
+          <input type="text"
+                 readonly
+                 :value="createdKeyData?.key || ''"
+                 class="w-full px-3.5 py-2.5 rounded-lg bg-gray-900 border border-gray-700 text-green-400 font-mono text-xs select-all focus:outline-none">
+          <button type="button"
+                  @click="copyCreatedKey(createdKeyData?.key)"
+                  class="px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs whitespace-nowrap shadow transition flex items-center space-x-1.5">
+            <span x-text="keyCopied ? 'Copied! ✓' : 'Copy'"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex justify-end">
+        <button type="button"
+                @click="createdKeyModalOpen = false"
+                class="px-5 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white font-medium text-xs transition">
+          I Have Saved My Key
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: CONFIRM REVOKE KEY -->
+  <!-- ========================================== -->
+  <div x-show="revokeKeyModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" x-cloak>
+    <div class="bg-gray-950 border border-red-900/60 rounded-2xl p-6 max-w-md w-full shadow-2xl relative" @click.away="revokeKeyModalOpen = false">
+      <div class="flex items-center space-x-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-red-950 border border-red-800 flex items-center justify-center font-bold text-red-400 shadow-lg text-lg">
+          ⚠️
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-white">Revoke API Key</h3>
+          <p class="text-xs text-red-400">This action cannot be undone</p>
+        </div>
+      </div>
+
+      <p class="text-sm text-gray-300 mb-6">
+        Are you sure you want to revoke key <strong class="text-white" x-text="keyToRevoke?.name"></strong> (<span class="font-mono text-xs text-indigo-400" x-text="keyToRevoke?.masked_key"></span>)? Any scripts or CLI connections using this key will immediately be rejected.
+      </p>
+
+      <div class="flex items-center justify-end space-x-3">
+        <button type="button" @click="revokeKeyModalOpen = false"
+                class="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium text-xs transition">
+          Cancel
+        </button>
+        <button type="button"
+                @click="submitRevokeKey()"
+                :disabled="revokeKeyLoading"
+                class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-semibold text-xs shadow transition flex items-center space-x-1.5">
+          <span x-show="revokeKeyLoading" class="animate-spin text-xs">⏳</span>
+          <span>Revoke Key</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Client-side SPA Application Logic -->
   <script>
     function relayApp() {
@@ -812,6 +1012,18 @@
         rateLimitSeconds: 0,
         rateLimitTimer: null,
 
+        // API Keys State
+        apiKeys: [],
+        createKeyModalOpen: false,
+        newKeyName: '',
+        createKeyLoading: false,
+        createdKeyModalOpen: false,
+        createdKeyData: null,
+        keyCopied: false,
+        revokeKeyModalOpen: false,
+        keyToRevoke: null,
+        revokeKeyLoading: false,
+
         // Modals & Drawers
         routeDrawerOpen: false,
         routeModalOpen: false,
@@ -828,6 +1040,7 @@
             this.fetchRoutes();
             this.fetchRequests(0);
             this.fetchDLQ();
+            this.fetchAPIKeys();
           }
         },
 
@@ -859,6 +1072,7 @@
               this.fetchRoutes();
               this.fetchRequests(0);
               this.fetchDLQ();
+              this.fetchAPIKeys();
               this.showToast('success', 'Logged in successfully');
             } else if (res.status === 429) {
               const data = await res.json().catch(() => ({}));
@@ -925,6 +1139,7 @@
           if (tab === 'routes') this.fetchRoutes();
           if (tab === 'requests') this.fetchRequests(0);
           if (tab === 'dlq') this.fetchDLQ();
+          if (tab === 'api-keys') this.fetchAPIKeys();
         },
 
         showToast(type, message) {
@@ -1210,6 +1425,88 @@
             }
           } catch (e) {
             this.showToast('error', 'Network error during bulk replay');
+          }
+        },
+
+        // --- API Keys Management ---
+        async fetchAPIKeys() {
+          try {
+            const res = await this.apiFetch('/api/v1/api-keys');
+            if (res.ok) {
+              this.apiKeys = await res.json();
+            }
+          } catch (e) {
+            this.showToast('error', 'Failed to fetch API keys');
+          }
+        },
+
+        openCreateKeyModal() {
+          this.newKeyName = '';
+          this.createKeyModalOpen = true;
+        },
+
+        async submitCreateKey() {
+          this.createKeyLoading = true;
+          try {
+            const res = await this.apiFetch('/api/v1/api-keys', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: this.newKeyName.trim() })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              this.createKeyModalOpen = false;
+              this.createdKeyData = data;
+              this.keyCopied = false;
+              this.createdKeyModalOpen = true;
+              this.fetchAPIKeys();
+              this.showToast('success', 'API key generated!');
+            } else {
+              const errData = await res.json().catch(() => ({}));
+              this.showToast('error', errData.error || 'Failed to generate API key');
+            }
+          } catch (e) {
+            this.showToast('error', 'Network error generating API key');
+          } finally {
+            this.createKeyLoading = false;
+          }
+        },
+
+        copyCreatedKey(text) {
+          if (!text) return;
+          navigator.clipboard.writeText(text);
+          this.keyCopied = true;
+          this.showToast('info', 'API key copied to clipboard!');
+          setTimeout(() => {
+            this.keyCopied = false;
+          }, 2000);
+        },
+
+        openRevokeKeyModal(k) {
+          this.keyToRevoke = k;
+          this.revokeKeyModalOpen = true;
+        },
+
+        async submitRevokeKey() {
+          if (!this.keyToRevoke) return;
+          this.revokeKeyLoading = true;
+          try {
+            const res = await this.apiFetch(`/api/v1/api-keys/${this.keyToRevoke.id}`, {
+              method: 'DELETE'
+            });
+            if (res.ok) {
+              this.showToast('success', `API key "${this.keyToRevoke.name}" revoked`);
+              this.revokeKeyModalOpen = false;
+              this.keyToRevoke = null;
+              this.fetchAPIKeys();
+            } else {
+              const errData = await res.json().catch(() => ({}));
+              this.showToast('error', errData.error || 'Failed to revoke API key');
+            }
+          } catch (e) {
+            this.showToast('error', 'Network error revoking API key');
+          } finally {
+            this.revokeKeyLoading = false;
           }
         }
 
