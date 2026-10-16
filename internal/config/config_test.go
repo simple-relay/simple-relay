@@ -147,4 +147,16 @@ func TestConfig_Validate(t *testing.T) {
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected error for zero drain timeout")
 	}
+
+	cfg = DefaultConfig()
+	cfg.AdminPassword = "short"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for admin password shorter than 10 characters")
+	}
+
+	cfg = DefaultConfig()
+	cfg.AdminPassword = "adminsecret123"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("unexpected error for valid admin password: %v", err)
+	}
 }

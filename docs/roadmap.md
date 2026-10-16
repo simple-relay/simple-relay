@@ -160,9 +160,8 @@
   - Synchronize active dashboard tab state (`routes`, `requests`, `dlq`) with browser URL hash/history.
   - Support deep-linking and browser back/forward navigation for request inspector drawer (`#requests?inspect=<ulid>`).
   - Native browser event handling (`hashchange` / `popstate`) with zero external frontend routing dependencies.
-- [ ] **Admin Password Authentication & CSRF Protection** ([#14](https://github.com/simple-relay/simple-relay/issues/14))
+- [ ] **Admin Password Authentication & Login Rate Limiter** ([#14](https://github.com/simple-relay/simple-relay/issues/14))
   - Protect UI routes with session cookie authenticated against `RELAY_ADMIN_PASSWORD`.
-  - CSRF token validation on all state-mutating requests (Route CRUD, Replay, Purge).
   - Login rate limiter to prevent brute-force attacks.
 - [x] **Storage Retention Cleaner (`internal/engine/cleaner.go`)** ([#15](https://github.com/simple-relay/simple-relay/issues/15))
   - Periodic background worker (hourly/daily).
