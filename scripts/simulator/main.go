@@ -33,12 +33,8 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// 1. Embedded Web UI
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
+	// 1. Embedded Web UI (exact match only via /{$} to prevent ServeMux subtree conflict)
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		data, err := web.WebFS.ReadFile("index.html")
 		if err != nil {
 			http.Error(w, "failed to read embedded ui", http.StatusInternalServerError)
