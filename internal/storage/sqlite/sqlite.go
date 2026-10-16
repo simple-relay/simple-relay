@@ -21,6 +21,7 @@ type DB struct {
 	*RequestRepo
 	*AttemptRepo
 	*RetentionRepo
+	*APIKeyRepo
 }
 
 var _ storage.Storage = (*DB)(nil)
@@ -60,6 +61,7 @@ func Open(dsn string) (*DB, error) {
 	db.RequestRepo = NewRequestRepo(db)
 	db.AttemptRepo = NewAttemptRepo(db)
 	db.RetentionRepo = NewRetentionRepo(db)
+	db.APIKeyRepo = NewAPIKeyRepo(db)
 
 	// Apply WAL and performance pragmas on writer
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -117,4 +119,9 @@ func (db *DB) Close() error {
 		return errWriter
 	}
 	return errReader
+}
+
+// APIKeys returns the API key repository implementation.
+func (db *DB) APIKeys() storage.APIKeyRepository {
+	return db.APIKeyRepo
 }

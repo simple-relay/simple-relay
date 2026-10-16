@@ -60,8 +60,30 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("failed to apply database migrations: %w", err)
 	}
 
+	// Auto-seed initial default API key on cold boot in dev mode if database has zero keys
+	if cfg.AdminPassword == "" {
+		totalKeys, err := db.APIKeys().CountTotalKeys(ctx)
+		if err != nil {
+			logger.Error("failed to query api keys count", "error", err)
+		} else if totalKeys == 0 {
+			rawKey, apiKey, err := api.GenerateRawKey("default")
+			if err != nil {
+				logger.Error("failed to generate default api key", "error", err)
+			} else if err := db.APIKeys().CreateAPIKey(ctx, apiKey); err != nil {
+				logger.Error("failed to persist default api key", "error", err)
+			} else {
+				logger.Info("no API keys found; generated default bootstrap key for dev mode",
+					"name", "default",
+					"key", rawKey,
+					"masked", apiKey.MaskedKey,
+				)
+			}
+		}
+	}
+
 	// Initialize in-memory route registry
 	registry := engine.NewRouteRegistry(db.RouteRepo)
+
 	if err := registry.Init(ctx); err != nil {
 		return fmt.Errorf("failed to initialize route registry: %w", err)
 	}
@@ -134,6 +156,7 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 		RequestRepo:   db.RequestRepo,
 		AttemptRepo:   db.AttemptRepo,
 		WakeFn:        dispatcher.Wake,
+		APIKeyRepo:    db.APIKeys(),
 	})
 
 	srv := &http.Server{

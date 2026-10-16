@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,6 +12,8 @@ import (
 	"time"
 
 	"github.com/simple-relay/simple-relay/internal/config"
+	"github.com/simple-relay/simple-relay/internal/model"
+	"github.com/simple-relay/simple-relay/internal/storage"
 )
 
 func TestHealthzEndpoint(t *testing.T) {
@@ -178,5 +182,169 @@ func TestRouter_AuthMiddleware(t *testing.T) {
 		if rrAuth.Code == http.StatusUnauthorized {
 			t.Fatalf("expected non-401 for %s with valid session cookie, got %d", p, rrAuth.Code)
 		}
+	}
+}
+
+func TestRouter_DualAuth(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	db := setupTestAPIKeysDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	rawKey, apiKey, err := GenerateRawKey("ci-key")
+	if err != nil {
+		t.Fatalf("failed to generate raw key: %v", err)
+	}
+	if err := db.APIKeys().CreateAPIKey(ctx, apiKey); err != nil {
+		t.Fatalf("failed to create api key: %v", err)
+	}
+
+	cfgAuth := config.DefaultConfig()
+	cfgAuth.AdminPassword = "adminpassword123"
+	sessionStore := NewSessionStore(24 * time.Hour)
+
+	router := NewRouter(cfgAuth, logger, RouterOptions{
+		SessionStore: sessionStore,
+		APIKeyRepo:   db.APIKeys(),
+	})
+
+	// 1. Valid X-API-Key should allow access
+	req1 := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	req1.Header.Set("X-API-Key", rawKey)
+	rr1 := httptest.NewRecorder()
+	router.ServeHTTP(rr1, req1)
+	if rr1.Code == http.StatusUnauthorized {
+		t.Fatalf("expected access with valid X-API-Key, got 401")
+	}
+
+	// 2. Valid Authorization: Bearer should allow access
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	req2.Header.Set("Authorization", "Bearer "+rawKey)
+	rr2 := httptest.NewRecorder()
+	router.ServeHTTP(rr2, req2)
+	if rr2.Code == http.StatusUnauthorized {
+		t.Fatalf("expected access with valid Bearer token, got 401")
+	}
+
+	// 3. Invalid API key should return 401
+	req3 := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	req3.Header.Set("X-API-Key", "sr_live_invalidkey")
+	rr3 := httptest.NewRecorder()
+	router.ServeHTTP(rr3, req3)
+	if rr3.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for invalid api key, got %d", rr3.Code)
+	}
+
+	// 4. Revoked API key should return 401
+	if err := db.APIKeys().RevokeAPIKey(ctx, apiKey.ID); err != nil {
+		t.Fatalf("failed to revoke key: %v", err)
+	}
+	req4 := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	req4.Header.Set("X-API-Key", rawKey)
+	rr4 := httptest.NewRecorder()
+	router.ServeHTTP(rr4, req4)
+	if rr4.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for revoked api key, got %d", rr4.Code)
+	}
+
+	// 5. Dev mode (AdminPassword == "") permits unauthenticated access, but rejects invalid API key
+	cfgDev := config.DefaultConfig()
+	cfgDev.AdminPassword = ""
+	routerDev := NewRouter(cfgDev, logger, RouterOptions{
+		APIKeyRepo: db.APIKeys(),
+	})
+
+	reqDevOpen := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	rrDevOpen := httptest.NewRecorder()
+	routerDev.ServeHTTP(rrDevOpen, reqDevOpen)
+	if rrDevOpen.Code == http.StatusUnauthorized {
+		t.Fatalf("expected dev mode open access without credentials, got 401")
+	}
+
+	reqDevBadKey := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	reqDevBadKey.Header.Set("X-API-Key", "sr_live_badkey")
+	rrDevBadKey := httptest.NewRecorder()
+	routerDev.ServeHTTP(rrDevBadKey, reqDevBadKey)
+	if rrDevBadKey.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 in dev mode when invalid key is explicitly sent, got %d", rrDevBadKey.Code)
+	}
+}
+
+func TestRouter_QueueStatsProtected(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	db := setupTestAPIKeysDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	rawKey, apiKey, err := GenerateRawKey("ci-key")
+	if err != nil {
+		t.Fatalf("failed to generate raw key: %v", err)
+	}
+	if err := db.APIKeys().CreateAPIKey(ctx, apiKey); err != nil {
+		t.Fatalf("failed to create api key: %v", err)
+	}
+
+	cfgAuth := config.DefaultConfig()
+	cfgAuth.AdminPassword = "adminpassword123"
+	sessionStore := NewSessionStore(24 * time.Hour)
+
+	router := NewRouter(cfgAuth, logger, RouterOptions{
+		SessionStore: sessionStore,
+		APIKeyRepo:   db.APIKeys(),
+		RequestRepo:  db.RequestRepo,
+	})
+
+	// Unauthenticated request to /api/v1/queue/stats should be rejected with 401
+	reqUnauth := httptest.NewRequest(http.MethodGet, "/api/v1/queue/stats", nil)
+	rrUnauth := httptest.NewRecorder()
+	router.ServeHTTP(rrUnauth, reqUnauth)
+	if rrUnauth.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unauthenticated /api/v1/queue/stats, got %d", rrUnauth.Code)
+	}
+
+	// Authenticated request to /api/v1/queue/stats should be allowed
+	reqAuth := httptest.NewRequest(http.MethodGet, "/api/v1/queue/stats", nil)
+	reqAuth.Header.Set("X-API-Key", rawKey)
+	rrAuth := httptest.NewRecorder()
+	router.ServeHTTP(rrAuth, reqAuth)
+	if rrAuth.Code == http.StatusUnauthorized {
+		t.Fatalf("expected authenticated access for /api/v1/queue/stats, got 401")
+	}
+}
+
+type failingAPIKeyRepo struct {
+	storage.APIKeyRepository
+	err error
+}
+
+func (m *failingAPIKeyRepo) GetAPIKeyByHash(ctx context.Context, keyHash string) (*model.APIKey, error) {
+	return nil, m.err
+}
+
+func TestRouter_InternalDBError_Returns500(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfgAuth := config.DefaultConfig()
+	cfgAuth.AdminPassword = "adminpassword123"
+
+	failingRepo := &failingAPIKeyRepo{err: errors.New("sqlite connection lost / disk I/O error")}
+	router := NewRouter(cfgAuth, logger, RouterOptions{
+		APIKeyRepo: failingRepo,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	req.Header.Set("X-API-Key", "sr_live_testkey123")
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 Internal Server Error on database failure, got %d", rr.Code)
+	}
+
+	var body map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if body["error"] != "Internal database error during authentication" {
+		t.Fatalf("unexpected error response: %s", body["error"])
 	}
 }

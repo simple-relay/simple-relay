@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/simple-relay/simple-relay/internal/storage"
 )
 
 // SessionStore manages active admin sessions in memory.
@@ -298,6 +300,7 @@ type AuthHandler struct {
 	adminPassword string
 	sessionStore  *SessionStore
 	rateLimiter   *RateLimiter
+	apiKeyRepo    storage.APIKeyRepository
 	logger        *slog.Logger
 }
 
@@ -314,7 +317,23 @@ func NewAuthHandler(adminPassword string, sessionStore *SessionStore, rateLimite
 	}
 }
 
+// WithAPIKeyRepo sets the API key repository for credential verification.
+func (h *AuthHandler) WithAPIKeyRepo(repo storage.APIKeyRepository) *AuthHandler {
+	h.apiKeyRepo = repo
+	return h
+}
+
 func (h *AuthHandler) isAuthenticated(r *http.Request) bool {
+	if h.apiKeyRepo != nil {
+		if key := extractAPIKey(r); key != "" {
+			hash := HashKey(key)
+			if apiKey, err := h.apiKeyRepo.GetAPIKeyByHash(r.Context(), hash); err == nil && apiKey != nil && apiKey.RevokedAt == nil && subtle.ConstantTimeCompare([]byte(apiKey.KeyHash), []byte(hash)) == 1 {
+				return true
+			}
+			return false
+		}
+	}
+
 	if h.adminPassword == "" {
 		return true
 	}

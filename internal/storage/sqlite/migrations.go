@@ -58,6 +58,15 @@ CREATE TABLE IF NOT EXISTS attempts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_attempts_request_id ON attempts (request_id);
+
+CREATE TABLE IF NOT EXISTS api_keys (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE,
+    masked_key TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    revoked_at DATETIME NULL
+);
 `
 
 // Migrate executes initial schema creation on SQLite writer connection.
