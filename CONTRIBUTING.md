@@ -65,6 +65,8 @@ To simulate real-world webhook traffic (e.g., Stripe, GitHub, query/header auth)
 ```bash
 # Start the standalone simulator server and embedded Web UI (default: http://localhost:9099)
 go run ./scripts/simulator
+# Or via Makefile:
+make simulate
 ```
 
 ---

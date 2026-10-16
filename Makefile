@@ -1,4 +1,4 @@
-.PHONY: build test race run debug debug-dlv clean tidy fmt check-fmt check-tidy lint check help install-hooks
+.PHONY: build test race run debug debug-dlv simulate clean tidy fmt check-fmt check-tidy lint check help install-hooks
 
 BINARY_NAME=relay
 BIN_DIR=bin
@@ -8,6 +8,8 @@ MAIN_SRC=./cmd/relay
 PORT ?= 8088
 DB ?= relay.db
 LOG_LEVEL ?= debug
+SIMULATOR_PORT ?= 9099
+RELAY_URL ?= http://localhost:8080
 
 help: ## Show list of available make targets
 	@echo "Available targets:"
@@ -52,6 +54,9 @@ debug: ## Run relay service in debug mode (log-level=debug, configurable via POR
 
 debug-dlv: ## Run relay service under Delve debugger on :2345 (headless)
 	dlv debug $(MAIN_SRC) --headless --listen=:2345 --api-version=2 --accept-multiclient -- -port $(PORT) -db $(DB) -log-level $(LOG_LEVEL)
+
+simulate: ## Run E2E traffic & webhook simulator (UI at :9099)
+	go run ./scripts/simulator -port $(SIMULATOR_PORT) -relay-url $(RELAY_URL)
 
 clean: ## Clean build artifacts, test coverages, and local databases
 	rm -rf $(BIN_DIR) coverage.out coverage.html *.db *.db-shm *.db-wal
