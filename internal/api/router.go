@@ -61,7 +61,7 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 		rateLimiter.StartAutoCleanup(opt.Context, 10*time.Minute)
 	}
 
-	authHandler := NewAuthHandler(cfg.AdminPassword, sessionStore, rateLimiter, logger)
+	authHandler := NewAuthHandler(cfg.AdminPassword, sessionStore, rateLimiter, logger).WithAPIKeyRepo(opt.APIKeyRepo)
 	mux.HandleFunc("GET /api/v1/auth/status", authHandler.Status)
 	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
 	mux.HandleFunc("POST /api/v1/auth/logout", authHandler.Logout)
@@ -159,38 +159,89 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 		mux.HandleFunc("DELETE /api/v1/api-keys/{id}", apiKeysHandler.RevokeKey)
 	}
 
-	handler := authMiddleware(cfg.AdminPassword, sessionStore, mux)
-
+	handler := authMiddleware(cfg.AdminPassword, sessionStore, opt.APIKeyRepo, mux)
 
 	// Wrap mux with standard logging & panic recovery middleware
 	return loggingMiddleware(logger, recoveryMiddleware(logger, handler))
 }
 
-func authMiddleware(adminPassword string, sessionStore *SessionStore, next http.Handler) http.Handler {
-	if adminPassword == "" {
-		return next
-	}
+func authMiddleware(adminPassword string, sessionStore *SessionStore, apiKeyRepo storage.APIKeyRepository, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		if strings.HasPrefix(path, "/api/v1/routes") ||
-			strings.HasPrefix(path, "/api/v1/requests") ||
-			strings.HasPrefix(path, "/api/v1/dlq") ||
-			((r.Method == http.MethodGet || r.Method == http.MethodHead) && strings.HasPrefix(path, "/api/v1/jobs/")) {
-			cookie, err := r.Cookie("relay_session")
-			if err != nil || cookie == nil || !sessionStore.Validate(cookie.Value) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				_ = json.NewEncoder(w).Encode(map[string]string{
-					"error": "Unauthorized: admin session required",
-				})
-				return
+		if !isProtectedPath(r.Method, path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// 1. Check API Key header if provided
+		if key := extractAPIKey(r); key != "" {
+			if apiKeyRepo != nil {
+				hash := HashKey(key)
+				apiKey, err := apiKeyRepo.GetAPIKeyByHash(r.Context(), hash)
+				if err == nil && apiKey != nil && apiKey.RevokedAt == nil {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error": "Unauthorized: invalid API key",
+			})
+			return
+		}
+
+		// 2. Check session cookie if active
+		if sessionStore != nil {
+			if cookie, err := r.Cookie("relay_session"); err == nil && cookie != nil {
+				if sessionStore.Validate(cookie.Value) {
+					next.ServeHTTP(w, r)
+					return
+				}
 			}
 		}
-		next.ServeHTTP(w, r)
+
+		// 3. Dev Mode: If admin password is empty, unauthenticated access is permitted
+		if adminPassword == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// 4. Protected Mode without valid credentials
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "Unauthorized: API key or admin session required",
+		})
 	})
 }
 
+func extractAPIKey(r *http.Request) string {
+	if key := r.Header.Get("X-API-Key"); key != "" {
+		return strings.TrimSpace(key)
+	}
+	auth := r.Header.Get("Authorization")
+	if strings.HasPrefix(auth, "Bearer ") {
+		return strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
+	}
+	return ""
+}
+
+func isProtectedPath(method, path string) bool {
+	if strings.HasPrefix(path, "/api/v1/routes") ||
+		strings.HasPrefix(path, "/api/v1/requests") ||
+		strings.HasPrefix(path, "/api/v1/dlq") ||
+		strings.HasPrefix(path, "/api/v1/api-keys") {
+		return true
+	}
+	if (method == http.MethodGet || method == http.MethodHead) && strings.HasPrefix(path, "/api/v1/jobs/") {
+		return true
+	}
+	return false
+}
+
 func loggingMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
