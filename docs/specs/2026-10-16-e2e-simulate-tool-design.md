@@ -62,29 +62,33 @@ The **E2E Simulation Tool** (`scripts/simulator`) is an independent, zero-depend
 
 ### 3.1 High-Level Architecture Flow
 
-```text
-               +-------------------------------------------------------------+
-               |                    Browser: Simulate UI                     |
-               |                                                             |
-               |   [Sender Panel]                     [Live Receiver Panel]  |
-               +---------+-----------------------------------+---------------+
-                         |                                   ^
-            1. POST      |                                   | 5. WebSocket
-            /api/send    |                                   |    Event Stream
-            (same-origin)|                                   |    (/ws)
-                         v                                   |
-               +---------+-----------------------------------+-----------+
-               |                  Simulate Server (:9099)                |
-               |   [Dispatch Proxy]               [Mock Destination]     |
-               +---------+-----------------------------------+-----------+
-                         |                                   ^
-            2. HTTP POST |                                   | 4. Forward
-            (Direct Go   |                                   |    to Destination
-             Client)     v                                   |    (X-Relay-ID)
-              +----------+---------+                         |
-              |    Simple Relay    |-------------------------+
-              |   (:8080 default)  | 3. Persist to WAL & Dispatch
-              +--------------------+
+```mermaid
+flowchart TD
+    subgraph Browser["Browser: Simulate UI"]
+        Sender["Sender Panel<br/>(Templates, Headers, Body)"]
+        Receiver["Live Receiver Panel<br/>(Real-time Inspection)"]
+    end
+
+    subgraph Simulator["Simulate Server (:9099)"]
+        Proxy["Dispatch Proxy<br/>(POST /api/send)"]
+        MockDest["Mock Destination<br/>(ANY /destination)"]
+        WSHub["WebSocket Hub<br/>(/ws)"]
+    end
+
+    subgraph Daemon["Simple Relay (:8080)"]
+        Ingest["Inbound Ingestion<br/>(/api/v1/webhook/:route)"]
+        WAL[("SQLite WAL")]
+        WorkerPool["Delivery Worker Pool"]
+    end
+
+    %% Flow connections
+    Sender -- "1. POST /api/send (Same-origin)" --> Proxy
+    Proxy -- "2. Direct HTTP Call (Go Client)" --> Ingest
+    Ingest --> WAL
+    WAL --> WorkerPool
+    WorkerPool -- "3. Forward to Destination (X-Relay-Request-ID)" --> MockDest
+    MockDest -- "4. Broadcast Event" --> WSHub
+    WSHub -- "5. WebSocket Stream (Live Events)" --> Receiver
 ```
 
 ### 3.2 Design Decision: Dispatch Proxy (`POST /api/send`) vs. Direct Browser Fetch
