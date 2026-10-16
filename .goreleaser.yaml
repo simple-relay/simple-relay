@@ -74,7 +74,7 @@ dockers:
       - "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:latest-amd64"
     dockerfile: Dockerfile
     use: buildx
-    builds:
+    ids:
       - simple-relay
       - relay-cli
     build_flag_templates:
@@ -90,7 +90,7 @@ dockers:
       - "ghcr.io/{{ .Env.REPO_OWNER_LOWER }}/simple-relay:latest-arm64"
     dockerfile: Dockerfile
     use: buildx
-    builds:
+    ids:
       - simple-relay
       - relay-cli
     build_flag_templates:
