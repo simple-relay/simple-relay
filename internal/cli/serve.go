@@ -78,6 +78,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 	if cmd.Flags().Changed("workers") {
 		cfg.WorkerConcurrency, _ = cmd.Flags().GetInt("workers")
+		// If dispatcher-buffer wasn't explicitly set via CLI or environment,
+		// reset buffer to 0 so Validate() recalculates 2 * WorkerConcurrency dynamically.
+		if !cmd.Flags().Changed("dispatcher-buffer") && os.Getenv("RELAY_DISPATCHER_BUFFER") == "" {
+			cfg.DispatcherBuffer = 0
+		}
 	}
 	if cmd.Flags().Changed("dispatcher-buffer") {
 		cfg.DispatcherBuffer, _ = cmd.Flags().GetInt("dispatcher-buffer")
@@ -107,7 +112,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		"build_date", version.BuildDate,
 	)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	if err := RunServer(ctx, cfg, logger); err != nil && !errors.Is(err, http.ErrServerClosed) {

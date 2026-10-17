@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -84,14 +85,38 @@ func getEnvOrDefault(key, fallback string) string {
 	return fallback
 }
 
+var knownServerFlags = map[string]bool{
+	"host":               true,
+	"port":               true,
+	"db":                 true,
+	"log-level":          true,
+	"workers":            true,
+	"dispatcher-buffer":  true,
+	"dispatcher-poll-ms": true,
+	"cleaner-interval":   true,
+	"drain-timeout":      true,
+}
+
 func normalizeArgs(args []string) []string {
 	res := make([]string, len(args))
-	for i, arg := range args {
-		if len(arg) > 2 && arg[0] == '-' && arg[1] != '-' {
-			res[i] = "-" + arg
-		} else {
-			res[i] = arg
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		// Stop normalizing after the POSIX end-of-flags delimiter "--"
+		if arg == "--" {
+			copy(res[i:], args[i:])
+			break
 		}
+
+		// Only rewrite single-dash aliases for known server flags (e.g. -host, -port, -db)
+		if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") && len(arg) > 2 {
+			flagPart := strings.TrimPrefix(arg, "-")
+			flagName := strings.SplitN(flagPart, "=", 2)[0]
+			if knownServerFlags[flagName] {
+				res[i] = "-" + arg
+				continue
+			}
+		}
+		res[i] = arg
 	}
 	return res
 }
