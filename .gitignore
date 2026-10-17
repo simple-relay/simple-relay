@@ -28,4 +28,5 @@ coverage.html
 Thumbs.db
 *.loc.*
 .superpowers/
+.local/
 

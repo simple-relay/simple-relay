@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -261,5 +262,49 @@ func TestGetDefaultTemplates(t *testing.T) {
 
 	if !foundStripe || !foundGitHub || !foundQuery {
 		t.Fatalf("missing expected template presets: stripe=%v github=%v query=%v", foundStripe, foundGitHub, foundQuery)
+	}
+}
+
+func TestStaticAssetsAndWebUI(t *testing.T) {
+	store := NewEventStore(10)
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	mux := SetupMux(store, hub, http.DefaultClient, "http://localhost:8080")
+
+	// 1. Root UI GET /
+	req := httptest.NewRequest("GET", "/", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /, got %d", rr.Code)
+	}
+	if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Fatalf("expected text/html content type, got %s", ct)
+	}
+
+	// 2. Static CSS GET /ui/static/css/tailwind.min.css
+	req = httptest.NewRequest("GET", "/ui/static/css/tailwind.min.css", nil)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /ui/static/css/tailwind.min.css, got %d", rr.Code)
+	}
+
+	// 3. Static JS GET /ui/static/js/alpine.min.js
+	req = httptest.NewRequest("GET", "/ui/static/js/alpine.min.js", nil)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /ui/static/js/alpine.min.js, got %d", rr.Code)
+	}
+
+	// 4. Static SVG GET /ui/static/logo.svg
+	req = httptest.NewRequest("GET", "/ui/static/logo.svg", nil)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /ui/static/logo.svg, got %d", rr.Code)
 	}
 }
