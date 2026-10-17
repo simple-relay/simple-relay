@@ -305,10 +305,8 @@ While Simple Relay is designed as a standalone single-binary application, produc
 ```text
 simple-relay/
 ├── cmd/
-│   ├── relay/
-│   │   └── main.go                 # App entry point, flags, graceful shutdown
-│   └── relay-cli/
-│       └── main.go                 # CLI inspection and operator triage tool
+│   └── relay/
+│       └── main.go                 # App entry point; delegates to internal/cli (serve default, operator subcommands)
 ├── internal/
 │   ├── api/                        # HTTP routers, middlewares, handlers
 │   │   ├── handler_webhook.go      # Inbound webhook ingestion

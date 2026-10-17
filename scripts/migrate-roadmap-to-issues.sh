@@ -163,8 +163,8 @@ Automated release management."
 ### Why & Context
 Self-hosted update notification. Reference: docs/specs/2026-10-09-version-check-design.md."
 
-    "Task 0.3.1|Task 0.3.1: CLI inspection binary (cmd/relay-cli)|v0.4.0 - Utility & Observability Extensions|type:feat,status:ready|### What needs to be done?
-- CLI tool (\`cmd/relay-cli\`) for inspecting relay health, routes, and queue depth.
+    "Task 0.3.1|Task 0.3.1: CLI inspection subcommands (cmd/relay)|v0.4.0 - Utility & Observability Extensions|type:feat,status:ready|### What needs to be done?
+- CLI operator subcommands (\`cmd/relay\`) for inspecting relay health, routes, and queue depth.
 
 ### Why & Context
 Terminal-based operational troubleshooting."

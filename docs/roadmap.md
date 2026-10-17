@@ -212,9 +212,10 @@
 
 ### Phase 4 — CLI, Observability & Alerting
 
-- [x] **CLI Inspection Binary (`cmd/relay-cli`)** ([#21](https://github.com/simple-relay/simple-relay/issues/21))
-  - Command-line tool to inspect relay health, active routes, and queue depth.
-  - Query in-flight jobs and Dead Letter Queue directly from terminal.
+- [x] **CLI Inspection Binary (embedded in `cmd/relay`)** ([#21](https://github.com/simple-relay/simple-relay/issues/21), [#60](https://github.com/simple-relay/simple-relay/issues/60))
+  - Operator CLI subcommands (`health`, `status`, `queue`, `dlq`) embedded directly into the server binary via `internal/cli`.
+  - `relay` (no args) starts the daemon; `relay health`, `relay queue`, `relay dlq list` etc. are operator inspection commands.
+  - Single static binary (`CGO_ENABLED=0`); `cobra`/`pflag` permitted as compile-time deps for CLI ergonomics.
 - [x] **Webhook Alert Notifications on DLQ Threshold Breaches** ([#22]
   - Push alert notifications to external webhooks (Slack, Discord, Email) when DLQ item count exceeds configured threshold.
 - [x] **API Key Authentication for Programmatic Management** ([#23](https://github.com/simple-relay/simple-relay/issues/23))

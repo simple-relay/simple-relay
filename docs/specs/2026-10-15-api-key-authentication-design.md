@@ -2,7 +2,7 @@
 
 - **Target Issue:** [#23](https://github.com/simple-relay/simple-relay/issues/23) (Roadmap Phase 4)
 - **Prerequisite PR:** [#50](https://github.com/simple-relay/simple-relay/pull/50) (Admin Password Session Auth & Login Rate Limiter)
-- **Related Issue & PR:** [#21](https://github.com/simple-relay/simple-relay/issues/21), [#62](https://github.com/simple-relay/simple-relay/pull/62) (CLI Inspection Binary `cmd/relay-cli`)
+- **Related Issue & PR:** [#21](https://github.com/simple-relay/simple-relay/issues/21), [#60](https://github.com/simple-relay/simple-relay/issues/60), [#62](https://github.com/simple-relay/simple-relay/pull/62) (CLI operator subcommands embedded in `relay` binary)
 - **Author:** `pmlonng`
 - **Date:** 2026-10-15
 - **Status:** Approved for Implementation Planning
@@ -14,7 +14,7 @@
 ### 1.1 The "Why"
 Simple Relay provides reliable HTTP webhook ingestion, asynchronous job retries, and synchronous relay proxying. Administrative operations (managing routes, inspecting request payloads and attempt history, dumping job details, and triggering DLQ re-deliveries) require protection against unauthorized access in production deployments.
 
-While PR #50 introduces browser cookie-based session authentication for the Web UI (authenticated against `RELAY_ADMIN_PASSWORD`), machine-to-machine integrations (e.g., CI/CD pipelines, automated recovery scripts, and the `relay-cli` binary in #21 / #62) cannot rely on ambient browser cookies or interactive HTML login forms.
+While PR #50 introduces browser cookie-based session authentication for the Web UI (authenticated against `RELAY_ADMIN_PASSWORD`), machine-to-machine integrations (e.g., CI/CD pipelines, automated recovery scripts, and the `relay` CLI subcommands in #21 / #62) cannot rely on ambient browser cookies or interactive HTML login forms.
 
 API Key Authentication provides durable, revocable cryptographic tokens allowing headless CLI tools and automated services to securely manage routes, query telemetry, and trigger operational workflows.
 
@@ -27,7 +27,7 @@ API Key Authentication provides durable, revocable cryptographic tokens allowing
 - **One-Way Cryptographic Hashing:** Never store raw API keys in SQLite. Store strictly one-way SHA-256 hashes (`key_hash`).
 - **Masked Key Representation:** Store a human-readable hint field `masked_key` in format `AAA*****BBBB` (e.g., `sr_live_9f83*****a3b1`) allowing operators to identify keys in lists without credential exposure.
 - **Harmonized Dual Authentication Pipeline:** Integrate cleanly with PR #50:
-  - When `RELAY_ADMIN_PASSWORD` is unset (`""`): Dev mode is active. Management endpoints remain open, allowing local development, testing, and zero-config Web UI / `relay-cli` usage.
+  - When `RELAY_ADMIN_PASSWORD` is unset (`""`): Dev mode is active. Management endpoints remain open, allowing local development, testing, and zero-config Web UI / `relay` CLI usage.
   - When `RELAY_ADMIN_PASSWORD` is configured: Authentication is strictly enforced on all administrative endpoints. Access is granted if the request carries **either** a valid API key (`X-API-Key: <key>` or `Authorization: Bearer <key>`) **or** an active admin session cookie (`relay_session`).
   - If credentials are provided (API key header or session cookie), they are always validated for correctness regardless of dev mode.
 - **Cold Boot Auto-Seeding:** If the database contains zero API keys (`COUNT(*) == 0`) on initial startup, automatically generate a default key named `default`, log its raw token once to server logs (`slog.Info`), and persist its hash and masked representation to SQLite.
@@ -237,7 +237,7 @@ During daemon initialization in `cmd/relay/main.go`:
      ```
      2026/10/15 05:00:00 INFO no API keys found; generated default bootstrap key name=default key=sr_live_... masked=sr_live_...
      ```
-   - This ensures immediate headless usability by `relay-cli` without manual database manipulation or deadlocks.
+   - This ensures immediate headless usability by `relay` CLI subcommands without manual database manipulation or deadlocks.
 4. If `total > 0`:
    - Seeding is skipped, preserving intentional key revocations across container or process restarts.
 
@@ -259,14 +259,13 @@ During daemon initialization in `cmd/relay/main.go`:
    - Verify unauthenticated access allowed in Dev Mode (`RELAY_ADMIN_PASSWORD == ""`).
    - Verify public endpoints remain accessible without auth headers.
 3. **End-to-End CLI Interoperability Testing:**
-   - Execute `relay-cli` commands (`health`, `queue`, `dlq list`) with `--api-key` pointing to active key under protected mode.
+   - Execute `relay` commands (`health`, `queue`, `dlq list`) with `--api-key` pointing to active key under protected mode.
    - Verify rejection with exit code 1 / `ErrUnauthorized` when invalid key is provided.
-   - Verify `relay-cli` executes cleanly without `--api-key` in Dev Mode.
+   - Verify `relay` CLI executes cleanly without `--api-key` in Dev Mode.
 4. **Standard Verification Matrix:**
    - `go test -v ./...`
    - `go test -race ./...`
    - `CGO_ENABLED=0 go build -o /dev/null ./cmd/relay`
-   - `CGO_ENABLED=0 go build -o /dev/null ./cmd/relay-cli`
 
 ---
 

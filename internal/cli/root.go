@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -84,6 +85,42 @@ func getEnvOrDefault(key, fallback string) string {
 	return fallback
 }
 
+var knownServerFlags = map[string]bool{
+	"host":               true,
+	"port":               true,
+	"db":                 true,
+	"log-level":          true,
+	"workers":            true,
+	"dispatcher-buffer":  true,
+	"dispatcher-poll-ms": true,
+	"cleaner-interval":   true,
+	"drain-timeout":      true,
+}
+
+func normalizeArgs(args []string) []string {
+	res := make([]string, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		// Stop normalizing after the POSIX end-of-flags delimiter "--"
+		if arg == "--" {
+			copy(res[i:], args[i:])
+			break
+		}
+
+		// Only rewrite single-dash aliases for known server flags (e.g. -host, -port, -db)
+		if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") && len(arg) > 2 {
+			flagPart := strings.TrimPrefix(arg, "-")
+			flagName := strings.SplitN(flagPart, "=", 2)[0]
+			if knownServerFlags[flagName] {
+				res[i] = "-" + arg
+				continue
+			}
+		}
+		res[i] = arg
+	}
+	return res
+}
+
 // NewRootCmd initializes the root Cobra command and its persistent flags.
 func NewRootCmd() *cobra.Command {
 	opts := &GlobalOptions{
@@ -99,11 +136,14 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:           "relay-cli",
-		Short:         "Simple Relay command-line inspection and operational management tool",
-		Long:          "relay-cli enables operators and automated pipelines to inspect health, monitor queue depth, and triage/replay Dead Letter Queue messages.",
+		Use:   "relay",
+		Short: "Simple Relay — one binary, no infrastructure, reliable HTTP delivery",
+		Long: "relay starts the daemon by default. Use subcommands to inspect health, " +
+			"monitor queue depth, and triage Dead Letter Queue messages without browser access.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Default behavior: start the server when no subcommand is provided.
+		RunE: runServe,
 		PersistentPreRun: func(c *cobra.Command, args []string) {
 			c.SetContext(contextWithOptions(c.Context(), opts))
 		},
@@ -114,7 +154,12 @@ func NewRootCmd() *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&opts.Output, "output", "o", opts.Output, "Output format: table or json (env: RELAY_OUTPUT)")
 	cmd.PersistentFlags().DurationVar(&opts.Timeout, "timeout", opts.Timeout, "HTTP client timeout (env: RELAY_TIMEOUT)")
 
+	// Register server daemon flags for default root execution
+	var serverOpts ServerOptions
+	addServerFlags(cmd, &serverOpts)
+
 	// Register subcommands
+	cmd.AddCommand(newServeCmd())
 	cmd.AddCommand(newHealthCmd())
 	cmd.AddCommand(newStatusCmd())
 	cmd.AddCommand(newQueueCmd())
@@ -126,6 +171,7 @@ func NewRootCmd() *cobra.Command {
 // Execute runs the default root command attached to os.Stdout and os.Stderr.
 func Execute() error {
 	cmd := NewRootCmd()
+	cmd.SetArgs(normalizeArgs(os.Args[1:]))
 	err := cmd.Execute()
 	if err != nil {
 		var ec ExitCodeError
@@ -144,7 +190,7 @@ func Execute() error {
 // ExecuteCommand executes root command with custom args and IO buffers (for tests).
 func ExecuteCommand(args []string, out, errOut io.Writer) error {
 	cmd := NewRootCmd()
-	cmd.SetArgs(args)
+	cmd.SetArgs(normalizeArgs(args))
 	cmd.SetOut(out)
 	cmd.SetErr(errOut)
 	return cmd.Execute()

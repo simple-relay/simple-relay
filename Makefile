@@ -31,9 +31,8 @@ check-tidy: ## Check go.mod and go.sum are tidy and committed
 lint: ## Run golangci-lint
 	@PATH="$$(go env GOPATH)/bin:$$PATH" golangci-lint run ./...
 
-build: ## Build static binaries without CGO (CGO_ENABLED=0)
+build: ## Build static binary without CGO (CGO_ENABLED=0)
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_SRC)
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/relay-cli ./cmd/relay-cli
 
 test: ## Run all test suites
 	go test -v ./...

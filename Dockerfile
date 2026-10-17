@@ -6,7 +6,6 @@ RUN apk --no-cache add ca-certificates tzdata \
 
 WORKDIR /app
 COPY simple-relay /usr/local/bin/simple-relay
-COPY relay-cli /usr/local/bin/relay-cli
 RUN ln -s /usr/local/bin/simple-relay /usr/local/bin/relay
 
 USER 10001:10001
