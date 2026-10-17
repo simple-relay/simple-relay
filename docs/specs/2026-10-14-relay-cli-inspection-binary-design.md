@@ -1,4 +1,4 @@
-# CLI Inspection Binary (`cmd/relay-cli`) Design Specification
+# CLI Inspection Subcommands (`cmd/relay`) Design Specification
 
 - **Target Issue:** [#21](https://github.com/simple-relay/simple-relay/issues/21) (Roadmap Phase 4)
 - **Dependency Issue:** [#60](https://github.com/simple-relay/simple-relay/issues/60) (Permit `spf13/cobra` for tooling binaries)
@@ -16,7 +16,7 @@ Simple Relay is deployed as a standalone, self-hosted HTTP reliability layer in 
 1. Accessing the embedded Web UI (`/ui/`), which is impractical in headless, bastion, or private VPC environments without port-forwarding.
 2. Manually crafting cURL requests against REST API endpoints, which is cumbersome and prone to operator error during production incident triage.
 
-`relay-cli` provides an ergonomic, Unix-friendly command-line binary (`cmd/relay-cli`) enabling DevOps engineers and SREs to inspect health, monitor queue depth, diagnose failed jobs, and trigger Dead Letter Queue (DLQ) re-deliveries directly from their terminal or automated scripts.
+`relay` provides ergonomic, Unix-friendly command-line subcommands directly inside the single binary (`cmd/relay`) enabling DevOps engineers and SREs to inspect health, monitor queue depth, diagnose failed jobs, and trigger Dead Letter Queue (DLQ) re-deliveries directly from their terminal or automated scripts.
 
 ---
 
@@ -30,7 +30,7 @@ Simple Relay is deployed as a standalone, self-hosted HTTP reliability layer in 
 - **Auth-Ready Transport:** Support `--api-key` and `RELAY_API_KEY` out of the box, forwarding `X-API-Key` headers and handling HTTP `401 Unauthorized` with actionable diagnostic messages.
 
 ### 2.2 Non-Goals
-- **Zero Server Changes (Pure Client):** `cmd/relay-cli` functions 100% as a client against existing daemon endpoints. No modifications to `cmd/relay`, `internal/api`, or `internal/storage` are permitted in this task.
+- **Zero Server Changes (Pure Client Mode for Subcommands):** Subcommands function as an HTTP client against existing daemon endpoints. No modifications to `internal/api` or `internal/storage` are required.
 - **Configuration CRUD in v1:** Route creation, updates, and deletions remain managed via YAML configuration file or Web UI in this initial milestone.
 - **Direct SQLite File Access:** CLI will **never** read or write directly to `relay.db`. All interactions strictly pass through the daemon's REST API.
 
@@ -48,7 +48,7 @@ Simple Relay is deployed as a standalone, self-hosted HTTP reliability layer in 
 
 ### 3.2 CLI Framework & Dependencies
 - **Framework:** `github.com/spf13/cobra` (v1.8.1+) and `github.com/spf13/pflag` (as tracked in [#60](https://github.com/simple-relay/simple-relay/issues/60)).
-- **Boundary Separation:** The core daemon (`cmd/relay`) retains strict zero-dependency HTTP routing, while auxiliary operator binaries (`cmd/relay-cli`) leverage Cobra for POSIX flags, command hierarchies, shell autocompletion, and validation.
+- **Single Binary Architecture:** Embedded directly into the single `cmd/relay` binary. Running `relay` without subcommands defaults to starting the server daemon (`serve`), while operator subcommands provide POSIX flags, command hierarchies, shell autocompletion, and validation.
 - **Static Binary Compatibility:** Must compile with `CGO_ENABLED=0` to preserve single-binary distribution.
 
 ---
@@ -74,7 +74,8 @@ Simple Relay is deployed as a standalone, self-hosted HTTP reliability layer in 
 ### 4.3 Subcommand Specifications
 
 ```text
-relay-cli
+relay
+├── serve (default daemon mode)
 ├── health (alias: status)
 ├── queue
 └── dlq
@@ -84,7 +85,7 @@ relay-cli
     └── replay-all
 ```
 
-#### 4.3.1 `relay-cli health` (alias: `status`)
+#### 4.3.1 `relay health` (alias: `status`)
 - **API Target:** `GET /healthz`
 - **Description:** Verifies server responsiveness and round-trip latency.
 - **Output (Table):**
@@ -94,7 +95,7 @@ relay-cli
   ```
 - **Exit Code:** `0` if `status == "ok"`, `2` if non-200 or status != "ok", `1` if connection refused.
 
-#### 4.3.2 `relay-cli queue`
+#### 4.3.2 `relay queue`
 - **Pure Client Metric Calculation:**
   - Queries `GET /api/v1/requests?status=pending&limit=1` -> reads response `.total` as `PendingCount`.
   - Queries `GET /api/v1/requests?status=processing&limit=1` -> reads response `.total` as `InFlightCount`.
@@ -108,7 +109,7 @@ relay-cli
   12             10         2            HEALTHY
   ```
 
-#### 4.3.3 `relay-cli dlq list`
+#### 4.3.3 `relay dlq list`
 - **API Target:** `GET /api/v1/dlq?limit=<limit>`
 - **Route Name Resolution (Pure Client):**
   - Fetches `GET /api/v1/routes` to build an in-memory lookup map (`route_id -> route_name`).
@@ -123,14 +124,14 @@ relay-cli
   01ja2b3c4d5e6f7g8h9j0k1m2p  slack-events      3           2026-10-14 13:50:22     429 Too Many Requests: rate limited
   ```
 
-#### 4.3.4 `relay-cli dlq inspect <request_id>`
+#### 4.3.4 `relay dlq inspect <request_id>`
 - **API Target:** `GET /api/v1/requests/<request_id>`
 - **Description:** Shows comprehensive job metadata, payload preview, and attempt history breakdown.
 - **Output (Table):**
   - Section 1: Request Metadata (ID, Route, Status, Created At, Destination).
   - Section 2: Attempt History table (`#`, `Attempted At`, `Status Code`, `Duration`, `Error`).
 
-#### 4.3.5 `relay-cli dlq replay <request_id>`
+#### 4.3.5 `relay dlq replay <request_id>`
 - **API Target:** `POST /api/v1/dlq/<request_id>/replay`
 - **Description:** Immediately transitions the specified DLQ request back to `pending` and wakes the dispatcher.
 - **Output:**
@@ -138,7 +139,7 @@ relay-cli
   Successfully requeued request 01ja2b3c4d5e6f7g8h9j0k1m2n for delivery.
   ```
 
-#### 4.3.6 `relay-cli dlq replay-all`
+#### 4.3.6 `relay dlq replay-all`
 - **API Target:** `POST /api/v1/dlq/replay-all`
 - **Flags:**
   - `-y, --yes`: Bypass interactive confirmation.
@@ -150,7 +151,7 @@ relay-cli
     `Error: non-interactive terminal detected. Must specify --yes (-y) to confirm bulk replay.`
 - **Client Chunked Pagination Loop (Server Cap Compliance):**
   - The server caps each replay call at `1,000` items (`limit = 1000`).
-  - If total items to replay > 1,000, `relay-cli` executes requests in chunks with `{"limit": 1000}` until all items are requeued, displaying incremental progress.
+  - If total items to replay > 1,000, `relay` executes requests in chunks with `{"limit": 1000}` until all items are requeued, displaying incremental progress.
 - **Output:**
   ```text
   Successfully requeued 142 DLQ requests for delivery.
@@ -163,13 +164,12 @@ relay-cli
 ```text
 simple-relay/
 ├── cmd/
-│   ├── relay/
-│   │   └── main.go                 # Core daemon entry point
-│   └── relay-cli/
-│       └── main.go                 # Thin wrapper invoking cli.Execute()
+│   └── relay/
+│       └── main.go                 # App entry point, delegates to cli.Execute()
 ├── internal/
 │   ├── cli/
 │   │   ├── root.go                 # Root command, persistent flags, config binding
+│   │   ├── serve.go                # 'serve' daemon command execution & lifecycle
 │   │   ├── client.go               # HTTP client wrapper, auth header injection, error parser
 │   │   ├── formatter.go            # Tabwriter table and JSON output formatting utilities
 │   │   ├── health.go               # 'health' / 'status' command implementation
@@ -217,11 +217,10 @@ When receiving HTTP `401 Unauthorized`, `client.go` returns typed error:
 1. **Unit & CLI Tests:**
    `go test -v -race ./internal/cli/...`
 2. **Static Compilation:**
-   `CGO_ENABLED=0 go build -o /dev/null ./cmd/relay-cli`
    `CGO_ENABLED=0 go build -o /dev/null ./cmd/relay`
 3. **End-to-End CLI Smoke Test:**
    - Boot temporary relay daemon in test background.
-   - Run `relay-cli health` -> verify exit code 0 and valid status output.
-   - Run `relay-cli queue` -> verify queue counts.
-   - Run `relay-cli dlq replay-all` in non-TTY mode without `-y` -> verify exit code 1.
+   - Run `relay health` -> verify exit code 0 and valid status output.
+   - Run `relay queue` -> verify queue counts.
+   - Run `relay dlq replay-all` in non-TTY mode without `-y` -> verify exit code 1.
    - Run with `-y` -> verify exit code 0.
