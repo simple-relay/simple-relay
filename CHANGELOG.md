@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.0](https://github.com/simple-relay/simple-relay/compare/v0.7.0...v0.8.0) (2026-10-17)
+
+
+### Features
+
+* **auth:** implement api key authentication for programmatic management ([#68](https://github.com/simple-relay/simple-relay/issues/68)) ([5b6125b](https://github.com/simple-relay/simple-relay/commit/5b6125b1f431f05c68b8e653f208bec276508e54))
+* **cli:** merge operator tooling into single relay binary ([#75](https://github.com/simple-relay/simple-relay/issues/75)) ([bfbb5a6](https://github.com/simple-relay/simple-relay/commit/bfbb5a67d444682d3d1a82b1c6e6845400c5a997))
+* **scripts:** implement e2e webhook and relay simulation tool ([#70](https://github.com/simple-relay/simple-relay/issues/70)) ([8a7716d](https://github.com/simple-relay/simple-relay/commit/8a7716dbaaf7f9aeb64c73a81815959e46a15caf))
+* **simulator:** update web ui following design system specifications ([#77](https://github.com/simple-relay/simple-relay/issues/77)) ([6fdbdac](https://github.com/simple-relay/simple-relay/commit/6fdbdac8e725c5207dd9d05fc1e5ad8e93551cff))
+* **ui:** apply minor UI updates and embed dashboard icons ([#64](https://github.com/simple-relay/simple-relay/issues/64)) ([fd78abc](https://github.com/simple-relay/simple-relay/commit/fd78abc399007c0172a9ca00a9da5330892c0124))
+* **ui:** implement api key management in dashboard ui ([#72](https://github.com/simple-relay/simple-relay/issues/72)) ([587dc71](https://github.com/simple-relay/simple-relay/commit/587dc71e886ac0100698f679d41f24c5386db03d))
+* **ui:** redesign dashboard layout and streamline navigation ([#74](https://github.com/simple-relay/simple-relay/issues/74)) ([479c339](https://github.com/simple-relay/simple-relay/commit/479c339f98e11971a493c68f717c77dddbf39ae8))
+
 ## [0.7.0](https://github.com/simple-relay/simple-relay/compare/v0.6.0...v0.7.0) (2026-10-16)
 
 
