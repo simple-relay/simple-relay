@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/simple-relay/simple-relay/scripts/simulator/web"
+	"github.com/simple-relay/simple-relay/ui"
 )
 
 func main() {
@@ -31,7 +32,39 @@ func main() {
 		Timeout: 30 * time.Second,
 	}
 
+	mux := SetupMux(store, hub, httpClient, *relayURL)
+
+	addr := fmt.Sprintf("0.0.0.0:%d", *port)
+	server := &http.Server{
+		Addr:    addr,
+		Handler: mux,
+	}
+
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		log.Printf("[simulator] server listening at http://%s", addr)
+		log.Printf("[simulator] destination url: http://localhost:%d/destination", *port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("[simulator] listen error: %v", err)
+		}
+	}()
+
+	<-stopChan
+	log.Println("[simulator] shutting down gracefully...")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_ = server.Shutdown(ctx)
+	log.Println("[simulator] stopped")
+}
+
+// SetupMux builds the HTTP routing ServeMux for the simulator server.
+func SetupMux(store *EventStore, hub *Hub, httpClient *http.Client, relayURL string) *http.ServeMux {
 	mux := http.NewServeMux()
+
+	// 0. Embedded UI static assets (vendored Tailwind CSS and Alpine.js for offline air-gapped delivery)
+	mux.Handle("GET /ui/static/", http.StripPrefix("/ui/", http.FileServer(http.FS(ui.FS))))
 
 	// 1. Embedded Web UI (exact match only via /{$} to prevent ServeMux subtree conflict)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +197,7 @@ func main() {
 	// 7. Templates endpoint
 	mux.HandleFunc("GET /api/templates", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(GetDefaultTemplates(*relayURL))
+		_ = json.NewEncoder(w).Encode(GetDefaultTemplates(relayURL))
 	})
 
 	// 8. Healthz
@@ -173,27 +206,5 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	addr := fmt.Sprintf("0.0.0.0:%d", *port)
-	server := &http.Server{
-		Addr:    addr,
-		Handler: mux,
-	}
-
-	stopChan := make(chan os.Signal, 1)
-	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		log.Printf("[simulator] server listening at http://%s", addr)
-		log.Printf("[simulator] destination url: http://localhost:%d/destination", *port)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("[simulator] listen error: %v", err)
-		}
-	}()
-
-	<-stopChan
-	log.Println("[simulator] shutting down gracefully...")
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	_ = server.Shutdown(ctx)
-	log.Println("[simulator] stopped")
+	return mux
 }

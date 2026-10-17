@@ -1,179 +1,303 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Simple Relay — E2E Traffic & Webhook Simulator</title>
-  <!-- Tailwind CSS via CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Alpine.js via CDN -->
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+  <link rel="icon" type="image/svg+xml" href="/ui/static/logo.svg">
+  <link rel="alternate icon" type="image/x-icon" href="/ui/static/favicon.ico">
+  <link rel="stylesheet" href="/ui/static/css/tailwind.min.css">
+  <script defer src="/ui/static/js/alpine.min.js"></script>
   <style>
     [x-cloak] { display: none !important; }
-    pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+    /* Technical & Monospace Typography */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background-color: #0b0f17;
+      color: #e5e7eb;
+    }
+    pre, code, .font-mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-feature-settings: "tnum";
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Utilitarian Surfaces & Elevation Tokens (DESIGN.md Section 2.1) */
+    .bg-app-canvas { background-color: #0b0f17 !important; }
+    .bg-app-sidebar { background-color: #070a10 !important; }
+    .bg-app-surface { background-color: #121824 !important; }
+    .bg-app-elevated { background-color: #182132 !important; }
+    .bg-app-input { background-color: #0e141f !important; }
+    .bg-app-row:hover { background-color: #192233 !important; }
+
+    /* Borders (DESIGN.md Section 2.2) */
+    .border-app { border-color: #243044 !important; }
+    .border-app-subtle { border-color: #1a2333 !important; }
+
+    /* Semantic Status Badges (DESIGN.md Section 2.4) */
+    .bg-status-success { background-color: rgba(6, 78, 59, 0.45) !important; color: #4ade80 !important; border-color: #15803d !important; }
+    .bg-status-failed { background-color: rgba(159, 18, 57, 0.45) !important; color: #fb7185 !important; border-color: #be123c !important; }
+    .bg-status-warning { background-color: rgba(146, 64, 14, 0.45) !important; color: #facc15 !important; border-color: #b45309 !important; }
+    .bg-status-purple { background-color: rgba(107, 33, 168, 0.45) !important; color: #c084fc !important; border-color: #7e22ce !important; }
+    .bg-status-muted { background-color: #1e293b !important; color: #cbd5e1 !important; border-color: #334155 !important; }
+
+    /* Slide-over Inspection Drawer Widths (DESIGN.md Section 5.1) */
+    .drawer-container { width: 100vw; }
+    @media (min-width: 768px) {
+      .drawer-container { width: 62vw !important; max-width: 860px; }
+    }
+    @media (min-width: 1280px) {
+      .drawer-container { width: 52vw !important; max-width: 920px; }
+    }
+
+    /* Low-fatigue Dark Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #2b3950;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3b4e6d;
+    }
   </style>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans antialiased" x-data="simulatorApp()" x-cloak>
-  <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-30 px-6 py-3.5 flex items-center justify-between shadow-sm">
+</head>
+<body class="bg-app-canvas text-gray-200 font-sans h-screen max-h-screen overflow-hidden antialiased flex flex-col" x-data="simulatorApp()" x-init="init()" x-cloak>
+
+  <!-- Top Toast Notifications -->
+  <div class="fixed top-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none">
+    <template x-for="toast in toasts" :key="toast.id">
+      <div class="pointer-events-auto px-4 py-2.5 rounded-md border text-xs font-medium flex items-center space-x-2.5 shadow-xl transition-all duration-200 transform translate-y-0"
+           :class="{
+             'bg-green-900/90 text-green-100 border-green-700': toast.type === 'success',
+             'bg-red-900/90 text-red-100 border-red-700': toast.type === 'error',
+             'bg-yellow-900/90 text-yellow-100 border-yellow-700': toast.type === 'warn',
+             'bg-gray-800/95 text-white border-gray-600': toast.type === 'info'
+           }">
+        <span class="w-2 h-2 rounded-full"
+              :class="{
+                'bg-green-400': toast.type === 'success',
+                'bg-red-400': toast.type === 'error',
+                'bg-yellow-400': toast.type === 'warn',
+                'bg-blue-400': toast.type === 'info'
+              }"></span>
+        <span x-text="toast.message"></span>
+      </div>
+    </template>
+  </div>
+
+  <!-- Header Bar (DESIGN.md Section 4.2: Clean text links, no redirect icons) -->
+  <header class="border-b border-app bg-app-sidebar px-6 py-3 shrink-0 flex items-center justify-between">
     <div class="flex items-center space-x-3">
-      <div class="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-indigo-500/20 shadow-md">
-        ⚡
+      <div class="w-8 h-8 rounded-md bg-app-elevated border border-app flex items-center justify-center text-white shadow-sm">
+        <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+        </svg>
       </div>
       <div>
-        <h1 class="text-base font-semibold text-white tracking-tight leading-none">Simple Relay Simulator</h1>
-        <p class="text-xs text-slate-400 mt-0.5">E2E Traffic Generator & Mock Upstream Receiver</p>
+        <div class="flex items-center space-x-2">
+          <h1 class="text-sm font-bold text-white tracking-wide leading-none">Simple Relay Simulator</h1>
+          <span class="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-app-elevated text-blue-400 border border-app font-semibold">Dev Tool</span>
+        </div>
+        <p class="text-[11px] text-gray-400 font-mono mt-0.5">E2E Traffic Generator & Mock Upstream Receiver</p>
       </div>
     </div>
 
-    <!-- Connection Status -->
-    <div class="flex items-center space-x-4">
-      <div class="flex items-center space-x-2 text-xs font-medium px-2.5 py-1 rounded-full border"
-           :class="wsConnected ? 'bg-emerald-950/40 border-emerald-800 text-emerald-400' : 'bg-rose-950/40 border-rose-800 text-rose-400'">
+    <!-- Live Stream Status & Navigation Links -->
+    <div class="flex items-center space-x-5 text-xs">
+      <!-- WebSocket Live Connection Badge -->
+      <div class="flex items-center space-x-2 px-2.5 py-1 rounded-full border text-xs font-mono font-medium"
+           :class="wsConnected ? 'bg-status-success' : 'bg-status-failed'">
         <span class="relative flex h-2 w-2">
           <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
-                :class="wsConnected ? 'bg-emerald-400' : 'bg-rose-400'"></span>
+                :class="wsConnected ? 'bg-green-400' : 'bg-rose-400'"></span>
           <span class="relative inline-flex rounded-full h-2 w-2"
-                :class="wsConnected ? 'bg-emerald-500' : 'bg-rose-500'"></span>
+                :class="wsConnected ? 'bg-green-500' : 'bg-rose-500'"></span>
         </span>
         <span x-text="wsConnected ? 'Live Stream Connected' : 'Disconnected (Reconnecting...)'"></span>
       </div>
-      <a href="http://localhost:8080" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center space-x-1 font-medium transition">
-        <span>Open Relay UI</span>
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+
+      <!-- Plain Text Navigation Links without external redirect icons (DESIGN.md Section 4.2) -->
+      <a :href="relayBaseURL" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition-colors font-medium">
+        Open Relay Dashboard
       </a>
+      <a href="https://simplerelay.dev/docs/" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition-colors">
+        Documentation
+      </a>
+      <a href="https://github.com/simple-relay/simple-relay/issues" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition-colors">
+        Report issues
+      </a>
+
+      <!-- Version & Healthz (DESIGN.md Section 6: Release Automation Preservation Invariant) -->
+      <div class="flex items-center space-x-3 pl-2 border-l border-app">
+        <a href="https://github.com/simple-relay/simple-relay/blob/main/CHANGELOG.md"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="text-gray-400 hover:text-white font-mono text-xs transition-colors"
+           title="View CHANGELOG.md">
+          v0.8.0<!-- x-release-please-version -->
+        </a>
+        <a href="/healthz" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white font-mono text-xs transition-colors">
+          /healthz
+        </a>
+      </div>
     </div>
   </header>
 
-  <!-- Main Container -->
-  <main class="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-800 overflow-hidden">
+  <!-- Main Viewport: Dual Column Layout (DESIGN.md Section 4.1: Viewport-Height Lock) -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-app border-app overflow-hidden">
 
-    <!-- LEFT PANEL: Sender -->
-    <section class="p-6 overflow-y-auto max-h-[calc(100vh-61px)] flex flex-col space-y-5">
-      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+    <!-- LEFT PANEL: HTTP Traffic Sender -->
+    <section class="p-6 overflow-y-auto h-full flex flex-col space-y-5 bg-app-canvas">
+      <div class="flex items-center justify-between pb-2 border-b border-app">
         <div>
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-indigo-400">Sender Panel</h2>
-          <p class="text-xs text-slate-400">Generate & dispatch requests to Simple Relay</p>
+          <h2 class="text-xs font-bold uppercase tracking-wider text-blue-400">Sender Panel</h2>
+          <p class="text-xs text-gray-400 mt-0.5">Generate & dispatch requests to Simple Relay via backend proxy</p>
         </div>
       </div>
 
-      <!-- Preset Selector -->
-      <div class="space-y-1.5">
-        <label class="text-xs font-semibold text-slate-300">Quick-Fill Preset Template</label>
+      <!-- Preset Selector Card -->
+      <div class="bg-app-surface border border-app rounded-lg p-4 space-y-3">
+        <label class="block text-xs font-semibold text-gray-200 uppercase tracking-wider">Quick-Fill Preset Template</label>
         <div class="flex space-x-2">
-          <select x-model="selectedPresetId" @change="applyPreset()" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+          <select x-model="selectedPresetId" @change="applyPreset()" class="flex-1 bg-app-input border border-app rounded-md px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-blue-500">
             <template x-for="p in presets" :key="p.id">
               <option :value="p.id" x-text="p.name"></option>
             </template>
           </select>
-          <button @click="applyPreset()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 rounded-lg transition border border-slate-700">
+          <button @click="applyPreset()" class="px-3 py-2 bg-app-elevated hover:bg-[#1f2b40] text-xs font-medium text-gray-200 rounded-md transition border border-app">
             Reset Preset
           </button>
         </div>
-        <p class="text-[11px] text-slate-400" x-text="currentPresetDescription"></p>
+        <p class="text-[11px] text-gray-400 leading-relaxed font-mono" x-text="currentPresetDescription"></p>
       </div>
 
-      <!-- URL & Method -->
-      <div class="space-y-1.5">
-        <label class="text-xs font-semibold text-slate-300">Target URL & Method</label>
+      <!-- Target URL & Method Card -->
+      <div class="bg-app-surface border border-app rounded-lg p-4 space-y-3">
+        <label class="block text-xs font-semibold text-gray-200 uppercase tracking-wider">Target URL & HTTP Method</label>
         <div class="flex space-x-2">
-          <select x-model="form.method" class="w-24 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-200 focus:outline-none focus:border-indigo-500">
+          <select x-model="form.method" class="w-24 bg-app-input border border-app rounded-md px-2.5 py-2 text-xs font-mono font-bold text-gray-200 focus:outline-none focus:border-blue-500">
             <option>POST</option>
             <option>PUT</option>
             <option>PATCH</option>
             <option>GET</option>
           </select>
-          <input type="text" x-model="form.url" placeholder="http://localhost:8080/api/v1/webhook/..." class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
+          <input type="text" x-model="form.url" placeholder="http://localhost:8080/api/v1/webhook/..." class="flex-1 bg-app-input border border-app rounded-md px-3 py-2 text-xs font-mono text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
         </div>
-      </div>
 
-      <!-- Cryptographic Signature Options -->
-      <div class="p-3.5 bg-slate-950/60 rounded-xl border border-slate-800/80 space-y-3">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold text-slate-300">Dynamic Signature Generator</span>
-          <span class="text-[11px] text-slate-400">Computes valid HMAC upon send</span>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-[11px] text-slate-400 block mb-1">Provider Adapter</label>
-            <select x-model="form.sign_provider" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
-              <option value="">None (Standard Request)</option>
-              <option value="stripe">Stripe (Stripe-Signature)</option>
-              <option value="github">GitHub (X-Hub-Signature-256)</option>
-            </select>
+        <!-- Cryptographic Signature Options -->
+        <div class="p-3.5 bg-app-input rounded-md border border-app-subtle space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-gray-300">Dynamic Signature Generator</span>
+            <span class="text-[11px] text-gray-400">Computes valid HMAC upon send</span>
           </div>
-          <div>
-            <label class="text-[11px] text-slate-400 block mb-1">Signing Secret</label>
-            <input type="text" x-model="form.sign_secret" :disabled="!form.sign_provider" placeholder="whsec_..." class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-40">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-[11px] text-gray-400 block mb-1">Provider Adapter</label>
+              <select x-model="form.sign_provider" class="w-full bg-app-surface border border-app rounded px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500">
+                <option value="">None (Standard Request)</option>
+                <option value="stripe">Stripe (Stripe-Signature)</option>
+                <option value="github">GitHub (X-Hub-Signature-256)</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[11px] text-gray-400 block mb-1">Signing Secret</label>
+              <input type="text" x-model="form.sign_secret" :disabled="!form.sign_provider" placeholder="whsec_..." class="w-full bg-app-surface border border-app rounded px-2.5 py-1.5 text-xs font-mono text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 disabled:opacity-40">
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Headers Editor -->
-      <div class="space-y-1.5">
+      <!-- Headers Editor Card -->
+      <div class="bg-app-surface border border-app rounded-lg p-4 space-y-2">
         <div class="flex items-center justify-between">
-          <label class="text-xs font-semibold text-slate-300">Custom Request Headers (JSON)</label>
-          <button @click="resetHeaders()" class="text-[11px] text-indigo-400 hover:text-indigo-300">Default Headers</button>
+          <label class="text-xs font-semibold text-gray-200 uppercase tracking-wider">Custom Request Headers (JSON)</label>
+          <button @click="resetHeaders()" class="text-[11px] text-blue-400 hover:text-white transition-colors">Default Headers</button>
         </div>
-        <textarea x-model="headersRaw" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500" placeholder='{"Content-Type": "application/json"}'></textarea>
+        <textarea x-model="headersRaw" rows="3" class="w-full bg-app-input border border-app rounded-md p-3 text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500" placeholder='{"Content-Type": "application/json"}'></textarea>
       </div>
 
-      <!-- Payload Editor -->
-      <div class="space-y-1.5 flex-1 flex flex-col">
-        <label class="text-xs font-semibold text-slate-300">Raw Request Body</label>
-        <textarea x-model="form.body" rows="7" class="w-full flex-1 bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500" placeholder='{"event": "test"}'></textarea>
+      <!-- Payload Editor Card -->
+      <div class="bg-app-surface border border-app rounded-lg p-4 space-y-2 flex-1 flex flex-col">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-semibold text-gray-200 uppercase tracking-wider">Raw Request Body</label>
+          <button @click="formatBodyJSON()" class="text-[11px] text-blue-400 hover:text-white transition-colors">Format JSON</button>
+        </div>
+        <textarea x-model="form.body" rows="7" class="w-full flex-1 bg-app-input border border-app rounded-md p-3 text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500" placeholder='{"event": "test"}'></textarea>
       </div>
 
       <!-- Dispatch Action Button -->
       <div>
-        <button @click="dispatchRequest()" :disabled="sending" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-900/50 text-white rounded-lg font-medium text-sm flex items-center justify-center space-x-2 transition shadow-lg shadow-indigo-600/20">
-          <svg x-show="sending" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
-          <span x-text="sending ? 'Dispatching to Relay...' : '⚡ Send Request to Simple Relay'"></span>
+        <button @click="dispatchRequest()" :disabled="sending" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-md font-semibold text-xs tracking-wide flex items-center justify-center space-x-2 transition shadow-sm">
+          <svg x-show="sending" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+          <span x-text="sending ? 'Dispatching to Simple Relay...' : 'Dispatch Request to Simple Relay'"></span>
         </button>
       </div>
 
-      <!-- Last Sent Result -->
-      <div x-show="lastResult" class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2.5">
+      <!-- Last Sent Result Card -->
+      <div x-show="lastResult" class="bg-app-surface rounded-lg border border-app p-4 space-y-3">
         <div class="flex items-center justify-between">
-          <div class="flex items-center space-x-2">
-            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Relay Response</span>
-            <span class="px-2 py-0.5 rounded text-xs font-bold"
-                  :class="lastResult && lastResult.status_code >= 200 && lastResult.status_code < 300 ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'"
+          <div class="flex items-center space-x-2.5">
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">Relay Response</span>
+            <span class="px-2 py-0.5 rounded text-xs font-mono font-bold border"
+                  :class="lastResult && lastResult.status_code >= 200 && lastResult.status_code < 300 ? 'bg-status-success' : 'bg-status-failed'"
                   x-text="lastResult ? lastResult.status_code + ' ' + (lastResult.status_code === 200 ? 'OK' : lastResult.status_code === 202 ? 'Accepted' : 'Error') : ''"></span>
           </div>
-          <span class="text-xs font-mono text-slate-400" x-text="lastResult ? lastResult.duration_ms.toFixed(1) + 'ms' : ''"></span>
+          <span class="text-xs font-mono text-gray-400 tabular-nums" x-text="lastResult ? lastResult.duration_ms.toFixed(1) + 'ms' : ''"></span>
         </div>
 
-        <div x-show="lastResult && lastResult.error" class="p-2.5 bg-rose-950/50 border border-rose-900 rounded text-xs text-rose-300 font-mono" x-text="lastResult ? lastResult.error : ''"></div>
+        <div x-show="lastResult && lastResult.error" class="p-3 bg-red-950/40 border border-red-800 rounded text-xs text-red-300 font-mono" x-text="lastResult ? lastResult.error : ''"></div>
 
-        <pre x-show="lastResult && lastResult.body" class="p-2.5 bg-slate-900 rounded-lg text-xs font-mono text-slate-300 overflow-x-auto max-h-40 border border-slate-800" x-text="formatJSON(lastResult ? lastResult.body : '')"></pre>
+        <div x-show="lastResult && lastResult.body" class="space-y-1.5">
+          <div class="flex items-center justify-between text-[11px] text-gray-400">
+            <span>Response Payload</span>
+            <button @click="copyText(lastResult.body, 'Response body copied')" class="text-blue-400 hover:text-white transition-colors">Copy</button>
+          </div>
+          <pre class="p-3 bg-app-input rounded-md text-xs font-mono text-gray-300 overflow-x-auto max-h-44 border border-app" x-text="formatJSON(lastResult ? lastResult.body : '')"></pre>
+        </div>
       </div>
     </section>
 
-    <!-- RIGHT PANEL: Live Receiver -->
-    <section class="p-6 overflow-y-auto max-h-[calc(100vh-61px)] flex flex-col space-y-5 bg-slate-900/60">
-      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+    <!-- RIGHT PANEL: Mock Destination & Real-Time Receiver -->
+    <section class="p-6 overflow-y-auto h-full flex flex-col space-y-5 bg-app-canvas">
+      <div class="flex items-center justify-between pb-2 border-b border-app">
         <div>
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-emerald-400">Receiver Panel</h2>
-          <p class="text-xs text-slate-400">Mock destination receiving forwarded requests from Simple Relay</p>
+          <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-400">Receiver Panel</h2>
+          <p class="text-xs text-gray-400 mt-0.5">Mock destination receiving forwarded requests from Simple Relay</p>
         </div>
-        <button @click="clearEvents()" class="px-2.5 py-1 text-xs text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 rounded border border-slate-800 hover:border-rose-900 transition">
+        <button @click="clearEvents()" class="px-2.5 py-1 text-xs text-gray-400 hover:text-rose-400 hover:bg-rose-950/30 rounded border border-app hover:border-rose-900 transition">
           Clear Events
         </button>
       </div>
 
-      <!-- Destination Upstream Settings Card -->
-      <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
+      <!-- Destination Endpoint Configuration Card -->
+      <div class="bg-app-surface rounded-lg border border-app p-4 space-y-3">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold text-slate-300">Mock Destination Endpoint</span>
-          <span class="text-[11px] text-slate-400 font-mono" x-text="destinationEndpoint"></span>
+          <span class="text-xs font-semibold text-gray-200 uppercase tracking-wider">Mock Destination Endpoint</span>
+          <button @click="copyText(destinationEndpoint, 'Destination URL copied')" class="text-[11px] text-blue-400 hover:text-white font-mono flex items-center space-x-1 transition-colors">
+            <span x-text="destinationEndpoint"></span>
+            <span class="text-gray-400 hover:text-white">📋</span>
+          </button>
         </div>
-        <p class="text-[11px] text-slate-400 leading-relaxed">
-          Configure routes in Simple Relay with <code class="text-indigo-400 bg-slate-900 px-1 py-0.5 rounded border border-slate-800" x-text="destinationEndpoint"></code> as their Destination URL.
+        <p class="text-[11px] text-gray-400 leading-relaxed">
+          Configure routes in Simple Relay with <code class="text-blue-400 bg-app-input px-1.5 py-0.5 rounded border border-app font-mono" x-text="destinationEndpoint"></code> as their Destination URL.
         </p>
 
-        <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+        <div class="grid grid-cols-2 gap-3 pt-3 border-t border-app">
           <div>
-            <label class="text-[11px] text-slate-400 block mb-1">Return Status Code</label>
-            <select x-model.number="mockConfig.status_code" @change="saveMockConfig()" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-200 focus:outline-none focus:border-indigo-500">
+            <label class="text-[11px] text-gray-400 block mb-1">Return Status Code</label>
+            <select x-model.number="mockConfig.status_code" @change="saveMockConfig()" class="w-full bg-app-input border border-app rounded-md px-2.5 py-1.5 text-xs font-mono font-bold text-gray-200 focus:outline-none focus:border-blue-500">
               <option value="200">200 OK (Success Delivery)</option>
               <option value="500">500 Internal Error (Trigger Retries)</option>
               <option value="429">429 Rate Limit (Retry-After: 3s)</option>
@@ -182,93 +306,195 @@
             </select>
           </div>
           <div>
-            <label class="text-[11px] text-slate-400 block mb-1">Simulated Latency (ms)</label>
-            <input type="number" x-model.number="mockConfig.delay_ms" @change="saveMockConfig()" min="0" step="50" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
+            <label class="text-[11px] text-gray-400 block mb-1">Simulated Latency (ms)</label>
+            <input type="number" x-model.number="mockConfig.delay_ms" @change="saveMockConfig()" min="0" step="50" class="w-full bg-app-input border border-app rounded-md px-2.5 py-1.5 text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500 tabular-nums">
           </div>
         </div>
       </div>
 
-      <!-- Events Stream Container -->
-      <div class="space-y-3 flex-1">
+      <!-- Deliveries High-Density Table / List Container -->
+      <div class="space-y-3 flex-1 flex flex-col">
         <div class="flex items-center justify-between">
-          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            Received Deliveries (<span x-text="events.length"></span>)
+          <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            Received Deliveries (<span class="tabular-nums text-white" x-text="events.length"></span>)
           </h3>
-          <span class="text-[11px] text-slate-400" x-show="events.length > 0">Click card to expand headers & body</span>
+          <span class="text-[11px] text-gray-500" x-show="events.length > 0">Click any row to open inspection drawer</span>
         </div>
 
         <!-- Empty State -->
-        <div x-show="events.length === 0" class="p-8 border border-dashed border-slate-800 rounded-xl text-center space-y-2">
-          <div class="text-2xl">📡</div>
-          <p class="text-xs text-slate-300 font-medium">Waiting for forwarded requests...</p>
-          <p class="text-[11px] text-slate-400 max-w-sm mx-auto">
-            When Simple Relay delivers an inbound webhook or async job to <span class="font-mono text-slate-300">/destination</span>, it will appear here in real time.
+        <div x-show="events.length === 0" class="p-8 border border-dashed border-app rounded-lg text-center space-y-2 bg-app-surface/50">
+          <div class="w-10 h-10 mx-auto rounded-full bg-app-elevated flex items-center justify-center text-gray-400">
+            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+            </svg>
+          </div>
+          <p class="text-xs text-gray-200 font-medium">Waiting for forwarded requests...</p>
+          <p class="text-[11px] text-gray-400 max-w-sm mx-auto leading-relaxed">
+            When Simple Relay delivers an inbound webhook or async job to <span class="font-mono text-gray-300">/destination</span>, it will appear here in real time.
           </p>
         </div>
 
-        <!-- Event Cards -->
-        <template x-for="(evt, idx) in events" :key="evt.id">
-          <div class="bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl overflow-hidden transition shadow-sm"
-               x-data="{ expanded: idx === 0 }">
-            <!-- Card Header -->
-            <div @click="expanded = !expanded" class="p-3.5 flex items-center justify-between cursor-pointer select-none bg-slate-950 hover:bg-slate-900/60 transition">
-              <div class="flex items-center space-x-2.5">
-                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider"
-                      :class="evt.response_status_returned >= 200 && evt.response_status_returned < 300 ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'"
-                      x-text="evt.response_status_returned"></span>
-                <span class="text-xs font-bold text-slate-200" x-text="evt.method"></span>
-                <span class="text-xs font-mono text-slate-400" x-text="evt.path"></span>
-              </div>
-              <div class="flex items-center space-x-3 text-xs text-slate-400">
-                <span class="font-mono text-[11px] text-indigo-400 font-medium" x-text="evt.headers['X-Relay-Request-Id'] || evt.headers['X-Relay-Request-ID'] || 'No Relay ID'"></span>
-                <span class="text-[11px]" x-text="formatTime(evt.received_at)"></span>
-                <svg class="w-3.5 h-3.5 transform transition-transform" :class="expanded ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-              </div>
-            </div>
-
-            <!-- Card Expanded Body -->
-            <div x-show="expanded" class="p-4 border-t border-slate-800/80 bg-slate-900/40 space-y-3 text-xs">
-              <!-- Query Parameters -->
-              <div x-show="Object.keys(evt.query_params || {}).length > 0" class="space-y-1">
-                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Query Parameters</span>
-                <div class="bg-slate-950 rounded p-2 border border-slate-800 space-y-1 font-mono text-[11px]">
-                  <template x-for="(val, key) in evt.query_params" :key="key">
-                    <div class="flex"><span class="text-indigo-400 w-32 shrink-0" x-text="key"></span>: <span class="text-slate-300 ml-2" x-text="val"></span></div>
-                  </template>
-                </div>
-              </div>
-
-              <!-- Headers -->
-              <div class="space-y-1">
-                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Relayed Headers</span>
-                <div class="bg-slate-950 rounded p-2 border border-slate-800 space-y-1 font-mono text-[11px] max-h-36 overflow-y-auto">
-                  <template x-for="(val, key) in evt.headers" :key="key">
-                    <div class="flex"><span class="text-slate-400 w-44 shrink-0 truncate" x-text="key"></span>: <span class="text-slate-200 ml-2 break-all" x-text="val"></span></div>
-                  </template>
-                </div>
-              </div>
-
-              <!-- Raw Body -->
-              <div class="space-y-1">
-                <div class="flex items-center justify-between">
-                  <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Raw Body</span>
-                  <button @click.stop="copyText(evt.body)" class="text-[10px] text-indigo-400 hover:text-indigo-300">Copy Body</button>
-                </div>
-                <pre class="bg-slate-950 p-2.5 rounded border border-slate-800 font-mono text-[11px] text-slate-200 overflow-x-auto max-h-48 whitespace-pre-wrap" x-text="formatJSON(evt.body)"></pre>
-              </div>
-            </div>
+        <!-- High-Density Table with Non-Blocking Drawer Rows (DESIGN.md Section 5.2 & 5.4) -->
+        <div x-show="events.length > 0" class="bg-app-surface border border-app rounded-lg overflow-hidden flex-1 flex flex-col">
+          <div class="overflow-x-auto flex-1">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead class="bg-app-sidebar border-b border-app text-[11px] font-semibold text-gray-300 uppercase tracking-wider select-none">
+                <tr>
+                  <th class="px-4 py-3">Status</th>
+                  <th class="px-4 py-3">Method</th>
+                  <th class="px-4 py-3">Relay Request ID</th>
+                  <th class="px-4 py-3 text-right">Received</th>
+                  <th class="px-3 py-3 text-right"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-app">
+                <template x-for="evt in events" :key="evt.id">
+                  <tr class="bg-app-row transition-colors cursor-pointer select-none"
+                      data-drawer-row
+                      :class="drawerOpen && activeEvent && activeEvent.id === evt.id ? 'bg-app-elevated border-l-2 border-blue-500' : ''"
+                      @click="openEventDrawer(evt)">
+                    <!-- Status Badge -->
+                    <td class="px-4 py-3.5 whitespace-nowrap">
+                      <span class="px-2 py-0.5 rounded text-[11px] font-mono font-bold border"
+                            :class="evt.response_status_returned >= 200 && evt.response_status_returned < 300 ? 'bg-status-success' : (evt.response_status_returned === 429 ? 'bg-status-warning' : 'bg-status-failed')"
+                            x-text="evt.response_status_returned"></span>
+                    </td>
+                    <!-- Method -->
+                    <td class="px-4 py-3.5 whitespace-nowrap font-mono font-bold text-gray-200" x-text="evt.method"></td>
+                    <!-- Relay Request ID -->
+                    <td class="px-4 py-3.5 font-mono text-blue-400 truncate max-w-[200px]"
+                        :title="getRelayRequestId(evt)"
+                        x-text="getRelayRequestId(evt)"></td>
+                    <!-- Time -->
+                    <td class="px-4 py-3.5 text-right font-mono text-gray-400 whitespace-nowrap tabular-nums text-[11px]" x-text="formatTime(evt.received_at)"></td>
+                    <!-- Action Chevron -->
+                    <td class="px-3 py-3.5 text-right text-gray-500">
+                      <svg class="w-4 h-4 ml-auto" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/>
+                      </svg>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
           </div>
-        </template>
+        </div>
       </div>
     </section>
 
   </main>
+
+  <!-- ============================================================== -->
+  <!-- SLIDE-OVER DELIVERY INSPECTION DRAWER (DESIGN.md Section 5.1 & 5.2) -->
+  <!-- ============================================================== -->
+  <div x-show="drawerOpen"
+       class="fixed inset-y-0 right-0 z-50 flex drawer-container pointer-events-none"
+       x-cloak
+       @keydown.escape.window="closeDrawer()">
+    <div class="w-full bg-app-surface border-l border-app flex flex-col shadow-2xl relative pointer-events-auto h-full"
+         @click.outside="handleDrawerClickOutside($event)">
+
+      <!-- Drawer Header -->
+      <div class="px-6 py-4 bg-app-sidebar border-b border-app flex items-center justify-between shrink-0">
+        <div class="flex items-center space-x-3">
+          <span class="px-2 py-0.5 rounded text-xs font-mono font-bold border"
+                :class="activeEvent && activeEvent.response_status_returned >= 200 && activeEvent.response_status_returned < 300 ? 'bg-status-success' : (activeEvent && activeEvent.response_status_returned === 429 ? 'bg-status-warning' : 'bg-status-failed')"
+                x-text="activeEvent ? activeEvent.response_status_returned : ''"></span>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Delivery Inspection</div>
+            <div class="font-mono text-sm text-white font-bold flex items-center space-x-2 mt-0.5">
+              <span x-text="activeEvent ? activeEvent.method : ''"></span>
+              <span class="text-gray-400 font-normal" x-text="activeEvent ? activeEvent.path : ''"></span>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button @click="copyText(activeEvent ? activeEvent.body : '', 'Delivery payload copied')" class="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-mono font-medium flex items-center space-x-1.5 shadow transition">
+            <span>Copy Body</span>
+          </button>
+          <button @click="closeDrawer()" class="text-gray-400 hover:text-white p-1 rounded transition" title="Close (Esc)">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Drawer Body (Independently Scrollable) -->
+      <div class="flex-1 p-6 overflow-y-auto space-y-5 text-xs" x-show="activeEvent">
+
+        <!-- Metadata Grid -->
+        <div class="grid grid-cols-2 gap-3 bg-app-elevated p-3.5 rounded-lg border border-app text-xs font-mono">
+          <div>
+            <span class="text-gray-400 block text-[10px] uppercase font-bold">Relay Request ID</span>
+            <div class="flex items-center space-x-1.5 mt-0.5">
+              <span class="text-blue-400 font-bold truncate max-w-xs" x-text="activeEvent ? getRelayRequestId(activeEvent) : ''"></span>
+              <button @click="copyText(getRelayRequestId(activeEvent), 'Request ID copied')" class="text-gray-400 hover:text-white" title="Copy ID">📋</button>
+            </div>
+          </div>
+          <div>
+            <span class="text-gray-400 block text-[10px] uppercase font-bold">Simulated Mock Status</span>
+            <span class="text-white font-bold mt-0.5 block" x-text="activeEvent ? activeEvent.response_status_returned + ' (Delay: ' + activeEvent.response_delay_ms + 'ms)' : ''"></span>
+          </div>
+          <div>
+            <span class="text-gray-400 block text-[10px] uppercase font-bold">Simulator Event ID</span>
+            <span class="text-gray-300 mt-0.5 block" x-text="activeEvent ? activeEvent.id : ''"></span>
+          </div>
+          <div>
+            <span class="text-gray-400 block text-[10px] uppercase font-bold">Received At</span>
+            <span class="text-gray-300 mt-0.5 block tabular-nums" x-text="activeEvent ? activeEvent.received_at : ''"></span>
+          </div>
+        </div>
+
+        <!-- Query Parameters (if present) -->
+        <div x-show="activeEvent && Object.keys(activeEvent.query_params || {}).length > 0" class="space-y-2">
+          <div class="text-[11px] font-bold uppercase tracking-wider text-gray-300 pb-1 border-b border-app">Query Parameters</div>
+          <div class="bg-app-input rounded-md p-3 border border-app space-y-1 font-mono text-xs">
+            <template x-for="(val, key) in (activeEvent ? activeEvent.query_params : {})" :key="key">
+              <div class="flex py-0.5">
+                <span class="text-blue-400 w-36 shrink-0 font-semibold" x-text="key"></span>
+                <span class="text-gray-200 ml-2 break-all" x-text="val"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Relayed HTTP Headers -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between pb-1 border-b border-app">
+            <div class="text-[11px] font-bold uppercase tracking-wider text-gray-300">Relayed HTTP Headers</div>
+            <input type="text" x-model="headerSearch" placeholder="Filter headers..." class="px-2 py-0.5 bg-app-input border border-app rounded text-[11px] text-gray-200 placeholder-gray-500 font-mono focus:outline-none focus:border-blue-500">
+          </div>
+          <div class="bg-app-input rounded-md p-3 border border-app space-y-1 font-mono text-xs max-h-56 overflow-y-auto">
+            <template x-for="[key, val] in filteredHeaders()" :key="key">
+              <div class="flex py-0.5 hover:bg-app-elevated/50 px-1 rounded transition-colors">
+                <span class="text-gray-400 w-48 shrink-0 truncate font-semibold" :title="key" x-text="key"></span>
+                <span class="text-gray-200 ml-2 break-all" x-text="val"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Raw Request Body -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between pb-1 border-b border-app">
+            <div class="text-[11px] font-bold uppercase tracking-wider text-gray-300">Raw Request Body</div>
+            <button @click="copyText(activeEvent ? activeEvent.body : '', 'Body copied')" class="text-[11px] text-blue-400 hover:text-white transition-colors">Copy Payload</button>
+          </div>
+          <pre class="bg-app-input p-3.5 rounded-md border border-app font-mono text-xs text-gray-200 overflow-x-auto max-h-64 whitespace-pre-wrap leading-relaxed" x-text="formatJSON(activeEvent ? activeEvent.body : '')"></pre>
+        </div>
+
+      </div>
+    </div>
+  </div>
 
   <script>
     function simulatorApp() {
       return {
         wsConnected: false,
         socket: null,
+        reconnectTimer: null,
+        relayBaseURL: 'http://localhost:8080',
         presets: [],
         selectedPresetId: 'stripe_webhook',
         currentPresetDescription: '',
@@ -288,12 +514,24 @@
           delay_ms: 0
         },
         events: [],
+        drawerOpen: false,
+        activeEvent: null,
+        headerSearch: '',
+        toasts: [],
 
         init() {
           this.fetchTemplates();
           this.fetchMockConfig();
           this.fetchEvents();
           this.connectWebSocket();
+        },
+
+        showToast(type, message) {
+          const id = Date.now() + Math.random();
+          this.toasts.push({ id, type, message });
+          setTimeout(() => {
+            this.toasts = this.toasts.filter(t => t.id !== id);
+          }, 3500);
         },
 
         async fetchTemplates() {
@@ -305,6 +543,7 @@
             }
           } catch (e) {
             console.error('Failed to load templates:', e);
+            this.showToast('error', 'Failed to load preset templates');
           }
         },
 
@@ -323,6 +562,18 @@
 
         resetHeaders() {
           this.headersRaw = '{\n  "Content-Type": "application/json"\n}';
+          this.showToast('info', 'Headers reset to default JSON');
+        },
+
+        formatBodyJSON() {
+          if (!this.form.body) return;
+          try {
+            const parsed = JSON.parse(this.form.body);
+            this.form.body = JSON.stringify(parsed, null, 2);
+            this.showToast('success', 'JSON body formatted');
+          } catch (e) {
+            this.showToast('warn', 'Body is not valid JSON');
+          }
         },
 
         async fetchMockConfig() {
@@ -338,13 +589,17 @@
 
         async saveMockConfig() {
           try {
-            await fetch('/api/mock-config', {
+            const resp = await fetch('/api/mock-config', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(this.mockConfig)
             });
+            if (resp.ok) {
+              this.showToast('success', `Mock destination set to HTTP ${this.mockConfig.status_code} (${this.mockConfig.delay_ms}ms)`);
+            }
           } catch (e) {
             console.error('Failed to save mock config:', e);
+            this.showToast('error', 'Failed to save mock configuration');
           }
         },
 
@@ -364,8 +619,11 @@
           try {
             await fetch('/api/events', { method: 'DELETE' });
             this.events = [];
+            if (this.drawerOpen) this.closeDrawer();
+            this.showToast('info', 'Delivery events cleared');
           } catch (e) {
             console.error('Failed to clear events:', e);
+            this.showToast('error', 'Failed to clear delivery events');
           }
         },
 
@@ -386,7 +644,8 @@
             try {
               const data = JSON.parse(event.data);
               if (!this.events.some(e => e.id === data.id)) {
-                this.events.unshift(data); // Prepend newest event
+                this.events.unshift(data);
+                this.showToast('info', `New delivery: ${data.method} (Status ${data.response_status_returned})`);
               }
             } catch (e) {
               console.error('Error parsing WS message:', e);
@@ -396,7 +655,7 @@
           this.socket.onclose = () => {
             this.wsConnected = false;
             if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-            this.reconnectTimer = setTimeout(() => this.connectWebSocket(), 2000); // Auto reconnect
+            this.reconnectTimer = setTimeout(() => this.connectWebSocket(), 2000);
           };
 
           this.socket.onerror = () => {
@@ -412,7 +671,7 @@
           try {
             headersObj = JSON.parse(this.headersRaw);
           } catch (e) {
-            alert('Invalid Headers JSON format');
+            this.showToast('error', 'Invalid Headers JSON format');
             this.sending = false;
             return;
           }
@@ -433,15 +692,54 @@
               body: JSON.stringify(payload)
             });
             this.lastResult = await resp.json();
+            if (this.lastResult && this.lastResult.status_code >= 200 && this.lastResult.status_code < 300) {
+              this.showToast('success', `Dispatched: HTTP ${this.lastResult.status_code} in ${this.lastResult.duration_ms.toFixed(1)}ms`);
+            } else {
+              this.showToast('warn', `Dispatched with response: HTTP ${this.lastResult.status_code}`);
+            }
           } catch (e) {
             this.lastResult = {
               status_code: 0,
               error: e.toString(),
               duration_ms: 0
             };
+            this.showToast('error', 'Request failed: ' + e.toString());
           } finally {
             this.sending = false;
           }
+        },
+
+        openEventDrawer(evt) {
+          this.activeEvent = evt;
+          this.headerSearch = '';
+          this.drawerOpen = true;
+        },
+
+        closeDrawer() {
+          this.drawerOpen = false;
+          this.activeEvent = null;
+        },
+
+        handleDrawerClickOutside(e) {
+          if (!this.drawerOpen) return;
+          // DESIGN.md Section 5.2: Ignore clicks on other drawer rows to enable seamless switching
+          if (e && e.target && e.target.closest && e.target.closest('[data-drawer-row]')) {
+            return;
+          }
+          this.closeDrawer();
+        },
+
+        getRelayRequestId(evt) {
+          if (!evt || !evt.headers) return 'None';
+          return evt.headers['X-Relay-Request-Id'] || evt.headers['X-Relay-Request-ID'] || 'None';
+        },
+
+        filteredHeaders() {
+          if (!this.activeEvent || !this.activeEvent.headers) return [];
+          const entries = Object.entries(this.activeEvent.headers);
+          if (!this.headerSearch.trim()) return entries;
+          const query = this.headerSearch.toLowerCase();
+          return entries.filter(([k, v]) => k.toLowerCase().includes(query) || (v && v.toLowerCase().includes(query)));
         },
 
         formatJSON(str) {
@@ -464,10 +762,15 @@
           }
         },
 
-        copyText(text) {
-          navigator.clipboard.writeText(text);
+        copyText(text, label = 'Copied to clipboard') {
+          if (!text) return;
+          navigator.clipboard.writeText(text).then(() => {
+            this.showToast('success', label);
+          }).catch(() => {
+            this.showToast('error', 'Failed to copy to clipboard');
+          });
         }
-      }
+      };
     }
   </script>
 </body>
