@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.1](https://github.com/simple-relay/simple-relay/compare/v0.8.0...v0.8.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* **docker:** pre-create writable data directory for non-root user ([#81](https://github.com/simple-relay/simple-relay/issues/81)) ([4e72653](https://github.com/simple-relay/simple-relay/commit/4e72653ca8e66a40e06ee8a86c5e754a9f7819d8))
+
+
+### Documentation
+
+* **readme:** use ghcr.io image path in docker quickstart ([#79](https://github.com/simple-relay/simple-relay/issues/79)) ([1cdbc4a](https://github.com/simple-relay/simple-relay/commit/1cdbc4a573644bc1190212d942fd97460e3c6c3a))
+
 ## [0.8.0](https://github.com/simple-relay/simple-relay/compare/v0.7.0...v0.8.0) (2026-10-17)
 
 
