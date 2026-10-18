@@ -109,7 +109,7 @@ docker run -d \
   -p 8080:8080 \
   -v relay-data:/data \
   -e RELAY_DB_PATH=/data/relay.db \
-  simple-relay/simple-relay:latest
+  ghcr.io/simple-relay/simple-relay:latest
 ```
 
 ### Option 2: Run Standalone Binary (Pure Go, Zero CGO)
