@@ -74,7 +74,11 @@ func NewJobIngestHandler(
 			if isHopByHop(k) {
 				continue
 			}
-			headers[k] = strings.Join(vv, ", ")
+			cleaned, keep := engine.SanitizeInternalAuthHeaders(k, vv)
+			if !keep || len(cleaned) == 0 {
+				continue
+			}
+			headers[k] = strings.Join(cleaned, ", ")
 		}
 
 		jobID := r.Header.Get("X-Relay-Request-ID")

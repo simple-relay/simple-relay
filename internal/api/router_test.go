@@ -108,20 +108,42 @@ func TestUIRoutes_StaticAssets(t *testing.T) {
 	}
 }
 
+// withLoopbackRemoteAddr wraps an http.Handler for unit tests using httptest.NewRequest,
+// rewriting the stdlib default "192.0.2.1:1234" to "127.0.0.1:12345" while preserving any explicit RemoteAddr.
+func withLoopbackRemoteAddr(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.RemoteAddr == "" || r.RemoteAddr == "192.0.2.1:1234" || r.RemoteAddr == httptest.DefaultRemoteAddr {
+			r.RemoteAddr = "127.0.0.1:12345"
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func TestRouter_AuthMiddleware(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	// Case 1: Admin password disabled
+	// Case 1: Admin password disabled (Dev Mode)
 	cfgNoAuth := config.DefaultConfig()
 	cfgNoAuth.AdminPassword = ""
 	routerNoAuth := NewRouter(cfgNoAuth, logger)
 
+	// 1a. Loopback caller in dev mode is permitted without credentials
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
 	rr := httptest.NewRecorder()
 	routerNoAuth.ServeHTTP(rr, req)
 	// Without routeRepo it returns 404 from ServeMux, NOT 401 Unauthorized
 	if rr.Code == http.StatusUnauthorized {
-		t.Fatalf("expected non-401 for /api/v1/routes when auth disabled, got %d", rr.Code)
+		t.Fatalf("expected non-401 for loopback /api/v1/routes when auth disabled, got %d", rr.Code)
+	}
+
+	// 1b. Non-loopback caller in dev mode MUST be rejected with 401 without API key
+	reqRemote := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	reqRemote.RemoteAddr = "203.0.113.50:54321"
+	rrRemote := httptest.NewRecorder()
+	routerNoAuth.ServeHTTP(rrRemote, reqRemote)
+	if rrRemote.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for non-loopback caller in dev mode without credentials, got %d", rrRemote.Code)
 	}
 
 	// Case 2: Admin password enabled
@@ -130,8 +152,8 @@ func TestRouter_AuthMiddleware(t *testing.T) {
 	sessionStore := NewSessionStore(24 * time.Hour)
 	routerAuth := NewRouter(cfgAuth, logger, RouterOptions{SessionStore: sessionStore})
 
-	// Public endpoints should pass through
-	publicPaths := []string{"/healthz", "/ui/static/js/alpine.min.js", "/", "/api/v1/auth/status"}
+	// Public endpoints (including inbound webhook receiver) should pass through
+	publicPaths := []string{"/healthz", "/ui/static/js/alpine.min.js", "/", "/api/v1/auth/status", "/api/v1/webhook/stripe"}
 	for _, p := range publicPaths {
 		reqPub := httptest.NewRequest(http.MethodGet, p, nil)
 		rrPub := httptest.NewRecorder()
@@ -141,7 +163,7 @@ func TestRouter_AuthMiddleware(t *testing.T) {
 		}
 	}
 
-	// Protected endpoints should return 401 Unauthorized when unauthenticated
+	// Protected endpoints (including outbound jobs and relay) should return 401 Unauthorized when unauthenticated
 	protectedPaths := []string{
 		"/api/v1/routes",
 		"/api/v1/routes/any-id",
@@ -150,6 +172,8 @@ func TestRouter_AuthMiddleware(t *testing.T) {
 		"/api/v1/dlq",
 		"/api/v1/dlq/any-id/replay",
 		"/api/v1/jobs/01hx0000000000000000000000",
+		"/api/v1/jobs/test-route",
+		"/api/v1/relay/test-route",
 	}
 	for _, p := range protectedPaths {
 		reqProt := httptest.NewRequest(http.MethodGet, p, nil)
@@ -160,12 +184,14 @@ func TestRouter_AuthMiddleware(t *testing.T) {
 		}
 	}
 
-	// Machine ingest POST /api/v1/jobs/{route_name} should remain unauthenticated
-	reqIngest := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/test-route", nil)
-	rrIngest := httptest.NewRecorder()
-	routerAuth.ServeHTTP(rrIngest, reqIngest)
-	if rrIngest.Code == http.StatusUnauthorized {
-		t.Fatalf("expected POST /api/v1/jobs/test-route not to be blocked by auth, got 401")
+	// Outbound POST /api/v1/jobs/{route_name} and POST /api/v1/relay/{route_name} must also be protected
+	for _, p := range []string{"/api/v1/jobs/test-route", "/api/v1/relay/test-route"} {
+		reqOut := httptest.NewRequest(http.MethodPost, p, nil)
+		rrOut := httptest.NewRecorder()
+		routerAuth.ServeHTTP(rrOut, reqOut)
+		if rrOut.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized for unauthenticated POST %s, got %d", p, rrOut.Code)
+		}
 	}
 
 	// Protected endpoints with valid cookie should not return 401
@@ -247,7 +273,7 @@ func TestRouter_DualAuth(t *testing.T) {
 		t.Fatalf("expected 401 for revoked api key, got %d", rr4.Code)
 	}
 
-	// 5. Dev mode (AdminPassword == "") permits unauthenticated access, but rejects invalid API key
+	// 5. Dev mode (AdminPassword == "") permits unauthenticated access on loopback, rejects remote unauthenticated, and rejects invalid API key
 	cfgDev := config.DefaultConfig()
 	cfgDev.AdminPassword = ""
 	routerDev := NewRouter(cfgDev, logger, RouterOptions{
@@ -255,13 +281,23 @@ func TestRouter_DualAuth(t *testing.T) {
 	})
 
 	reqDevOpen := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	reqDevOpen.RemoteAddr = "127.0.0.1:12345"
 	rrDevOpen := httptest.NewRecorder()
 	routerDev.ServeHTTP(rrDevOpen, reqDevOpen)
 	if rrDevOpen.Code == http.StatusUnauthorized {
-		t.Fatalf("expected dev mode open access without credentials, got 401")
+		t.Fatalf("expected dev mode open access on loopback without credentials, got 401")
+	}
+
+	reqDevRemote := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	reqDevRemote.RemoteAddr = "203.0.113.99:54321"
+	rrDevRemote := httptest.NewRecorder()
+	routerDev.ServeHTTP(rrDevRemote, reqDevRemote)
+	if rrDevRemote.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 in dev mode for remote non-loopback caller without API key, got %d", rrDevRemote.Code)
 	}
 
 	reqDevBadKey := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	reqDevBadKey.RemoteAddr = "127.0.0.1:12345"
 	reqDevBadKey.Header.Set("X-API-Key", "sr_live_badkey")
 	rrDevBadKey := httptest.NewRecorder()
 	routerDev.ServeHTTP(rrDevBadKey, reqDevBadKey)

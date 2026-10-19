@@ -101,10 +101,10 @@ func setupTestRouterWithRelay(t *testing.T) (*sqlite.DB, *engine.RouteRegistry, 
 	)
 
 	cfg := config.DefaultConfig()
-	router := NewRouter(cfg, logger, RouterOptions{
+	router := withLoopbackRemoteAddr(NewRouter(cfg, logger, RouterOptions{
 		RouteRegistry: registry,
 		RelayEngine:   relayEngine,
-	})
+	}))
 
 	return db, registry, router, upstream
 }

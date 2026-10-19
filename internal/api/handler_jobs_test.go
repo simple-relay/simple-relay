@@ -61,13 +61,14 @@ func setupTestJobServer(t *testing.T) (*sqlite.DB, *engine.RouteRegistry, *engin
 	batchWriter.Start(context.Background())
 
 	cfg := &config.Config{Port: 8080}
-	handler := NewRouter(cfg, nil, RouterOptions{
+	handler := withLoopbackRemoteAddr(NewRouter(cfg, nil, RouterOptions{
 		RouteRegistry: registry,
 		BatchWriter:   batchWriter,
 		RequestRepo:   reqRepo,
 		AttemptRepo:   attemptRepo,
+		APIKeyRepo:    sqlite.NewAPIKeyRepo(db),
 		MaxBodyBytes:  1024 * 1024,
-	})
+	}))
 
 	return db, registry, batchWriter, handler, route
 }
@@ -116,6 +117,78 @@ func TestJobIngest_Success(t *testing.T) {
 	}
 	if savedReq.Headers["Idempotency-Key"] != "idem-xyz" {
 		t.Errorf("expected header Idempotency-Key preserved, got %q", savedReq.Headers["Idempotency-Key"])
+	}
+}
+
+func TestJobIngest_StripsInternalAuthCredentials(t *testing.T) {
+	db, _, bw, handler, route := setupTestJobServer(t)
+	defer db.Close()
+	defer bw.Close()
+
+	rawKey, keyEntity, err := GenerateRawKey("job-ingest-test")
+	if err != nil {
+		t.Fatalf("GenerateRawKey failed: %v", err)
+	}
+	if err := sqlite.NewAPIKeyRepo(db).CreateAPIKey(context.Background(), keyEntity); err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+
+	// 1. Authenticate with X-API-Key while passing an upstream Authorization Bearer token and mixed cookies
+	req1 := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/"+route.Name, bytes.NewBufferString(`{"test":1}`))
+	req1.Header.Set("Content-Type", "application/json")
+	req1.Header.Set("X-API-Key", rawKey)
+	req1.Header.Set("Authorization", "Bearer sk_live_upstream_openai_token")
+	req1.Header.Set("Cookie", "relay_session=admin_session_secret; tenant_id=acme")
+
+	rec1 := httptest.NewRecorder()
+	handler.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted, got %d: %s", rec1.Code, rec1.Body.String())
+	}
+
+	var resp1 map[string]any
+	_ = json.Unmarshal(rec1.Body.Bytes(), &resp1)
+	jobID1 := resp1["job_id"].(string)
+
+	reqRepo := sqlite.NewRequestRepo(db)
+	saved1, err := reqRepo.GetRequestByID(context.Background(), jobID1)
+	if err != nil {
+		t.Fatalf("GetRequestByID failed: %v", err)
+	}
+	if _, exists := saved1.Headers["X-Api-Key"]; exists {
+		t.Fatalf("expected X-Api-Key to be stripped from persisted headers, got %v", saved1.Headers["X-Api-Key"])
+	}
+	if saved1.Headers["Authorization"] != "Bearer sk_live_upstream_openai_token" {
+		t.Fatalf("expected upstream Authorization preserved, got %q", saved1.Headers["Authorization"])
+	}
+	if saved1.Headers["Cookie"] != "tenant_id=acme" {
+		t.Fatalf("expected relay_session stripped from Cookie while preserving tenant_id=acme, got %q", saved1.Headers["Cookie"])
+	}
+
+	// 2. Authenticate with Authorization: Bearer sr_live_... and sole relay_session cookie
+	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/"+route.Name, bytes.NewBufferString(`{"test":2}`))
+	req2.Header.Set("Authorization", "Bearer "+rawKey)
+	req2.Header.Set("Cookie", "relay_session=admin_session_secret")
+
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+
+	var resp2 map[string]any
+	_ = json.Unmarshal(rec2.Body.Bytes(), &resp2)
+	jobID2 := resp2["job_id"].(string)
+
+	saved2, err := reqRepo.GetRequestByID(context.Background(), jobID2)
+	if err != nil {
+		t.Fatalf("GetRequestByID failed: %v", err)
+	}
+	if _, exists := saved2.Headers["Authorization"]; exists {
+		t.Fatalf("expected Authorization: Bearer sr_live_* to be stripped, got %q", saved2.Headers["Authorization"])
+	}
+	if _, exists := saved2.Headers["Cookie"]; exists {
+		t.Fatalf("expected Cookie with only relay_session to be stripped completely, got %q", saved2.Headers["Cookie"])
 	}
 }
 

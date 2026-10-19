@@ -116,12 +116,13 @@ func TestRateLimiter_Lifecycle(t *testing.T) {
 }
 
 func TestAuthHandler_Status(t *testing.T) {
-	// Case 1: Admin password disabled
+	// Case 1a: Admin password disabled, loopback request -> auth_required=false, authenticated=true
 	store := NewSessionStore(24 * time.Hour)
 	rl := NewRateLimiter(5, 5*time.Minute)
 	hNoAuth := NewAuthHandler("", store, rl, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/auth/status", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
 	w := httptest.NewRecorder()
 	hNoAuth.Status(w, req)
 
@@ -133,7 +134,19 @@ func TestAuthHandler_Status(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	if res["auth_required"] != false || res["authenticated"] != true {
-		t.Fatalf("expected auth_required=false, authenticated=true, got %+v", res)
+		t.Fatalf("expected auth_required=false, authenticated=true on loopback dev mode, got %+v", res)
+	}
+
+	// Case 1b: Admin password disabled, non-loopback request -> auth_required=true, authenticated=false
+	reqRemote := httptest.NewRequest("GET", "/api/v1/auth/status", nil)
+	reqRemote.RemoteAddr = "203.0.113.50:54321"
+	wRemote := httptest.NewRecorder()
+	hNoAuth.Status(wRemote, reqRemote)
+
+	var resRemote map[string]any
+	_ = json.Unmarshal(wRemote.Body.Bytes(), &resRemote)
+	if resRemote["auth_required"] != true || resRemote["authenticated"] != false {
+		t.Fatalf("expected auth_required=true, authenticated=false for remote caller in dev mode, got %+v", resRemote)
 	}
 
 	// Case 2: Admin password enabled, not authenticated
@@ -341,25 +354,37 @@ func TestRateLimiter_SlidingWindowAndCleanup(t *testing.T) {
 func TestExtractClientIP(t *testing.T) {
 	tests := []struct {
 		name       string
+		trustProxy bool
 		xff        string
 		xRealIP    string
 		remoteAddr string
 		expected   string
 	}{
 		{
-			name:       "X-Forwarded-For multiple IPs",
+			name:       "Untrusted proxy ignores X-Forwarded-For and X-Real-IP",
+			trustProxy: false,
+			xff:        "203.0.113.195:8080, 70.41.3.18",
+			xRealIP:    "198.51.100.1:9090",
+			remoteAddr: "10.0.0.1:12345",
+			expected:   "10.0.0.1",
+		},
+		{
+			name:       "Trusted proxy uses X-Forwarded-For multiple IPs",
+			trustProxy: true,
 			xff:        " 203.0.113.195:8080 , 70.41.3.18, 150.172.238.178 ",
 			remoteAddr: "10.0.0.1:12345",
 			expected:   "203.0.113.195",
 		},
 		{
-			name:       "X-Real-IP takes precedence over RemoteAddr",
+			name:       "Trusted proxy X-Real-IP takes precedence over RemoteAddr",
+			trustProxy: true,
 			xRealIP:    "198.51.100.1:9090",
 			remoteAddr: "10.0.0.1:12345",
 			expected:   "198.51.100.1",
 		},
 		{
 			name:       "Fallback to RemoteAddr",
+			trustProxy: true,
 			remoteAddr: "192.168.1.50:12345",
 			expected:   "192.168.1.50",
 		},
@@ -375,11 +400,45 @@ func TestExtractClientIP(t *testing.T) {
 			if tc.xRealIP != "" {
 				req.Header.Set("X-Real-IP", tc.xRealIP)
 			}
-			ip := ExtractClientIP(req)
+			ip := ExtractClientIP(req, tc.trustProxy)
 			if ip != tc.expected {
 				t.Fatalf("expected IP %q, got %q", tc.expected, ip)
 			}
 		})
+	}
+}
+
+func TestAuthHandler_RateLimit_BlocksXFFSpoofingWhenUntrusted(t *testing.T) {
+	adminPass := "supersecret123"
+	store := NewSessionStore(24 * time.Hour)
+	rl := NewRateLimiter(5, 5*time.Minute)
+	h := NewAuthHandler(adminPass, store, rl, nil) // trustProxy defaults to false
+	clientIP := "198.51.100.99:54321"
+
+	// 5 failed login attempts with rotating spoofed X-Forwarded-For headers
+	for i := 1; i <= 5; i++ {
+		body, _ := json.Marshal(map[string]string{"password": "wrong"})
+		req := httptest.NewRequest("POST", "/api/v1/auth/login", bytes.NewReader(body))
+		req.RemoteAddr = clientIP
+		req.Header.Set("X-Forwarded-For", "203.0.113."+strconv.Itoa(i))
+		w := httptest.NewRecorder()
+		h.Login(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: expected 401, got %d", i, w.Code)
+		}
+	}
+
+	// 6th attempt with yet another spoofed X-Forwarded-For must be blocked with 429
+	body, _ := json.Marshal(map[string]string{"password": adminPass})
+	reqBlocked := httptest.NewRequest("POST", "/api/v1/auth/login", bytes.NewReader(body))
+	reqBlocked.RemoteAddr = clientIP
+	reqBlocked.Header.Set("X-Forwarded-For", "203.0.113.250")
+	wBlocked := httptest.NewRecorder()
+	h.Login(wBlocked, reqBlocked)
+
+	if wBlocked.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 Too Many Requests despite X-Forwarded-For spoofing, got %d", wBlocked.Code)
 	}
 }
 

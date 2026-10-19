@@ -39,12 +39,12 @@ func setupTestRoutesRouter(t *testing.T) (http.Handler, *sqlite.DB, *engine.Rout
 	}
 
 	cfg := &config.Config{Port: 8080}
-	handler := NewRouter(cfg, nil, RouterOptions{
+	handler := withLoopbackRemoteAddr(NewRouter(cfg, nil, RouterOptions{
 		RouteRepo:     db.RouteRepo,
 		RouteRegistry: registry,
 		RequestRepo:   db.RequestRepo,
 		AttemptRepo:   db.AttemptRepo,
-	})
+	}))
 
 	return handler, db, registry
 }
@@ -259,5 +259,114 @@ func TestRoutesHandler_ValidationRulesAndAsymmetric(t *testing.T) {
 
 	if rsaRec.Code != http.StatusCreated {
 		t.Fatalf("expected 201 Created for rsa_sha256 without secret, got %d: %s", rsaRec.Code, rsaRec.Body.String())
+	}
+}
+
+func TestRoutesHandler_SecretMaskingAndPreservation(t *testing.T) {
+	router, db, registry := setupTestRoutesRouter(t)
+	defer db.Close()
+
+	rawSecret := "whsec_super_secret_stripe_key_9a8b"
+	expectedMask := MaskSecret(rawSecret)
+	if expectedMask == rawSecret || expectedMask != "whse*****9a8b" {
+		t.Fatalf("expected masked secret whse*****9a8b, got %q", expectedMask)
+	}
+
+	// 1. Create route with signature_secret -> response must mask it, registry must retain raw secret
+	createBody := map[string]any{
+		"name":               "stripe-masked",
+		"type":               "inbound",
+		"mode":               "async",
+		"path":               "/api/v1/webhook/stripe-masked",
+		"destination_url":    "https://api.internal.com/stripe",
+		"signature_provider": "stripe",
+		"signature_secret":   rawSecret,
+	}
+	bodyBytes, _ := json.Marshal(createBody)
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/routes", bytes.NewReader(bodyBytes))
+	createRec := httptest.NewRecorder()
+	router.ServeHTTP(createRec, createReq)
+
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	var created model.Route
+	_ = json.NewDecoder(createRec.Body).Decode(&created)
+	if created.SignatureSecret != expectedMask {
+		t.Fatalf("expected POST response to return masked secret %q, got %q", expectedMask, created.SignatureSecret)
+	}
+
+	cached, found := registry.GetByName("stripe-masked")
+	if !found || cached.SignatureSecret != rawSecret {
+		t.Fatalf("expected in-memory registry to preserve raw secret %q, got %q", rawSecret, cached.SignatureSecret)
+	}
+
+	// 2. GET /api/v1/routes/{id} and GET /api/v1/routes must never leak raw secret
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/routes/"+created.ID, nil)
+	getRec := httptest.NewRecorder()
+	router.ServeHTTP(getRec, getReq)
+	var fetched model.Route
+	_ = json.NewDecoder(getRec.Body).Decode(&fetched)
+	if fetched.SignatureSecret != expectedMask {
+		t.Fatalf("expected GET /routes/{id} to return masked secret %q, got %q", expectedMask, fetched.SignatureSecret)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	listRec := httptest.NewRecorder()
+	router.ServeHTTP(listRec, listReq)
+	var listed []*model.Route
+	_ = json.NewDecoder(listRec.Body).Decode(&listed)
+	if len(listed) != 1 || listed[0].SignatureSecret != expectedMask {
+		t.Fatalf("expected GET /routes to return masked secret %q, got %+v", expectedMask, listed)
+	}
+
+	// 3. PUT /api/v1/routes/{id} echoing the masked secret (e.g. from UI edit drawer) preserves raw secret
+	updateMasked := map[string]any{
+		"name":               "stripe-masked",
+		"type":               "inbound",
+		"mode":               "async",
+		"path":               "/api/v1/webhook/stripe-masked",
+		"destination_url":    "https://api.internal.com/stripe-v2",
+		"signature_provider": "stripe",
+		"signature_secret":   expectedMask,
+		"max_attempts":       8,
+	}
+	updBytes, _ := json.Marshal(updateMasked)
+	updReq := httptest.NewRequest(http.MethodPut, "/api/v1/routes/"+created.ID, bytes.NewReader(updBytes))
+	updRec := httptest.NewRecorder()
+	router.ServeHTTP(updRec, updReq)
+	if updRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK when updating with masked secret, got %d: %s", updRec.Code, updRec.Body.String())
+	}
+
+	cachedAfterMaskedPut, _ := registry.GetByName("stripe-masked")
+	if cachedAfterMaskedPut.SignatureSecret != rawSecret {
+		t.Fatalf("expected raw secret %q preserved after PUT with masked value, got %q", rawSecret, cachedAfterMaskedPut.SignatureSecret)
+	}
+
+	// 4. PUT /api/v1/routes/{id} with a new raw secret rotates the secret
+	newSecret := "whsec_rotated_stripe_secret_1234"
+	updateNew := map[string]any{
+		"name":               "stripe-masked",
+		"type":               "inbound",
+		"mode":               "async",
+		"path":               "/api/v1/webhook/stripe-masked",
+		"destination_url":    "https://api.internal.com/stripe-v2",
+		"signature_provider": "stripe",
+		"signature_secret":   newSecret,
+		"max_attempts":       8,
+	}
+	updNewBytes, _ := json.Marshal(updateNew)
+	updNewReq := httptest.NewRequest(http.MethodPut, "/api/v1/routes/"+created.ID, bytes.NewReader(updNewBytes))
+	updNewRec := httptest.NewRecorder()
+	router.ServeHTTP(updNewRec, updNewReq)
+	if updNewRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK when rotating secret, got %d: %s", updNewRec.Code, updNewRec.Body.String())
+	}
+
+	cachedAfterRotate, _ := registry.GetByName("stripe-masked")
+	if cachedAfterRotate.SignatureSecret != newSecret {
+		t.Fatalf("expected rotated raw secret %q in registry, got %q", newSecret, cachedAfterRotate.SignatureSecret)
 	}
 }

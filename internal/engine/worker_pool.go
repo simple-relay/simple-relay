@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -149,7 +150,14 @@ func (wp *WorkerPool) processJob(ctx context.Context, req *model.Request) {
 	}
 
 	for k, v := range req.Headers {
-		outReq.Header.Set(k, v)
+		if isHopByHopHeader(k) || strings.EqualFold(k, "X-Relay-Timeout") {
+			continue
+		}
+		cleaned, keep := SanitizeInternalAuthHeaders(k, []string{v})
+		if !keep || len(cleaned) == 0 {
+			continue
+		}
+		outReq.Header.Set(k, strings.Join(cleaned, ", "))
 	}
 	if outReq.Header.Get("X-Relay-Request-ID") == "" {
 		outReq.Header.Set("X-Relay-Request-ID", req.ID)

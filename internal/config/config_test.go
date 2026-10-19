@@ -32,6 +32,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.DrainTimeout.Seconds() != 30 {
 		t.Fatalf("expected default DrainTimeout 30s, got %v", cfg.DrainTimeout)
 	}
+	if cfg.TrustProxy {
+		t.Fatalf("expected default TrustProxy false, got true")
+	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -44,6 +47,7 @@ func TestLoadFromEnv(t *testing.T) {
 	os.Setenv("RELAY_DISPATCHER_POLL_MS", "250")
 	os.Setenv("RELAY_CLEANER_INTERVAL", "30m")
 	os.Setenv("RELAY_DRAIN_TIMEOUT", "45s")
+	os.Setenv("RELAY_TRUST_PROXY", "true")
 	defer func() {
 		os.Unsetenv("RELAY_PORT")
 		os.Unsetenv("RELAY_HOST")
@@ -54,6 +58,7 @@ func TestLoadFromEnv(t *testing.T) {
 		os.Unsetenv("RELAY_DISPATCHER_POLL_MS")
 		os.Unsetenv("RELAY_CLEANER_INTERVAL")
 		os.Unsetenv("RELAY_DRAIN_TIMEOUT")
+		os.Unsetenv("RELAY_TRUST_PROXY")
 	}()
 
 	cfg, err := LoadFromEnv()
@@ -87,6 +92,9 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if cfg.DrainTimeout.Seconds() != 45 {
 		t.Fatalf("expected DrainTimeout 45s, got %v", cfg.DrainTimeout)
+	}
+	if !cfg.TrustProxy {
+		t.Fatalf("expected TrustProxy true when RELAY_TRUST_PROXY=true")
 	}
 }
 
