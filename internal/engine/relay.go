@@ -77,12 +77,17 @@ func (e *RelayEngine) RelaySync(
 		requestID = model.NewULID()
 	}
 
-	// Prepare headers map for SQLite storage
+	// Prepare headers map for SQLite storage (strip hop-by-hop and internal relay auth credentials)
 	headersMap := make(map[string]string)
-	for k, v := range headers {
-		if len(v) > 0 {
-			headersMap[k] = v[0]
+	for k, vv := range headers {
+		if isHopByHopHeader(k) {
+			continue
 		}
+		cleaned, keep := SanitizeInternalAuthHeaders(k, vv)
+		if !keep || len(cleaned) == 0 {
+			continue
+		}
+		headersMap[k] = strings.Join(cleaned, ", ")
 	}
 
 	// 1. Initial persistence of Request in SQLite (status: processing)
@@ -278,16 +283,82 @@ func (e *RelayEngine) RelaySync(
 	}, nil
 }
 
-// copyFilteredHeaders copies HTTP headers while stripping RFC 7230 hop-by-hop headers.
+// copyFilteredHeaders copies HTTP headers while stripping RFC 7230 hop-by-hop headers
+// and internal Simple Relay authentication credentials.
 func copyFilteredHeaders(dst http.Header, src http.Header) {
 	for k, vv := range src {
 		if isHopByHopHeader(k) || strings.EqualFold(k, "X-Relay-Timeout") {
 			continue
 		}
-		for _, v := range vv {
+		cleaned, keep := SanitizeInternalAuthHeaders(k, vv)
+		if !keep {
+			continue
+		}
+		for _, v := range cleaned {
 			dst.Add(k, v)
 		}
 	}
+}
+
+// SanitizeInternalAuthHeaders strips Simple Relay caller credentials (X-API-Key,
+// Authorization: Bearer sr_live_*, and relay_session cookie) so they are never persisted
+// in plaintext request logs or leaked to upstream destination URLs ⚡.
+func SanitizeInternalAuthHeaders(k string, vv []string) ([]string, bool) {
+	if strings.EqualFold(k, "X-API-Key") {
+		return nil, false
+	}
+	if strings.EqualFold(k, "Authorization") {
+		kept := make([]string, 0, len(vv))
+		for _, v := range vv {
+			if isRelayBearerToken(v) {
+				continue
+			}
+			kept = append(kept, v)
+		}
+		if len(kept) == 0 {
+			return nil, false
+		}
+		return kept, true
+	}
+	if strings.EqualFold(k, "Cookie") {
+		kept := make([]string, 0, len(vv))
+		for _, v := range vv {
+			if stripped := stripRelaySessionCookie(v); stripped != "" {
+				kept = append(kept, stripped)
+			}
+		}
+		if len(kept) == 0 {
+			return nil, false
+		}
+		return kept, true
+	}
+	return vv, true
+}
+
+func isRelayBearerToken(val string) bool {
+	trimmed := strings.TrimSpace(val)
+	if len(trimmed) > 7 && strings.EqualFold(trimmed[:7], "Bearer ") {
+		token := strings.TrimSpace(trimmed[7:])
+		return strings.HasPrefix(token, "sr_live_")
+	}
+	return false
+}
+
+func stripRelaySessionCookie(cookieHeader string) string {
+	parts := strings.Split(cookieHeader, ";")
+	kept := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		name, _, _ := strings.Cut(trimmed, "=")
+		if strings.TrimSpace(name) == "relay_session" {
+			continue
+		}
+		kept = append(kept, trimmed)
+	}
+	return strings.Join(kept, "; ")
 }
 
 // isHopByHopHeader checks if a header is an RFC 7230 hop-by-hop header.

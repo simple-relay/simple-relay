@@ -84,6 +84,8 @@ A security audit of Simple Relay's default HTTP and configuration boundaries ide
 
 - **Protected Paths (`isProtectedPath`):**
   - Protects `/`, `/ui`, `/ui/`, `/api/v1/routes`, `/api/v1/requests`, `/api/v1/dlq`, `/api/v1/api-keys`, `/api/v1/jobs`, and `/api/v1/relay`.
+- **Outbound Credential Stripping (`SanitizeInternalAuthHeaders`):**
+  - Before persisting `requests.headers` to SQLite or forwarding requests to `route.DestinationURL` in `NewJobIngestHandler`, `RelayEngine.RelaySync`, and `WorkerPool.processJob`, Simple Relay strips its own internal authentication credentials (`X-API-Key`, `Authorization: Bearer sr_live_*`, and the `relay_session` cookie) while preserving non-relay `Authorization` headers (e.g., upstream `Bearer sk_live_...`) and application cookies.
 - **Middleware & AuthHandler Dev Mode Behavior:**
   - When `AdminPassword == ""`:
     - Requests with a valid API key (`Authorization: Bearer` or `X-API-Key`) are authenticated regardless of source IP.

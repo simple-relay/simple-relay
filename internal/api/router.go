@@ -235,11 +235,24 @@ func extractAPIKey(r *http.Request) string {
 	if key := r.Header.Get("X-API-Key"); key != "" {
 		return strings.TrimSpace(key)
 	}
-	auth := r.Header.Get("Authorization")
-	if strings.HasPrefix(auth, "Bearer ") {
-		return strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
+	var fallbackToken string
+	for _, auth := range r.Header.Values("Authorization") {
+		trimmed := strings.TrimSpace(auth)
+		if len(trimmed) > 7 && strings.EqualFold(trimmed[:7], "Bearer ") {
+			token := strings.TrimSpace(trimmed[7:])
+			if strings.HasPrefix(token, "sr_live_") {
+				return token
+			}
+			if fallbackToken == "" {
+				fallbackToken = token
+			}
+		}
 	}
-	return ""
+	// On outbound proxy/job endpoints, non-sr_live_ Bearer tokens belong to the upstream destination API.
+	if strings.HasPrefix(r.URL.Path, "/api/v1/jobs") || strings.HasPrefix(r.URL.Path, "/api/v1/relay") {
+		return ""
+	}
+	return fallbackToken
 }
 
 func isProtectedPath(method, path string) bool {

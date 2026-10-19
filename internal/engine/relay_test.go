@@ -248,3 +248,59 @@ func TestRelayEngine_ClientDisconnectCancellation(t *testing.T) {
 		t.Errorf("expected fast abortion, but took %v", duration)
 	}
 }
+
+func TestRelayEngine_StripsInternalAuthCredentials(t *testing.T) {
+	db, engine, route := setupTestRelayEngine(t)
+	defer db.Close()
+
+	var capturedHeaders http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedHeaders = r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	route.DestinationURL = server.URL
+
+	ctx := context.Background()
+	headers := make(http.Header)
+	headers.Set("X-API-Key", "sr_live_internal_secret")
+	headers.Add("Authorization", "Bearer sr_live_internal_secret")
+	headers.Add("Authorization", "Bearer sk_test_upstream_key")
+	headers.Set("Cookie", "relay_session=secret_session_token; upstream_cookie=val1")
+
+	res, err := engine.RelaySync(ctx, route, "POST", "/api/v1/relay/sync-test", headers, []byte("{}"), nil)
+	if err != nil {
+		t.Fatalf("RelaySync failed: %v", err)
+	}
+
+	// Verify upstream did not receive internal credentials
+	if got := capturedHeaders.Get("X-API-Key"); got != "" {
+		t.Fatalf("expected X-API-Key stripped from upstream request, got %q", got)
+	}
+	if got := capturedHeaders.Get("Authorization"); got != "Bearer sk_test_upstream_key" {
+		t.Fatalf("expected only upstream Authorization forwarded, got %q", got)
+	}
+	if got := capturedHeaders.Get("Cookie"); got != "upstream_cookie=val1" {
+		t.Fatalf("expected relay_session stripped from upstream Cookie, got %q", got)
+	}
+
+	// Verify SQLite record did not persist internal credentials
+	saved, err := db.GetRequestByID(ctx, res.RequestID)
+	if err != nil {
+		t.Fatalf("GetRequestByID failed: %v", err)
+	}
+	if _, exists := saved.Headers["X-Api-Key"]; exists {
+		t.Fatalf("expected X-Api-Key stripped from SQLite headers, got %q", saved.Headers["X-Api-Key"])
+	}
+	if _, exists := saved.Headers["X-API-Key"]; exists {
+		t.Fatalf("expected X-API-Key stripped from SQLite headers, got %q", saved.Headers["X-API-Key"])
+	}
+	if saved.Headers["Authorization"] != "Bearer sk_test_upstream_key" {
+		t.Fatalf("expected SQLite Authorization to only keep upstream token, got %q", saved.Headers["Authorization"])
+	}
+	if saved.Headers["Cookie"] != "upstream_cookie=val1" {
+		t.Fatalf("expected SQLite Cookie to strip relay_session, got %q", saved.Headers["Cookie"])
+	}
+}
