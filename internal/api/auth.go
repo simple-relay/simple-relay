@@ -265,27 +265,30 @@ func (rl *RateLimiter) StartAutoCleanup(ctx context.Context, interval time.Durat
 	}()
 }
 
-// ExtractClientIP extracts the host IP from request headers or RemoteAddr.
-// It prioritizes X-Forwarded-For (first entry) and X-Real-IP before RemoteAddr.
-func ExtractClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		ips := strings.Split(xff, ",")
-		if len(ips) > 0 {
-			clientIP := strings.TrimSpace(ips[0])
-			if clientIP != "" {
-				if host, _, err := net.SplitHostPort(clientIP); err == nil {
-					return host
+// ExtractClientIP extracts the host IP from request RemoteAddr.
+// It only trusts X-Forwarded-For (first entry) and X-Real-IP when trustProxy is explicitly enabled.
+func ExtractClientIP(r *http.Request, trustProxy ...bool) string {
+	trusted := len(trustProxy) > 0 && trustProxy[0]
+	if trusted {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			ips := strings.Split(xff, ",")
+			if len(ips) > 0 {
+				clientIP := strings.TrimSpace(ips[0])
+				if clientIP != "" {
+					if host, _, err := net.SplitHostPort(clientIP); err == nil {
+						return host
+					}
+					return clientIP
 				}
-				return clientIP
 			}
 		}
-	}
 
-	if xRealIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); xRealIP != "" {
-		if host, _, err := net.SplitHostPort(xRealIP); err == nil {
-			return host
+		if xRealIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); xRealIP != "" {
+			if host, _, err := net.SplitHostPort(xRealIP); err == nil {
+				return host
+			}
+			return xRealIP
 		}
-		return xRealIP
 	}
 
 	remote := strings.TrimSpace(r.RemoteAddr)
@@ -295,9 +298,28 @@ func ExtractClientIP(r *http.Request) string {
 	return remote
 }
 
+// isLoopbackRequest checks whether the direct TCP peer in r.RemoteAddr is a loopback address (127.0.0.0/8, ::1, or localhost).
+// Note: Never use X-Forwarded-For here—loopback dev mode must verify the actual socket peer ⚡.
+func isLoopbackRequest(r *http.Request) bool {
+	remote := strings.TrimSpace(r.RemoteAddr)
+	if remote == "" {
+		return false
+	}
+	host := remote
+	if h, _, err := net.SplitHostPort(remote); err == nil {
+		host = h
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 // AuthHandler handles admin login, logout, and session status.
 type AuthHandler struct {
 	adminPassword string
+	trustProxy    bool
 	sessionStore  *SessionStore
 	rateLimiter   *RateLimiter
 	apiKeyRepo    storage.APIKeyRepository
@@ -323,6 +345,12 @@ func (h *AuthHandler) WithAPIKeyRepo(repo storage.APIKeyRepository) *AuthHandler
 	return h
 }
 
+// WithTrustProxy configures whether proxy IP headers (X-Forwarded-For, X-Real-IP) are trusted for rate limiting.
+func (h *AuthHandler) WithTrustProxy(trust bool) *AuthHandler {
+	h.trustProxy = trust
+	return h
+}
+
 func (h *AuthHandler) isAuthenticated(r *http.Request) bool {
 	if h.apiKeyRepo != nil {
 		if key := extractAPIKey(r); key != "" {
@@ -335,7 +363,7 @@ func (h *AuthHandler) isAuthenticated(r *http.Request) bool {
 	}
 
 	if h.adminPassword == "" {
-		return true
+		return isLoopbackRequest(r)
 	}
 	cookie, err := r.Cookie("relay_session")
 	if err != nil || cookie == nil {
@@ -347,8 +375,9 @@ func (h *AuthHandler) isAuthenticated(r *http.Request) bool {
 // Status returns whether admin auth is required and if the current client is authenticated.
 func (h *AuthHandler) Status(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	authRequired := h.adminPassword != "" || !isLoopbackRequest(r)
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"auth_required": h.adminPassword != "",
+		"auth_required": authRequired,
 		"authenticated": h.isAuthenticated(r),
 	})
 }
@@ -357,12 +386,17 @@ func (h *AuthHandler) Status(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if h.adminPassword == "" {
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]string{"status": "authenticated"})
+		if isLoopbackRequest(r) {
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "authenticated"})
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "Admin password authentication is not configured; provide an API key or connect from loopback"})
 		return
 	}
 
-	ip := ExtractClientIP(r)
+	ip := ExtractClientIP(r, h.trustProxy)
 	if allowed, wait := h.rateLimiter.Allow(ip); !allowed {
 		retryAfterSeconds := int(math.Ceil(wait.Seconds()))
 		if retryAfterSeconds <= 0 {

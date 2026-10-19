@@ -83,10 +83,10 @@ func TestRequestsHandler_ListAndDetail(t *testing.T) {
 	}
 
 	cfg := &config.Config{Port: 8080}
-	router := NewRouter(cfg, nil, RouterOptions{
+	router := withLoopbackRemoteAddr(NewRouter(cfg, nil, RouterOptions{
 		RequestRepo: db.RequestRepo,
 		AttemptRepo: db.AttemptRepo,
-	})
+	}))
 
 	// 1. List all requests
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/requests", nil)

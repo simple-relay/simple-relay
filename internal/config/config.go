@@ -24,6 +24,7 @@ type Config struct {
 	RetentionFailedDays  int
 	CleanerInterval      time.Duration
 	AdminPassword        string
+	TrustProxy           bool
 	MaxBatchSize         int
 	BatchTimeoutMS       int
 	DrainTimeout         time.Duration
@@ -43,6 +44,7 @@ func DefaultConfig() *Config {
 		RetentionFailedDays:  30,
 		CleanerInterval:      1 * time.Hour,
 		AdminPassword:        "",
+		TrustProxy:           false,
 		MaxBatchSize:         50,
 		BatchTimeoutMS:       10,
 		DrainTimeout:         30 * time.Second,
@@ -65,6 +67,7 @@ func Load() (*Config, error) {
 	fs.IntVar(&cfg.DispatcherPollMS, "dispatcher-poll-ms", cfg.DispatcherPollMS, "Dispatcher polling interval in milliseconds")
 	fs.DurationVar(&cfg.CleanerInterval, "cleaner-interval", cfg.CleanerInterval, "Storage retention cleaner execution interval")
 	fs.DurationVar(&cfg.DrainTimeout, "drain-timeout", cfg.DrainTimeout, "Graceful shutdown drain timeout")
+	fs.BoolVar(&cfg.TrustProxy, "trust-proxy", cfg.TrustProxy, "Trust X-Forwarded-For and X-Real-IP headers from reverse proxy")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return nil, fmt.Errorf("failed to parse command line flags: %w", err)
@@ -131,6 +134,11 @@ func (c *Config) loadFromEnv() {
 	}
 	if val := os.Getenv("RELAY_ADMIN_PASSWORD"); val != "" {
 		c.AdminPassword = val
+	}
+	if val := os.Getenv("RELAY_TRUST_PROXY"); val != "" {
+		if b, err := strconv.ParseBool(strings.TrimSpace(val)); err == nil {
+			c.TrustProxy = b
+		}
 	}
 	if val := os.Getenv("RELAY_BATCH_SIZE"); val != "" {
 		if b, err := strconv.Atoi(val); err == nil && b > 0 {

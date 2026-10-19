@@ -95,6 +95,7 @@ var knownServerFlags = map[string]bool{
 	"dispatcher-poll-ms": true,
 	"cleaner-interval":   true,
 	"drain-timeout":      true,
+	"trust-proxy":        true,
 }
 
 func normalizeArgs(args []string) []string {

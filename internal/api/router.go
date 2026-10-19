@@ -62,7 +62,9 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 		rateLimiter.StartAutoCleanup(opt.Context, 10*time.Minute)
 	}
 
-	authHandler := NewAuthHandler(cfg.AdminPassword, sessionStore, rateLimiter, logger).WithAPIKeyRepo(opt.APIKeyRepo)
+	authHandler := NewAuthHandler(cfg.AdminPassword, sessionStore, rateLimiter, logger).
+		WithAPIKeyRepo(opt.APIKeyRepo).
+		WithTrustProxy(cfg.TrustProxy)
 	mux.HandleFunc("GET /api/v1/auth/status", authHandler.Status)
 	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
 	mux.HandleFunc("POST /api/v1/auth/logout", authHandler.Logout)
@@ -214,13 +216,13 @@ func authMiddleware(adminPassword string, sessionStore *SessionStore, apiKeyRepo
 			}
 		}
 
-		// 3. Dev Mode: If admin password is empty, unauthenticated access is permitted
-		if adminPassword == "" {
+		// 3. Dev Mode: If admin password is empty, unauthenticated access is permitted ONLY from loopback ⚡
+		if adminPassword == "" && isLoopbackRequest(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		// 4. Protected Mode without valid credentials
+		// 4. Protected Mode (or non-loopback caller in dev mode) without valid credentials
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -245,10 +247,9 @@ func isProtectedPath(method, path string) bool {
 		strings.HasPrefix(path, "/api/v1/requests") ||
 		strings.HasPrefix(path, "/api/v1/queue") ||
 		strings.HasPrefix(path, "/api/v1/dlq") ||
-		strings.HasPrefix(path, "/api/v1/api-keys") {
-		return true
-	}
-	if (method == http.MethodGet || method == http.MethodHead) && strings.HasPrefix(path, "/api/v1/jobs/") {
+		strings.HasPrefix(path, "/api/v1/api-keys") ||
+		strings.HasPrefix(path, "/api/v1/jobs") ||
+		strings.HasPrefix(path, "/api/v1/relay") {
 		return true
 	}
 	return false

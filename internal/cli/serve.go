@@ -32,6 +32,7 @@ type ServerOptions struct {
 	DispatcherPollMS  int
 	CleanerInterval   time.Duration
 	DrainTimeout      time.Duration
+	TrustProxy        bool
 }
 
 func addServerFlags(cmd *cobra.Command, opts *ServerOptions) {
@@ -44,6 +45,7 @@ func addServerFlags(cmd *cobra.Command, opts *ServerOptions) {
 	cmd.Flags().IntVar(&opts.DispatcherPollMS, "dispatcher-poll-ms", 500, "Dispatcher polling interval in ms (env: RELAY_DISPATCHER_POLL_MS)")
 	cmd.Flags().DurationVar(&opts.CleanerInterval, "cleaner-interval", 1*time.Hour, "Storage retention cleaner execution interval (env: RELAY_CLEANER_INTERVAL)")
 	cmd.Flags().DurationVar(&opts.DrainTimeout, "drain-timeout", 30*time.Second, "Graceful shutdown drain timeout (env: RELAY_DRAIN_TIMEOUT)")
+	cmd.Flags().BoolVar(&opts.TrustProxy, "trust-proxy", false, "Trust X-Forwarded-For and X-Real-IP headers from reverse proxy (env: RELAY_TRUST_PROXY)")
 }
 
 func newServeCmd() *cobra.Command {
@@ -96,6 +98,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("drain-timeout") {
 		cfg.DrainTimeout, _ = cmd.Flags().GetDuration("drain-timeout")
 	}
+	if cmd.Flags().Changed("trust-proxy") {
+		cfg.TrustProxy, _ = cmd.Flags().GetBool("trust-proxy")
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
@@ -136,6 +141,12 @@ func RunServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 
 	// Auto-seed initial default API key on cold boot in dev mode if database has zero keys.
 	if cfg.AdminPassword == "" {
+		if cfg.Host == "0.0.0.0" || cfg.Host == "" || cfg.Host == "::" {
+			logger.Warn("RELAY_ADMIN_PASSWORD is empty while binding to a non-loopback address; unauthenticated dev mode access is restricted to loopback (127.0.0.1/::1), remote callers must provide X-API-Key",
+				"host", cfg.Host,
+				"port", cfg.Port,
+			)
+		}
 		totalKeys, err := db.APIKeys().CountTotalKeys(ctx)
 		if err != nil {
 			logger.Error("failed to query api keys count", "error", err)

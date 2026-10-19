@@ -61,13 +61,13 @@ func setupTestJobServer(t *testing.T) (*sqlite.DB, *engine.RouteRegistry, *engin
 	batchWriter.Start(context.Background())
 
 	cfg := &config.Config{Port: 8080}
-	handler := NewRouter(cfg, nil, RouterOptions{
+	handler := withLoopbackRemoteAddr(NewRouter(cfg, nil, RouterOptions{
 		RouteRegistry: registry,
 		BatchWriter:   batchWriter,
 		RequestRepo:   reqRepo,
 		AttemptRepo:   attemptRepo,
 		MaxBodyBytes:  1024 * 1024,
-	})
+	}))
 
 	return db, registry, batchWriter, handler, route
 }

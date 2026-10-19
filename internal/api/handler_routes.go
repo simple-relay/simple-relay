@@ -35,6 +35,28 @@ func NewRoutesHandler(
 	}
 }
 
+// MaskSecret redacts a signature secret into a safe hint (e.g. "whse*****9a1b" or "********").
+func MaskSecret(secret string) string {
+	if secret == "" {
+		return ""
+	}
+	if len(secret) <= 8 {
+		return "********"
+	}
+	return secret[:4] + "*****" + secret[len(secret)-4:]
+}
+
+// maskRoute returns a shallow copy of the route with SignatureSecret masked for HTTP responses.
+// Keeps the underlying model.Route in RouteRegistry untouched for zero-alloc HMAC verification ⚡.
+func maskRoute(r *model.Route) *model.Route {
+	if r == nil {
+		return nil
+	}
+	cp := *r
+	cp.SignatureSecret = MaskSecret(r.SignatureSecret)
+	return &cp
+}
+
 // ListRoutes handles GET /api/v1/routes
 func (h *RoutesHandler) ListRoutes(w http.ResponseWriter, r *http.Request) {
 	routes, err := h.repo.ListRoutes(r.Context())
@@ -43,13 +65,14 @@ func (h *RoutesHandler) ListRoutes(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "failed to list routes")
 		return
 	}
-	if routes == nil {
-		routes = []*model.Route{}
+	masked := make([]*model.Route, 0, len(routes))
+	for _, rt := range routes {
+		masked = append(masked, maskRoute(rt))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(routes)
+	_ = json.NewEncoder(w).Encode(masked)
 }
 
 // CreateRoute handles POST /api/v1/routes
@@ -100,7 +123,7 @@ func (h *RoutesHandler) CreateRoute(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(&route)
+	_ = json.NewEncoder(w).Encode(maskRoute(&route))
 }
 
 // GetRoute handles GET /api/v1/routes/{id}
@@ -124,7 +147,7 @@ func (h *RoutesHandler) GetRoute(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(route)
+	_ = json.NewEncoder(w).Encode(maskRoute(route))
 }
 
 // UpdateRoute handles PUT /api/v1/routes/{id}
@@ -138,6 +161,17 @@ func (h *RoutesHandler) UpdateRoute(w http.ResponseWriter, r *http.Request) {
 	var route model.Route
 	if err := json.NewDecoder(r.Body).Decode(&route); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	existing, err := h.repo.GetRouteByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			writeJSONError(w, http.StatusNotFound, "route not found")
+			return
+		}
+		h.logger.Error("failed to fetch existing route for update", "id", id, "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to update route")
 		return
 	}
 
@@ -156,6 +190,13 @@ func (h *RoutesHandler) UpdateRoute(w http.ResponseWriter, r *http.Request) {
 	}
 	if route.SignatureProvider == "" {
 		route.SignatureProvider = model.SignatureProviderNone
+	}
+
+	// Preserve existing secret when the caller omits signature_secret or echoes back the masked value
+	if route.Type == model.RouteTypeInbound && route.SignatureProvider != model.SignatureProviderNone {
+		if strings.TrimSpace(route.SignatureSecret) == "" || route.SignatureSecret == MaskSecret(existing.SignatureSecret) {
+			route.SignatureSecret = existing.SignatureSecret
+		}
 	}
 
 	if err := route.Validate(); err != nil {
@@ -186,7 +227,7 @@ func (h *RoutesHandler) UpdateRoute(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(&route)
+	_ = json.NewEncoder(w).Encode(maskRoute(&route))
 }
 
 // DeleteRoute handles DELETE /api/v1/routes/{id}

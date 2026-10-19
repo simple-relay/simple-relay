@@ -78,12 +78,12 @@ func setupTestDLQServer(t *testing.T) (*sqlite.DB, *engine.RouteRegistry, *int32
 		LogLevel: "debug",
 	}
 
-	handler := NewRouter(cfg, nil, RouterOptions{
+	handler := withLoopbackRemoteAddr(NewRouter(cfg, nil, RouterOptions{
 		RouteRegistry: registry,
 		RequestRepo:   reqRepo,
 		AttemptRepo:   attemptRepo,
 		WakeFn:        wakeFn,
-	})
+	}))
 
 	return db, registry, &wakeCalls, handler, route1, route2
 }

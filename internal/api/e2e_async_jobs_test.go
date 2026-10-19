@@ -109,13 +109,13 @@ func TestE2E_AsyncJobsDeliveryPipeline(t *testing.T) {
 
 	// 5. Mount HTTP API Router
 	cfg := &config.Config{Port: 8080}
-	appHandler := NewRouter(cfg, nil, RouterOptions{
+	appHandler := withLoopbackRemoteAddr(NewRouter(cfg, nil, RouterOptions{
 		RouteRegistry: registry,
 		BatchWriter:   batchWriter,
 		RequestRepo:   reqRepo,
 		AttemptRepo:   attemptRepo,
 		MaxBodyBytes:  1024 * 1024,
-	})
+	}))
 
 	// 6. Send HTTP Ingestion Request
 	payload := `{"event": "charge.success", "id": "ch_123"}`
