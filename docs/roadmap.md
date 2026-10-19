@@ -12,13 +12,13 @@
 | :--- | :--- | :--- | :--- |
 | **Phase 1** | Outbound Relay & Core Storage Engine | **Completed** | 100% Completed |
 | **Phase 2** | Inbound Webhooks & Security Pipeline | **Completed** | 100% Completed |
-| **Phase 3** | Embedded Web UI & Lifecycle Maintenance | **In Progress** | 55% Completed |
-| **Phase 4** | CLI, Observability & Alerting | Backlog | 0% |
-| **Phase 5** | Multi-node Clustering & Advanced Features | Backlog | 0% |
+| **Phase 3** | Embedded Web UI & Lifecycle Maintenance | **In Progress** | 62% Completed |
+| **Phase 4** | CLI, Observability & Alerting | **In Progress** | 50% Completed |
+| **Phase 5** | Multi-node Clustering & Advanced Features | **In Progress** | 33% Completed |
 
 ### Active Execution Pointer
 - **Current Phase:** Phase 3 — Embedded Web UI & Lifecycle Maintenance
-- **Next Immediate Focus:** Admin Password Authentication & CSRF Protection ([#14](https://github.com/simple-relay/simple-relay/issues/14)).
+- **Next Immediate Focus:** Default Security Hardening, Secret Masking & Proxy IP Trust ([#82](https://github.com/simple-relay/simple-relay/issues/82)).
 
 ---
 
@@ -207,6 +207,15 @@
   - Coordinate SQLite WAL and background worker dispatching during handover to avoid duplicate job claims or database lock contention.
   - Provide cross-platform safety: enable socket inheritance on POSIX (Linux/macOS) and fallback gracefully on Windows.
   - See design specification: [2026-10-12-zero-downtime-live-binary-upgrade-design.md](specs/2026-10-12-zero-downtime-live-binary-upgrade-design.md).
+- [ ] **Default Security Hardening, Secret Masking & Proxy IP Trust** ([#82](https://github.com/simple-relay/simple-relay/issues/82))
+  - Mask `signature_secret` on route read responses (`GET /api/v1/routes` and `GET /api/v1/routes/{id}`) while preserving existing secrets when omitted/masked on `PUT`.
+  - Protect outbound endpoints (`POST /api/v1/jobs/{route_name}` and `ANY /api/v1/relay/{route_name}`) with API key or admin session authentication.
+  - Harden empty `RELAY_ADMIN_PASSWORD` dev mode: restrict unauthenticated fallback to loopback (`127.0.0.1` / `::1`) or require the bootstrap API key, and log a startup warning when binding `0.0.0.0` without a password.
+  - Restrict `ExtractClientIP` (`X-Forwarded-For` / `X-Real-IP`) behind explicit `RELAY_TRUST_PROXY=true` to prevent login rate-limiter spoofing.
+- [ ] **Async vs Sync Retry Backoff Decoupling & Configurable SQLite Sync Mode** ([#83](https://github.com/simple-relay/simple-relay/issues/83))
+  - Separate default retry backoff profiles between synchronous proxy (`RelaySync`: `100ms` base, `10s` max) and asynchronous worker delivery (`WorkerPool`: multi-minute/hour window) so downstream deployments do not exhaust retries in under 30 seconds.
+  - Support optional route-level retry timing overrides (`base_backoff_ms`, `max_backoff_ms`, `retry_non_idempotent`).
+  - Expose `RELAY_SQLITE_SYNC` (`NORMAL` | `FULL`) and `RELAY_MAX_BODY_SIZE_MB` in `internal/config` and `sqlite.Open` for strict power-loss durability control.
 
 ---
 
@@ -222,6 +231,9 @@
   - Secure API endpoints using API keys for machine-to-machine route management and job querying.
 - [ ] **Prometheus Metrics Exporter Endpoint (`GET /metrics`)** ([#24](https://github.com/simple-relay/simple-relay/issues/24))
   - Expose Prometheus metrics tracking ingestion rate, delivery latency histograms, retry counts, and worker saturation.
+- [ ] **Provider Event ID Deduplication & Route Pause/Resume Control** ([#84](https://github.com/simple-relay/simple-relay/issues/84))
+  - Support route operational state (`active` / `paused`) so inbound webhooks continue to be durably queued (`pending`) while outbound dispatching is paused during downstream maintenance.
+  - Deduplicate duplicate upstream provider webhook deliveries using configurable event/delivery ID headers or payload keys before enqueueing.
 - [ ] **Extended Signature Verification Adapters (`Shopify`, `Slack`, `Svix`)**
   - Implement Shopify base64 HMAC verification adapter.
   - Implement Slack v0 timestamp-based HMAC verification adapter.
