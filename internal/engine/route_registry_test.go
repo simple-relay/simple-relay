@@ -16,7 +16,7 @@ func setupTestRegistry(t *testing.T) (*sqlite.DB, *RouteRegistry) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test_registry.db")
 
-	db, err := sqlite.Open(dbPath)
+	db, err := sqlite.Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}

@@ -20,7 +20,7 @@ func setupTestRelayEngine(t *testing.T) (*sqlite.DB, *RelayEngine, *model.Route)
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test_relay_engine.db")
 
-	db, err := sqlite.Open(dbPath)
+	db, err := sqlite.Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}
@@ -145,6 +145,7 @@ func TestRelayEngine_RetryAndSuccessOnSecondAttempt(t *testing.T) {
 	defer server.Close()
 
 	route.DestinationURL = server.URL
+	route.RetryNonIdempotent = true
 
 	ctx := context.Background()
 	res, err := engine.RelaySync(ctx, route, "POST", "/api/v1/relay/sync-test", make(http.Header), []byte("retry payload"), nil)
@@ -192,6 +193,7 @@ func TestRelayEngine_ExhaustRetries(t *testing.T) {
 
 	route.DestinationURL = server.URL
 	route.MaxAttempts = 3
+	route.RetryNonIdempotent = true
 
 	ctx := context.Background()
 	res, err := engine.RelaySync(ctx, route, "POST", "/api/v1/relay/sync-test", make(http.Header), []byte("body"), nil)
@@ -302,5 +304,83 @@ func TestRelayEngine_StripsInternalAuthCredentials(t *testing.T) {
 	}
 	if saved.Headers["Cookie"] != "upstream_cookie=val1" {
 		t.Fatalf("expected SQLite Cookie to strip relay_session, got %q", saved.Headers["Cookie"])
+	}
+}
+
+func TestRelayEngine_NonIdempotentMethodGate(t *testing.T) {
+	db, engine, route := setupTestRelayEngine(t)
+	defer db.Close()
+
+	var callCount int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		current := atomic.AddInt32(&callCount, 1)
+		if current == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte("transient 503"))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("recovered"))
+	}))
+	defer server.Close()
+
+	route.DestinationURL = server.URL
+	route.MaxAttempts = 3
+	route.RetryNonIdempotent = false
+
+	ctx := context.Background()
+
+	// 1. POST without Idempotency-Key and RetryNonIdempotent=false -> must NOT retry (only 1 attempt)
+	atomic.StoreInt32(&callCount, 0)
+	res, err := engine.RelaySync(ctx, route, "POST", "/api/v1/relay/sync-test", make(http.Header), []byte("charge"), nil)
+	if err != nil {
+		t.Fatalf("RelaySync returned unexpected error: %v", err)
+	}
+	if res.Attempts != 1 || res.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 1 attempt and status 503 for non-idempotent POST without key, got attempts=%d status=%d", res.Attempts, res.StatusCode)
+	}
+
+	// 2. PATCH without Idempotency-Key and RetryNonIdempotent=false -> must NOT retry (only 1 attempt)
+	atomic.StoreInt32(&callCount, 0)
+	res, err = engine.RelaySync(ctx, route, "PATCH", "/api/v1/relay/sync-test", make(http.Header), []byte("patch"), nil)
+	if err != nil {
+		t.Fatalf("RelaySync returned unexpected error: %v", err)
+	}
+	if res.Attempts != 1 || res.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 1 attempt and status 503 for non-idempotent PATCH without key, got attempts=%d status=%d", res.Attempts, res.StatusCode)
+	}
+
+	// 3. POST WITH Idempotency-Key -> allowed to retry and succeed on attempt 2
+	atomic.StoreInt32(&callCount, 0)
+	hdrWithIdem := make(http.Header)
+	hdrWithIdem.Set("Idempotency-Key", "idem-key-001")
+	res, err = engine.RelaySync(ctx, route, "POST", "/api/v1/relay/sync-test", hdrWithIdem, []byte("charge"), nil)
+	if err != nil {
+		t.Fatalf("RelaySync failed: %v", err)
+	}
+	if res.Attempts != 2 || res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 2 attempts and status 200 for POST with Idempotency-Key, got attempts=%d status=%d", res.Attempts, res.StatusCode)
+	}
+
+	// 4. POST WITH X-Relay-Idempotency-Key -> allowed to retry and succeed on attempt 2
+	atomic.StoreInt32(&callCount, 0)
+	hdrWithRelayIdem := make(http.Header)
+	hdrWithRelayIdem.Set("X-Relay-Idempotency-Key", "idem-key-002")
+	res, err = engine.RelaySync(ctx, route, "POST", "/api/v1/relay/sync-test", hdrWithRelayIdem, []byte("charge"), nil)
+	if err != nil {
+		t.Fatalf("RelaySync failed: %v", err)
+	}
+	if res.Attempts != 2 || res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 2 attempts and status 200 for POST with X-Relay-Idempotency-Key, got attempts=%d status=%d", res.Attempts, res.StatusCode)
+	}
+
+	// 5. GET without Idempotency-Key and RetryNonIdempotent=false -> idempotent method always retries
+	atomic.StoreInt32(&callCount, 0)
+	res, err = engine.RelaySync(ctx, route, "GET", "/api/v1/relay/sync-test", make(http.Header), nil, nil)
+	if err != nil {
+		t.Fatalf("RelaySync failed: %v", err)
+	}
+	if res.Attempts != 2 || res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 2 attempts and status 200 for idempotent GET, got attempts=%d status=%d", res.Attempts, res.StatusCode)
 	}
 }

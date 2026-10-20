@@ -65,7 +65,7 @@ func TestE2ELiveUpgrade(t *testing.T) {
 	defer mockUpstream.Close()
 
 	dbPath := filepath.Join(tmpDir, "relay_e2e.db")
-	db, err := sqlite.Open(dbPath)
+	db, err := sqlite.Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open sqlite database: %v", err)
 	}

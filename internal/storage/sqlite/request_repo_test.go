@@ -16,7 +16,7 @@ func setupTestDBWithRoute(t *testing.T) (*DB, *RouteRepo, *RequestRepo, *model.R
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test_req.db")
 
-	db, err := Open(dbPath)
+	db, err := Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open test sqlite: %v", err)
 	}

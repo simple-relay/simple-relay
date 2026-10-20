@@ -383,3 +383,63 @@ func TestWorkerPool_TruncateLargeResponseBody(t *testing.T) {
 		t.Errorf("response body exceeded 32KB limit, length: %d", len(*repo.attempts[0].ResponseBody))
 	}
 }
+
+func TestWorkerPool_DefaultAsyncEngineAndRouteBackoffOverrides(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "45")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer ts.Close()
+
+	route := &model.Route{
+		ID:                   "r-override",
+		Name:                 "async-override",
+		DestinationURL:       ts.URL,
+		MaxAttempts:          5,
+		TimeoutMS:            2000,
+		RetryBackoffStrategy: model.RetryStrategyExponential,
+		BaseBackoffMS:        10000,
+		MaxBackoffMS:         60000,
+	}
+	routeRepo := &mockRouteRepo{routes: []*model.Route{route}}
+	registry := NewRouteRegistry(routeRepo)
+	if err := registry.Init(context.Background()); err != nil {
+		t.Fatalf("registry.Init failed: %v", err)
+	}
+
+	repo := newMockWorkerRepo()
+	jobsCh := make(chan *model.Request, 2)
+
+	// Pass nil retryEngine -> should default to NewAsyncRetryEngine() (5s base, 15m max)
+	wp := NewWorkerPool(jobsCh, registry, repo, repo, nil, WorkerPoolConfig{Concurrency: 1})
+	if wp.retryEngine == nil || wp.retryEngine.config.BaseBackoff != DefaultAsyncBaseBackoff {
+		t.Fatalf("expected WorkerPool nil retryEngine to default to DefaultAsyncBaseBackoff (5s), got %+v", wp.retryEngine)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wp.Start(ctx)
+
+	before := time.Now().UTC()
+	jobsCh <- &model.Request{
+		ID:            "req-override",
+		RouteID:       "r-override",
+		Method:        "POST",
+		URL:           ts.URL,
+		AttemptsCount: 0,
+	}
+	close(jobsCh)
+	_ = wp.Close()
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	up, ok := repo.statusUpdate["req-override"]
+	if !ok || up.nextAttemptAt == nil {
+		t.Fatalf("expected status update with nextAttemptAt for req-override")
+	}
+	delay := up.nextAttemptAt.Sub(before)
+	if delay < 44*time.Second || delay > 47*time.Second {
+		t.Fatalf("expected ~45s delay from Retry-After with async engine, got %v", delay)
+	}
+}

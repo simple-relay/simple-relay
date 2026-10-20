@@ -33,6 +33,8 @@ type ServerOptions struct {
 	CleanerInterval   time.Duration
 	DrainTimeout      time.Duration
 	TrustProxy        bool
+	SQLiteSync        string
+	MaxBodySizeMB     int
 }
 
 func addServerFlags(cmd *cobra.Command, opts *ServerOptions) {
@@ -46,6 +48,8 @@ func addServerFlags(cmd *cobra.Command, opts *ServerOptions) {
 	cmd.Flags().DurationVar(&opts.CleanerInterval, "cleaner-interval", 1*time.Hour, "Storage retention cleaner execution interval (env: RELAY_CLEANER_INTERVAL)")
 	cmd.Flags().DurationVar(&opts.DrainTimeout, "drain-timeout", 30*time.Second, "Graceful shutdown drain timeout (env: RELAY_DRAIN_TIMEOUT)")
 	cmd.Flags().BoolVar(&opts.TrustProxy, "trust-proxy", false, "Trust X-Forwarded-For and X-Real-IP headers from reverse proxy (env: RELAY_TRUST_PROXY)")
+	cmd.Flags().StringVar(&opts.SQLiteSync, "sqlite-sync", "NORMAL", "SQLite WAL synchronous mode: NORMAL or FULL (env: RELAY_SQLITE_SYNC)")
+	cmd.Flags().IntVar(&opts.MaxBodySizeMB, "max-body-size-mb", 10, "Maximum HTTP request body size in MB (env: RELAY_MAX_BODY_SIZE_MB)")
 }
 
 func newServeCmd() *cobra.Command {
@@ -101,6 +105,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("trust-proxy") {
 		cfg.TrustProxy, _ = cmd.Flags().GetBool("trust-proxy")
 	}
+	if cmd.Flags().Changed("sqlite-sync") {
+		cfg.SQLiteSync, _ = cmd.Flags().GetString("sqlite-sync")
+	}
+	if cmd.Flags().Changed("max-body-size-mb") {
+		cfg.MaxBodySizeMB, _ = cmd.Flags().GetInt("max-body-size-mb")
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
@@ -129,7 +139,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 // RunServer executes the relay daemon HTTP server and background workers until ctx is canceled.
 func RunServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
-	db, err := sqlite.Open(cfg.DBPath)
+	db, err := sqlite.Open(cfg.DBPath, cfg.SQLiteSync)
 	if err != nil {
 		return fmt.Errorf("failed to open sqlite database at %s: %w", cfg.DBPath, err)
 	}
@@ -171,10 +181,11 @@ func RunServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 		return fmt.Errorf("failed to initialize route registry: %w", err)
 	}
 
-	retryEngine := engine.NewRetryEngine()
+	syncRetryEngine := engine.NewRetryEngine()
+	asyncRetryEngine := engine.NewAsyncRetryEngine()
 	relayEngine := engine.NewRelayEngine(
 		&http.Client{},
-		retryEngine,
+		syncRetryEngine,
 		db.RequestRepo,
 		db.AttemptRepo,
 		logger,
@@ -191,7 +202,7 @@ func RunServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 		PollInterval:          time.Duration(cfg.DispatcherPollMS) * time.Millisecond,
 		SkipImmediateRecovery: inherited,
 	})
-	workerPool := engine.NewWorkerPool(jobsCh, registry, db.RequestRepo, db.AttemptRepo, retryEngine, engine.WorkerPoolConfig{
+	workerPool := engine.NewWorkerPool(jobsCh, registry, db.RequestRepo, db.AttemptRepo, asyncRetryEngine, engine.WorkerPoolConfig{
 		Concurrency: cfg.WorkerConcurrency,
 	})
 	batchWriter := engine.NewBatchWriter(db.RequestRepo, engine.BatchWriterConfig{
@@ -235,6 +246,7 @@ func RunServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 		RequestRepo:   db.RequestRepo,
 		AttemptRepo:   db.AttemptRepo,
 		WakeFn:        dispatcher.Wake,
+		MaxBodyBytes:  int64(cfg.MaxBodySizeMB) * 1024 * 1024,
 		APIKeyRepo:    db.APIKeys(),
 	})
 

@@ -25,6 +25,8 @@ type Config struct {
 	CleanerInterval      time.Duration
 	AdminPassword        string
 	TrustProxy           bool
+	SQLiteSync           string
+	MaxBodySizeMB        int
 	MaxBatchSize         int
 	BatchTimeoutMS       int
 	DrainTimeout         time.Duration
@@ -45,6 +47,8 @@ func DefaultConfig() *Config {
 		CleanerInterval:      1 * time.Hour,
 		AdminPassword:        "",
 		TrustProxy:           false,
+		SQLiteSync:           "NORMAL",
+		MaxBodySizeMB:        10,
 		MaxBatchSize:         50,
 		BatchTimeoutMS:       10,
 		DrainTimeout:         30 * time.Second,
@@ -68,6 +72,8 @@ func Load() (*Config, error) {
 	fs.DurationVar(&cfg.CleanerInterval, "cleaner-interval", cfg.CleanerInterval, "Storage retention cleaner execution interval")
 	fs.DurationVar(&cfg.DrainTimeout, "drain-timeout", cfg.DrainTimeout, "Graceful shutdown drain timeout")
 	fs.BoolVar(&cfg.TrustProxy, "trust-proxy", cfg.TrustProxy, "Trust X-Forwarded-For and X-Real-IP headers from reverse proxy")
+	fs.StringVar(&cfg.SQLiteSync, "sqlite-sync", cfg.SQLiteSync, "SQLite WAL synchronous mode: NORMAL or FULL")
+	fs.IntVar(&cfg.MaxBodySizeMB, "max-body-size-mb", cfg.MaxBodySizeMB, "Maximum HTTP request body size in megabytes")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return nil, fmt.Errorf("failed to parse command line flags: %w", err)
@@ -140,6 +146,16 @@ func (c *Config) loadFromEnv() {
 			c.TrustProxy = b
 		}
 	}
+	if val := os.Getenv("RELAY_SQLITE_SYNC"); val != "" {
+		c.SQLiteSync = strings.ToUpper(strings.TrimSpace(val))
+	}
+	if val := os.Getenv("RELAY_MAX_BODY_SIZE_MB"); val != "" {
+		if mb, err := strconv.Atoi(strings.TrimSpace(val)); err == nil {
+			c.MaxBodySizeMB = mb
+		} else {
+			c.MaxBodySizeMB = -1
+		}
+	}
 	if val := os.Getenv("RELAY_BATCH_SIZE"); val != "" {
 		if b, err := strconv.Atoi(val); err == nil && b > 0 {
 			c.MaxBatchSize = b
@@ -179,6 +195,16 @@ func (c *Config) Validate() error {
 	}
 	if c.AdminPassword != "" && len(c.AdminPassword) < 10 {
 		return fmt.Errorf("admin password must be at least 10 characters long")
+	}
+	c.SQLiteSync = strings.ToUpper(strings.TrimSpace(c.SQLiteSync))
+	if c.SQLiteSync == "" {
+		c.SQLiteSync = "NORMAL"
+	}
+	if c.SQLiteSync != "NORMAL" && c.SQLiteSync != "FULL" {
+		return fmt.Errorf("invalid sqlite sync mode: %s (must be NORMAL or FULL)", c.SQLiteSync)
+	}
+	if c.MaxBodySizeMB <= 0 || c.MaxBodySizeMB > 10240 {
+		return fmt.Errorf("max body size must be between 1 and 10240 MB")
 	}
 	// Dynamic buffer resolution: 0 signifies auto-sizing to 2 * WorkerConcurrency
 	if c.DispatcherBuffer <= 0 {

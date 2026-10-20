@@ -21,7 +21,7 @@ func setupTestRoutesRouter(t *testing.T) (http.Handler, *sqlite.DB, *engine.Rout
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test_routes.db")
 
-	db, err := sqlite.Open(dbPath)
+	db, err := sqlite.Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open test sqlite: %v", err)
 	}
@@ -368,5 +368,57 @@ func TestRoutesHandler_SecretMaskingAndPreservation(t *testing.T) {
 	cachedAfterRotate, _ := registry.GetByName("stripe-masked")
 	if cachedAfterRotate.SignatureSecret != newSecret {
 		t.Fatalf("expected rotated raw secret %q in registry, got %q", newSecret, cachedAfterRotate.SignatureSecret)
+	}
+}
+
+func TestRoutesHandler_BackoffOverridesAndRetryNonIdempotent(t *testing.T) {
+	router, db, registry := setupTestRoutesRouter(t)
+	defer db.Close()
+
+	// 1. Reject inverted backoff range (base_backoff_ms > max_backoff_ms) with 400 Bad Request
+	badBody, _ := json.Marshal(map[string]any{
+		"name":                 "bad-backoff",
+		"type":                 "outbound",
+		"mode":                 "sync",
+		"path":                 "/api/v1/relay/bad-backoff",
+		"destination_url":      "https://api.internal.com/charge",
+		"base_backoff_ms":      20000,
+		"max_backoff_ms":       5000,
+		"retry_non_idempotent": true,
+	})
+	badReq := httptest.NewRequest(http.MethodPost, "/api/v1/routes", bytes.NewReader(badBody))
+	badRec := httptest.NewRecorder()
+	router.ServeHTTP(badRec, badReq)
+	if badRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for inverted backoff range, got %d: %s", badRec.Code, badRec.Body.String())
+	}
+
+	// 2. Create route with custom backoff and retry_non_idempotent
+	createBody, _ := json.Marshal(map[string]any{
+		"name":                 "sync-charge",
+		"type":                 "outbound",
+		"mode":                 "sync",
+		"path":                 "/api/v1/relay/sync-charge",
+		"destination_url":      "https://api.internal.com/charge",
+		"base_backoff_ms":      250,
+		"max_backoff_ms":       5000,
+		"retry_non_idempotent": true,
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/routes", bytes.NewReader(createBody))
+	createRec := httptest.NewRecorder()
+	router.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	var created model.Route
+	_ = json.NewDecoder(createRec.Body).Decode(&created)
+	if created.BaseBackoffMS != 250 || created.MaxBackoffMS != 5000 || !created.RetryNonIdempotent {
+		t.Fatalf("unexpected created route backoff fields: %+v", created)
+	}
+
+	cached, found := registry.GetByName("sync-charge")
+	if !found || cached.BaseBackoffMS != 250 || cached.MaxBackoffMS != 5000 || !cached.RetryNonIdempotent {
+		t.Fatalf("expected registry to hold updated backoff fields, got %+v", cached)
 	}
 }

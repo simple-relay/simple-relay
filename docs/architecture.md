@@ -10,7 +10,7 @@ The system is designed with extreme minimalism to optimize operational costs and
 
 * **Core Language:** Go (Golang) — provides high performance, low memory footprint, and static binary compilation without external runtime dependencies.
 * **Database & Storage Adapter:** Embedded **SQLite** is the default database to maintain the "zero-config, single binary" philosophy.
-  * **Concurrency Configuration:** Configured in **WAL (Write-Ahead Logging)** mode with dedicated connection separation: **1 dedicated Writer connection (`SetMaxOpenConns(1)`)** and a pooled set of Reader connections with `busy_timeout = 5000ms`.
+  * **Concurrency Configuration:** Configured in **WAL (Write-Ahead Logging)** mode with dedicated connection separation: **1 dedicated Writer connection (`SetMaxOpenConns(1)`)** and a pooled set of Reader connections with `busy_timeout = 5000ms` and configurable `PRAGMA synchronous` (`NORMAL` default, `FULL` optional via `RELAY_SQLITE_SYNC`).
   * **Storage Architecture:** Built using **Storage Interfaces (Adapter / Repository Pattern)**, completely decoupling business logic from SQLite. This enables built-in storage backends for PostgreSQL or MySQL (with SQLite remaining the zero-config default) without altering business logic.
   * **Disaster Recovery / Replication:** Supports native integration with **Litestream** for zero-downtime, continuous streaming replication to S3/Cloud Storage, eliminating the single point of failure (SPOF) of single-node SQLite.
 * **Packaging & Deployment:**
@@ -42,7 +42,7 @@ Relays HTTP calls originating from internal systems to external services (e.g., 
 
 * **Sync Proxy Mode (with Client Abort Propagation):**
   * Client maintains an open HTTP connection while Relay forwards the request.
-  * In-memory retry loop handles transient errors (429, 5xx, timeouts, `Retry-After`).
+  * In-memory retry loop (`100ms` base, `10s` max default backoff) handles transient errors (429, 5xx, timeouts, `Retry-After`). Non-idempotent methods (`POST`, `PATCH`) only retry when an `Idempotency-Key` / `X-Relay-Idempotency-Key` header is supplied or `retry_non_idempotent` is enabled on the route.
   * **Context Cancellation:** If the client disconnects or aborts before completion, Relay **immediately cancels** in-flight upstream requests and stops retrying, preventing duplicate transactions and unexpected billing.
 * **Async Outbound / Durable Job Mode (Fire-and-Forget):**
   * Solves the inherent limitation of in-process SDK retries when applications restart.
@@ -165,17 +165,21 @@ The core Delivery Engine relies on 3 optimized tables:
 ### 1. `routes` Table (Routing & Verification Configuration)
 ```sql
 CREATE TABLE routes (
-    id TEXT PRIMARY KEY,                       -- UUID
+    id TEXT PRIMARY KEY,                       -- ULID
     name TEXT NOT NULL UNIQUE,                 -- e.g., "stripe-payments"
     type TEXT NOT NULL,                        -- 'inbound' | 'outbound'
     mode TEXT NOT NULL DEFAULT 'async',        -- 'sync' | 'async'
     path TEXT NOT NULL UNIQUE,                 -- e.g., "/api/v1/webhook/stripe"
     destination_url TEXT NOT NULL,             -- Forward target URL
-    signature_provider TEXT DEFAULT 'none',    -- 'none' | 'stripe' | 'github' | 'hmac_sha256'
-    signature_secret TEXT,                     -- Secret key for verification
+    signature_provider TEXT DEFAULT 'none',    -- 'none' | 'stripe' | 'github' | 'hmac_sha256' | 'ed25519' | 'rsa_sha256'
+    signature_secret TEXT,                     -- Secret key or public key for verification
+    validation_rules TEXT DEFAULT '[]',        -- Pre-persistence header/query/body_json rules
     max_attempts INTEGER NOT NULL DEFAULT 5,   -- Bounded retry limit
     timeout_ms INTEGER NOT NULL DEFAULT 10000, -- Timeout per attempt
     retry_backoff_strategy TEXT DEFAULT 'exp', -- 'exp' | 'linear'
+    base_backoff_ms INTEGER NOT NULL DEFAULT 0,-- Optional base backoff override (0 = engine default)
+    max_backoff_ms INTEGER NOT NULL DEFAULT 0, -- Optional max backoff override (0 = engine default)
+    retry_non_idempotent INTEGER NOT NULL DEFAULT 0, -- Allow sync POST/PATCH retries without Idempotency-Key
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -249,8 +253,10 @@ Configured via environment variables with clear naming:
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `RELAY_PORT` | `8080` | HTTP server listening port |
-| `RELAY_DB_PATH` | `./data/relay.db` | File path for SQLite database |
+| `RELAY_DB_PATH` | `relay.db` | File path for SQLite database |
+| `RELAY_SQLITE_SYNC` | `NORMAL` | SQLite WAL synchronous pragma (`NORMAL` or `FULL`) |
 | `RELAY_ADMIN_PASSWORD` | *(empty = disabled)* | Password to access Web UI and Admin APIs |
+| `RELAY_TRUST_PROXY` | `false` | Trust `X-Forwarded-For` and `X-Real-IP` reverse proxy headers |
 | `RELAY_MAX_BODY_SIZE_MB` | `10` | Maximum allowable HTTP request body (in MB) |
 | `RELAY_RESPONSE_TRUNCATE_KB` | `32` | Max length of response body stored in `attempts` |
 | `RELAY_RETENTION_SUCCESS_DAYS` | `7` | Retention period for successful requests |

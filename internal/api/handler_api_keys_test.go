@@ -20,7 +20,7 @@ func setupTestAPIKeysDB(t *testing.T) *sqlite.DB {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test_api_keys.db")
 
-	db, err := sqlite.Open(dbPath)
+	db, err := sqlite.Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open test sqlite: %v", err)
 	}

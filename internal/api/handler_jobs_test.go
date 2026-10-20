@@ -22,7 +22,7 @@ func setupTestJobServer(t *testing.T) (*sqlite.DB, *engine.RouteRegistry, *engin
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test_jobs.db")
 
-	db, err := sqlite.Open(dbPath)
+	db, err := sqlite.Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}

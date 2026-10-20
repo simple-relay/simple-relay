@@ -16,7 +16,7 @@ func setupTestDB(t *testing.T) (*DB, *RouteRepo) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test_repo.db")
 
-	db, err := Open(dbPath)
+	db, err := Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open test sqlite: %v", err)
 	}
@@ -249,5 +249,63 @@ func TestRouteRepo_CorruptedValidationRules(t *testing.T) {
 	_, err = repo.ListRoutes(ctx)
 	if err == nil {
 		t.Fatal("expected error on ListRoutes with corrupt validation rules, got nil")
+	}
+}
+
+func TestRouteRepo_BackoffOverridesAndRetryNonIdempotent(t *testing.T) {
+	db, repo := setupTestDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	route := &model.Route{
+		Name:                 "sync-payment-proxy",
+		Type:                 model.RouteTypeOutbound,
+		Mode:                 model.RouteModeSync,
+		Path:                 "/api/v1/relay/payments",
+		DestinationURL:       "https://payments.internal/charge",
+		SignatureProvider:    model.SignatureProviderNone,
+		MaxAttempts:          4,
+		TimeoutMS:            5000,
+		RetryBackoffStrategy: model.RetryStrategyExponential,
+		BaseBackoffMS:        250,
+		MaxBackoffMS:         8000,
+		RetryNonIdempotent:   true,
+	}
+
+	if err := repo.CreateRoute(ctx, route); err != nil {
+		t.Fatalf("failed to create route: %v", err)
+	}
+
+	fetched, err := repo.GetRouteByID(ctx, route.ID)
+	if err != nil {
+		t.Fatalf("failed to get route by ID: %v", err)
+	}
+	if fetched.BaseBackoffMS != 250 || fetched.MaxBackoffMS != 8000 || !fetched.RetryNonIdempotent {
+		t.Fatalf("unexpected backoff/idempotency fields on GetRouteByID: %+v", fetched)
+	}
+
+	routes, err := repo.ListRoutes(ctx)
+	if err != nil || len(routes) != 1 {
+		t.Fatalf("failed to list routes: %v (len=%d)", err, len(routes))
+	}
+	if routes[0].BaseBackoffMS != 250 || routes[0].MaxBackoffMS != 8000 || !routes[0].RetryNonIdempotent {
+		t.Fatalf("unexpected backoff/idempotency fields on ListRoutes: %+v", routes[0])
+	}
+
+	// Update fields
+	route.BaseBackoffMS = 500
+	route.MaxBackoffMS = 15000
+	route.RetryNonIdempotent = false
+	if err := repo.UpdateRoute(ctx, route); err != nil {
+		t.Fatalf("failed to update route: %v", err)
+	}
+
+	updated, err := repo.GetRouteByName(ctx, route.Name)
+	if err != nil {
+		t.Fatalf("failed to get route by Name: %v", err)
+	}
+	if updated.BaseBackoffMS != 500 || updated.MaxBackoffMS != 15000 || updated.RetryNonIdempotent {
+		t.Fatalf("unexpected updated fields: %+v", updated)
 	}
 }

@@ -120,6 +120,13 @@ func (e *RelayEngine) RelaySync(
 	if maxAttempts <= 0 {
 		maxAttempts = 1
 	}
+	hasIdempotencyKey := strings.TrimSpace(headers.Get("Idempotency-Key")) != "" ||
+		strings.TrimSpace(headers.Get("X-Relay-Idempotency-Key")) != ""
+	// Non-idempotent sync calls (POST/PATCH) without an idempotency key or explicit route opt-in
+	// must not retry on failure to avoid duplicate upstream side effects ⚡.
+	if !isIdempotentMethod(method) && !route.RetryNonIdempotent && !hasIdempotencyKey {
+		maxAttempts = 1
+	}
 
 	var (
 		lastStatusCode  int
@@ -154,9 +161,9 @@ func (e *RelayEngine) RelaySync(
 		upstreamReq.Header.Set("X-Relay-Request-ID", requestID)
 
 		// Idempotency propagation
-		if idemKey := headers.Get("Idempotency-Key"); idemKey != "" {
+		if idemKey := strings.TrimSpace(headers.Get("Idempotency-Key")); idemKey != "" {
 			upstreamReq.Header.Set("Idempotency-Key", idemKey)
-		} else if relayIdemKey := headers.Get("X-Relay-Idempotency-Key"); relayIdemKey != "" {
+		} else if relayIdemKey := strings.TrimSpace(headers.Get("X-Relay-Idempotency-Key")); relayIdemKey != "" {
 			upstreamReq.Header.Set("Idempotency-Key", relayIdemKey)
 		}
 
@@ -188,7 +195,7 @@ func (e *RelayEngine) RelaySync(
 
 			// If error is retryable and we haven't reached max_attempts, sleep and retry
 			if e.retryEngine.IsRetryableError(execErr) && attempt < maxAttempts {
-				delay := e.retryEngine.CalculateBackoff(attempt, route.RetryBackoffStrategy, "")
+				delay := e.retryEngine.CalculateBackoffWithOverrides(attempt, route.RetryBackoffStrategy, "", route.BaseBackoffMS, route.MaxBackoffMS)
 				select {
 				case <-time.After(delay):
 					continue
@@ -223,7 +230,7 @@ func (e *RelayEngine) RelaySync(
 		if e.retryEngine.IsRetryableStatus(resp.StatusCode) {
 			if attempt < maxAttempts {
 				retryAfterHeader := resp.Header.Get("Retry-After")
-				delay := e.retryEngine.CalculateBackoff(attempt, route.RetryBackoffStrategy, retryAfterHeader)
+				delay := e.retryEngine.CalculateBackoffWithOverrides(attempt, route.RetryBackoffStrategy, retryAfterHeader, route.BaseBackoffMS, route.MaxBackoffMS)
 				select {
 				case <-time.After(delay):
 					continue
@@ -359,6 +366,21 @@ func stripRelaySessionCookie(cookieHeader string) string {
 		kept = append(kept, trimmed)
 	}
 	return strings.Join(kept, "; ")
+}
+
+// isIdempotentMethod returns true for HTTP methods defined as idempotent by RFC 9110 Section 9.2.2.
+func isIdempotentMethod(method string) bool {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case http.MethodGet,
+		http.MethodHead,
+		http.MethodPut,
+		http.MethodDelete,
+		http.MethodOptions,
+		http.MethodTrace:
+		return true
+	default:
+		return false
+	}
 }
 
 // isHopByHopHeader checks if a header is an RFC 7230 hop-by-hop header.

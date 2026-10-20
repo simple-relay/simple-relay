@@ -91,3 +91,25 @@ func TestIndexHTML_APIKeysManagement(t *testing.T) {
 		}
 	}
 }
+
+func TestIndexHTML_RetryBackoffAndNonIdempotentControls(t *testing.T) {
+	data, err := FS.ReadFile("index.html")
+	if err != nil {
+		t.Fatalf("failed to read index.html: %v", err)
+	}
+
+	content := string(data)
+	expectedSubstrings := []string{
+		`x-model.number="routeForm.base_backoff_ms"`,
+		`x-model.number="routeForm.max_backoff_ms"`,
+		`x-model="routeForm.retry_non_idempotent"`,
+		`base_backoff_ms: 5000`,
+		`max_backoff_ms: 900000`,
+	}
+
+	for _, substr := range expectedSubstrings {
+		if !strings.Contains(content, substr) {
+			t.Errorf("expected index.html to contain %q", substr)
+		}
+	}
+}

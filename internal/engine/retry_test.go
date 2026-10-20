@@ -230,3 +230,75 @@ func TestIsRetryableError(t *testing.T) {
 		t.Error("unrelated generic error should not be retryable")
 	}
 }
+
+func TestNewAsyncRetryEngine_Defaults(t *testing.T) {
+	e := NewAsyncRetryEngine()
+	if e.config.BaseBackoff != DefaultAsyncBaseBackoff {
+		t.Fatalf("expected DefaultAsyncBaseBackoff 5s, got %v", e.config.BaseBackoff)
+	}
+	if e.config.MaxBackoff != DefaultAsyncMaxBackoff {
+		t.Fatalf("expected DefaultAsyncMaxBackoff 15m, got %v", e.config.MaxBackoff)
+	}
+	if e.config.MaxRetryAfter != DefaultAsyncMaxRetryAfter {
+		t.Fatalf("expected DefaultAsyncMaxRetryAfter 15m, got %v", e.config.MaxRetryAfter)
+	}
+
+	// Retry-After of 120s should be respected in async engine (not clamped to 30s)
+	if delay := e.CalculateBackoff(1, model.RetryStrategyExponential, "120"); delay != 120*time.Second {
+		t.Fatalf("expected 120s delay for async Retry-After, got %v", delay)
+	}
+}
+
+func TestCalculateBackoffWithOverrides(t *testing.T) {
+	e := NewRetryEngine() // sync defaults: 100ms base, 10s max
+
+	// 1. Custom base (500ms) and max (2000ms)
+	for i := 0; i < 50; i++ {
+		d1 := e.CalculateBackoffWithOverrides(1, model.RetryStrategyExponential, "", 500, 2000)
+		if d1 < 0 || d1 > 500*time.Millisecond {
+			t.Fatalf("attempt 1 override delay %v out of [0, 500ms]", d1)
+		}
+		d5 := e.CalculateBackoffWithOverrides(5, model.RetryStrategyExponential, "", 500, 2000)
+		if d5 < 0 || d5 > 2*time.Second {
+			t.Fatalf("attempt 5 override delay %v out of [0, 2s]", d5)
+		}
+	}
+
+	// 2. Only base_backoff_ms overridden above engine's default MaxBackoff (15000ms > 10s)
+	for i := 0; i < 20; i++ {
+		d := e.CalculateBackoffWithOverrides(1, model.RetryStrategyExponential, "", 15000, 0)
+		if d < 0 || d > 15*time.Second {
+			t.Fatalf("expected clamp to 15s when base_backoff_ms=15000 and max_backoff_ms=0, got %v", d)
+		}
+	}
+
+	// 3. MaxBackoff override > DefaultMaxRetryAfter (60s > 30s) expands Retry-After cap
+	dRetryAfter := e.CalculateBackoffWithOverrides(1, model.RetryStrategyExponential, "45", 1000, 60000)
+	if dRetryAfter != 45*time.Second {
+		t.Fatalf("expected Retry-After of 45s allowed when maxBackoffMS=60000, got %v", dRetryAfter)
+	}
+
+	// 4. Async engine with only max_backoff_ms overridden below DefaultAsyncBaseBackoff (2000ms < 5000ms)
+	asyncEngine := NewAsyncRetryEngine()
+	for i := 0; i < 20; i++ {
+		d := asyncEngine.CalculateBackoffWithOverrides(1, model.RetryStrategyExponential, "", 0, 2000)
+		if d < 0 || d > 2*time.Second {
+			t.Fatalf("expected async delay clamped to explicit max_backoff_ms=2s, got %v", d)
+		}
+	}
+
+	// 5. High attempt count (attempt=35) with large base_backoff_ms (60000ms) must not overflow int64 into 0
+	var nonZeroSeen bool
+	for i := 0; i < 50; i++ {
+		d := asyncEngine.CalculateBackoffWithOverrides(35, model.RetryStrategyExponential, "", 60000, 900000)
+		if d < 0 || d > 900*time.Second {
+			t.Fatalf("attempt 35 overflowed or exceeded maxBackoff: %v", d)
+		}
+		if d > 0 {
+			nonZeroSeen = true
+		}
+	}
+	if !nonZeroSeen {
+		t.Fatal("expected non-zero jittered backoff on attempt 35 with base_backoff_ms=60000, got all 0s (int64 overflow)")
+	}
+}
