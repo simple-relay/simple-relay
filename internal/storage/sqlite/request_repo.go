@@ -526,6 +526,54 @@ func (r *RequestRepo) ReplayDLQRequest(ctx context.Context, id string) (*model.R
 	return r.GetRequestByID(ctx, id)
 }
 
+// ReplayRequest atomically transitions a request ('success', 'failed', 'dlq') to 'pending' state.
+// For async requests waiting in backoff delay ('failed' with next_attempt_at in the future), replay intentionally
+// resets next_attempt_at to now and attempts_count to 0, granting developers immediate redelivery triage without delay ⚡.
+// If the request is currently actively queued or in-flight ('pending' or 'processing'), it returns storage.ErrConflict.
+func (r *RequestRepo) ReplayRequest(ctx context.Context, id string) (*model.Request, error) {
+	now := time.Now().UTC()
+	query := `
+		UPDATE requests
+		SET status = 'pending',
+		    attempts_count = 0,
+		    next_attempt_at = ?,
+		    last_error = NULL,
+		    updated_at = ?
+		WHERE id = ? AND status IN ('success', 'failed', 'dlq');
+	`
+
+	res, err := r.db.Writer().ExecContext(ctx, query, now, now, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to replay request %s: %w", id, err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check rows affected for replay %s: %w", id, err)
+	}
+
+	if rowsAffected == 0 {
+		var currentStatus string
+		checkErr := r.db.Reader().QueryRowContext(ctx, `SELECT status FROM requests WHERE id = ?;`, id).Scan(&currentStatus)
+		if errors.Is(checkErr, sql.ErrNoRows) {
+			return nil, storage.ErrNotFound
+		}
+		if checkErr == nil {
+			return nil, storage.ErrConflict
+		}
+		return nil, fmt.Errorf("failed to inspect status for request %s: %w", id, checkErr)
+	}
+
+	// Return a lean Request struct without re-querying heavy body BLOBs or unmarshaling headers ⚡
+	return &model.Request{
+		ID:            id,
+		Status:        model.RequestStatusPending,
+		AttemptsCount: 0,
+		NextAttemptAt: &now,
+		UpdatedAt:     now,
+	}, nil
+}
+
 // ReplayAllDLQRequests atomically batches up to limit DLQ requests and transitions them to 'pending'.
 func (r *RequestRepo) ReplayAllDLQRequests(ctx context.Context, routeID string, limit int) ([]string, error) {
 	if limit <= 0 {

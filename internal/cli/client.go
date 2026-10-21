@@ -352,6 +352,31 @@ func (c *RelayClient) ReplayDLQ(ctx context.Context, id string) error {
 	return nil
 }
 
+// ReplayRequest requeues any historical request (success, failed, or dlq) back to pending.
+func (c *RelayClient) ReplayRequest(ctx context.Context, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return errors.New("request id cannot be empty")
+	}
+	path := fmt.Sprintf("/api/v1/requests/%s/replay", url.PathEscape(id))
+	resp, err := c.doRequest(ctx, http.MethodPost, path, nil)
+	if err != nil {
+		return fmt.Errorf("failed to replay request %s: %w", id, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("request %s not found", id)
+	}
+	if resp.StatusCode == http.StatusConflict {
+		return fmt.Errorf("request %s is currently pending or processing", id)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("replay request returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // ReplayAllDLQ requeues all failed DLQ messages in chunked batches complying with the 1,000 server cap.
 func (c *RelayClient) ReplayAllDLQ(ctx context.Context) (int, error) {
 	const maxReplayBatches = 100

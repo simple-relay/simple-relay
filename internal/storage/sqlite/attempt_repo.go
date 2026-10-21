@@ -69,7 +69,7 @@ func (a *AttemptRepo) ListAttemptsByRequestID(ctx context.Context, requestID str
 		       response_body, error_message, executed_at, duration_ms
 		FROM attempts
 		WHERE request_id = ?
-		ORDER BY attempt_number ASC;
+		ORDER BY executed_at ASC, id ASC;
 	`
 
 	rows, err := a.db.Reader().QueryContext(ctx, query, requestID)

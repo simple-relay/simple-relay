@@ -466,6 +466,143 @@ func TestRequestRepo_ReplayDLQRequest(t *testing.T) {
 	}
 }
 
+func TestRequestRepo_ReplayRequest(t *testing.T) {
+	db, _, reqRepo, route := setupTestDBWithRoute(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	errMsg := "upstream 500 error"
+
+	// 1. Success request
+	reqSuccess := &model.Request{
+		RouteID:       route.ID,
+		Method:        "POST",
+		URL:           "https://dest/success",
+		Headers:       map[string]string{"Content-Type": "application/json"},
+		Body:          []byte("payload-success"),
+		Status:        model.RequestStatusSuccess,
+		AttemptsCount: 1,
+	}
+	if err := reqRepo.CreateRequest(ctx, reqSuccess); err != nil {
+		t.Fatalf("CreateRequest success failed: %v", err)
+	}
+
+	// 2. Failed request
+	reqFailed := &model.Request{
+		RouteID:       route.ID,
+		Method:        "POST",
+		URL:           "https://dest/failed",
+		Headers:       map[string]string{"Content-Type": "application/json"},
+		Body:          []byte("payload-failed"),
+		Status:        model.RequestStatusFailed,
+		AttemptsCount: 2,
+		LastError:     &errMsg,
+	}
+	if err := reqRepo.CreateRequest(ctx, reqFailed); err != nil {
+		t.Fatalf("CreateRequest failed failed: %v", err)
+	}
+
+	// 3. DLQ request
+	reqDLQ := &model.Request{
+		RouteID:       route.ID,
+		Method:        "POST",
+		URL:           "https://dest/dlq",
+		Headers:       map[string]string{"Content-Type": "application/json"},
+		Body:          []byte("payload-dlq"),
+		Status:        model.RequestStatusDLQ,
+		AttemptsCount: 5,
+		LastError:     &errMsg,
+	}
+	if err := reqRepo.CreateRequest(ctx, reqDLQ); err != nil {
+		t.Fatalf("CreateRequest dlq failed: %v", err)
+	}
+
+	// 4. Pending request
+	reqPending := &model.Request{
+		RouteID:       route.ID,
+		Method:        "POST",
+		URL:           "https://dest/pending",
+		Headers:       map[string]string{"Content-Type": "application/json"},
+		Body:          []byte("payload-pending"),
+		Status:        model.RequestStatusPending,
+		AttemptsCount: 0,
+	}
+	if err := reqRepo.CreateRequest(ctx, reqPending); err != nil {
+		t.Fatalf("CreateRequest pending failed: %v", err)
+	}
+
+	// 5. Processing request
+	reqProcessing := &model.Request{
+		RouteID:       route.ID,
+		Method:        "POST",
+		URL:           "https://dest/processing",
+		Headers:       map[string]string{"Content-Type": "application/json"},
+		Body:          []byte("payload-processing"),
+		Status:        model.RequestStatusProcessing,
+		AttemptsCount: 1,
+	}
+	if err := reqRepo.CreateRequest(ctx, reqProcessing); err != nil {
+		t.Fatalf("CreateRequest processing failed: %v", err)
+	}
+
+	// Test 1: Replay Success request -> transitions to Pending
+	repSuccess, err := reqRepo.ReplayRequest(ctx, reqSuccess.ID)
+	if err != nil {
+		t.Fatalf("ReplayRequest on success failed: %v", err)
+	}
+	if repSuccess.Status != model.RequestStatusPending {
+		t.Errorf("expected pending, got %s", repSuccess.Status)
+	}
+	if repSuccess.AttemptsCount != 0 {
+		t.Errorf("expected attempts_count 0, got %d", repSuccess.AttemptsCount)
+	}
+	if repSuccess.LastError != nil {
+		t.Errorf("expected last_error nil, got %v", *repSuccess.LastError)
+	}
+	if repSuccess.NextAttemptAt == nil || repSuccess.NextAttemptAt.IsZero() {
+		t.Errorf("expected next_attempt_at set, got %v", repSuccess.NextAttemptAt)
+	}
+
+	// Test 2: Replay Failed request -> transitions to Pending
+	repFailed, err := reqRepo.ReplayRequest(ctx, reqFailed.ID)
+	if err != nil {
+		t.Fatalf("ReplayRequest on failed failed: %v", err)
+	}
+	if repFailed.Status != model.RequestStatusPending {
+		t.Errorf("expected pending, got %s", repFailed.Status)
+	}
+	if repFailed.LastError != nil {
+		t.Errorf("expected last_error nil, got %v", *repFailed.LastError)
+	}
+
+	// Test 3: Replay DLQ request -> transitions to Pending
+	repDLQ, err := reqRepo.ReplayRequest(ctx, reqDLQ.ID)
+	if err != nil {
+		t.Fatalf("ReplayRequest on dlq failed: %v", err)
+	}
+	if repDLQ.Status != model.RequestStatusPending {
+		t.Errorf("expected pending, got %s", repDLQ.Status)
+	}
+
+	// Test 4: Replay Pending request -> ErrConflict
+	_, err = reqRepo.ReplayRequest(ctx, reqPending.ID)
+	if !errors.Is(err, storage.ErrConflict) {
+		t.Errorf("expected ErrConflict for pending request, got %v", err)
+	}
+
+	// Test 5: Replay Processing request -> ErrConflict
+	_, err = reqRepo.ReplayRequest(ctx, reqProcessing.ID)
+	if !errors.Is(err, storage.ErrConflict) {
+		t.Errorf("expected ErrConflict for processing request, got %v", err)
+	}
+
+	// Test 6: Replay Non-existent request -> ErrNotFound
+	_, err = reqRepo.ReplayRequest(ctx, "01nonexistentulid0000000000")
+	if !errors.Is(err, storage.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for non-existent request, got %v", err)
+	}
+}
+
 func TestRequestRepo_ReplayAllDLQRequests(t *testing.T) {
 	db, routeRepo, reqRepo, route1 := setupTestDBWithRoute(t)
 	defer db.Close()
