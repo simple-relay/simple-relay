@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.9.0](https://github.com/simple-relay/simple-relay/compare/v0.8.1...v0.9.0) (2026-10-21)
+
+
+### Features
+
+* **api:** allow replaying any request for inspection and debugging ([#93](https://github.com/simple-relay/simple-relay/issues/93)) ([9e92164](https://github.com/simple-relay/simple-relay/commit/9e9216453f91890c804dde7ac83caf1d379f548e))
+* **dashboard:** add delivery overview metrics cards and telemetry page ([#94](https://github.com/simple-relay/simple-relay/issues/94)) ([a31cb80](https://github.com/simple-relay/simple-relay/commit/a31cb80bc2ec65458bd64fdc028297e94df34c6f))
+* **engine:** decouple retry backoff profiles and expose sqlite sync mode ([#91](https://github.com/simple-relay/simple-relay/issues/91)) ([ddcd2db](https://github.com/simple-relay/simple-relay/commit/ddcd2db9eebe12942d5aea96108d6e0abc492437))
+* **security:** harden dev mode loopback auth, mask route secrets, and restrict proxy header trust ([#86](https://github.com/simple-relay/simple-relay/issues/86)) ([019cee4](https://github.com/simple-relay/simple-relay/commit/019cee43e13e38d8baa3462bd30673a5dbdba802))
+
+
+### Documentation
+
+* **roadmap:** track security hardening, retry decoupling, and route control tasks ([#85](https://github.com/simple-relay/simple-relay/issues/85)) ([f7e73b4](https://github.com/simple-relay/simple-relay/commit/f7e73b45d7afe0c552cfa193734a7d03eed74402))
+* **specs:** add retry backoff profiles and sqlite sync design spec ([#89](https://github.com/simple-relay/simple-relay/issues/89)) ([e01cbf1](https://github.com/simple-relay/simple-relay/commit/e01cbf14145f55bda58c83f12f29956f88fadd13))
+
+
+### Maintenance & Dependencies
+
+* synchronize roadmap with issue status [skip ci] ([33d80b6](https://github.com/simple-relay/simple-relay/commit/33d80b6b71d1e49a725090f6f67c5c4c8b0a4ad3))
+
 ## [0.8.1](https://github.com/simple-relay/simple-relay/compare/v0.8.0...v0.8.1) (2026-10-18)
 
 
