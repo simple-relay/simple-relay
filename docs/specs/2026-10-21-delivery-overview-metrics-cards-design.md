@@ -98,9 +98,9 @@ func (r *RequestRepo) GetQueueStats(ctx context.Context) (*model.QueueStats, err
 	now := time.Now().UTC()
 	query := `
 		SELECT
-			(SELECT COUNT(*) FROM requests WHERE (status = 'pending' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)) OR (status = 'failed' AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?)),
+			(SELECT COUNT(*) FROM requests WHERE status IN ('pending', 'failed') AND ((status = 'pending' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)) OR (status = 'failed' AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?))),
 			(SELECT COUNT(*) FROM requests WHERE status = 'processing'),
-			(SELECT COUNT(*) FROM requests WHERE status = 'failed' AND next_attempt_at > ?),
+			(SELECT COUNT(*) FROM requests WHERE status IN ('pending', 'failed') AND status = 'failed' AND next_attempt_at > ?),
 			(SELECT COUNT(*) FROM requests WHERE status = 'dlq');
 	`
 	var stats model.QueueStats

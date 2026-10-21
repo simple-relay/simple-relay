@@ -1474,6 +1474,7 @@
             if (elapsed >= this.refreshCycleMs) {
               this.refreshCycleStart = Date.now();
               this.refreshProgress = 0;
+              if (this.queueStatsLoading) return;
               this.fetchQueueStats();
             } else {
               this.refreshProgress = Math.min(100, Math.floor((elapsed / this.refreshCycleMs) * 100));
@@ -1528,6 +1529,7 @@
 
         // --- Queue Stats & Recent Activity ---
         async fetchQueueStats() {
+          if (this.queueStatsLoading) return;
           this.queueStatsLoading = true;
           try {
             const [statsRes, recentRes] = await Promise.all([
