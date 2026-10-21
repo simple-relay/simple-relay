@@ -48,6 +48,7 @@ type RequestRepository interface {
 	ListDLQRequests(ctx context.Context, routeID string, limit, offset int) ([]*model.Request, int64, error)
 	ReplayDLQRequest(ctx context.Context, id string) (*model.Request, error)
 	ReplayAllDLQRequests(ctx context.Context, routeID string, limit int) ([]string, error)
+	ReplayRequest(ctx context.Context, id string) (*model.Request, error)
 	GetQueueStats(ctx context.Context) (pending, inFlight int64, err error)
 }
 

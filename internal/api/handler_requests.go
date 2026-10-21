@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/simple-relay/simple-relay/internal/model"
 	"github.com/simple-relay/simple-relay/internal/storage"
@@ -16,6 +17,7 @@ import (
 type RequestsHandler struct {
 	reqRepo     storage.RequestRepository
 	attemptRepo storage.AttemptRepository
+	wakeFn      func()
 	logger      *slog.Logger
 }
 
@@ -33,6 +35,20 @@ func NewRequestsHandler(
 		attemptRepo: attemptRepo,
 		logger:      logger,
 	}
+}
+
+// WithWakeFn registers an immediate dispatcher wakeup callback.
+func (h *RequestsHandler) WithWakeFn(wakeFn func()) *RequestsHandler {
+	h.wakeFn = wakeFn
+	return h
+}
+
+// RequestReplayResponse represents the result of requeuing any historical request.
+type RequestReplayResponse struct {
+	ID         string `json:"id"`
+	Status     string `json:"status"`
+	Replayed   bool   `json:"replayed"`
+	ReplayedAt string `json:"replayed_at"`
 }
 
 // RequestsListResponse represents paginated request metadata.
@@ -162,4 +178,45 @@ func (h *RequestsHandler) GetRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(detail)
+}
+
+// ReplayRequest handles POST /api/v1/requests/{id}/replay.
+func (h *RequestsHandler) ReplayRequest(w http.ResponseWriter, r *http.Request) {
+	requestID := r.PathValue("id")
+	if requestID == "" {
+		requestID = r.PathValue("request_id")
+	}
+	if requestID == "" {
+		writeJSONError(w, http.StatusBadRequest, "request_id is required in URL path")
+		return
+	}
+
+	req, err := h.reqRepo.ReplayRequest(r.Context(), requestID)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			writeJSONError(w, http.StatusNotFound, "request not found")
+			return
+		}
+		if errors.Is(err, storage.ErrConflict) {
+			writeJSONError(w, http.StatusConflict, "request is currently pending or processing")
+			return
+		}
+		h.logger.Error("failed to replay request", "request_id", requestID, "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to replay request")
+		return
+	}
+
+	// Wake dispatcher immediately so delivery starts without delay ⚡
+	if h.wakeFn != nil {
+		h.wakeFn()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(RequestReplayResponse{
+		ID:         req.ID,
+		Status:     string(req.Status),
+		Replayed:   true,
+		ReplayedAt: time.Now().UTC().Format(time.RFC3339),
+	})
 }

@@ -108,6 +108,10 @@ func (m *mockWorkerRepo) ListRequests(ctx context.Context, filter storage.Reques
 func (m *mockWorkerRepo) ReplayDLQRequest(ctx context.Context, id string) (*model.Request, error) {
 	return nil, nil
 }
+
+func (m *mockWorkerRepo) ReplayRequest(ctx context.Context, id string) (*model.Request, error) {
+	return nil, nil
+}
 func (m *mockWorkerRepo) ReplayAllDLQRequests(ctx context.Context, routeID string, limit int) ([]string, error) {
 	return nil, nil
 }

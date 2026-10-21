@@ -159,6 +159,14 @@ func TestCommands_DLQ(t *testing.T) {
 		case r.URL.Path == "/api/v1/dlq/01ja2b3c4d5e6f7g8h9j0k1m2n/replay":
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+		case r.URL.Path == "/api/v1/requests/01ja2b3c4d5e6f7g8h9j0k1m2n/replay":
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":          "01ja2b3c4d5e6f7g8h9j0k1m2n",
+				"status":      "pending",
+				"replayed":    true,
+				"replayed_at": "2026-10-21T03:00:00Z",
+			})
 		case r.URL.Path == "/api/v1/dlq/replay-all":
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -204,6 +212,30 @@ func TestCommands_DLQ(t *testing.T) {
 		out := outBuf.String()
 		if !strings.Contains(out, "Successfully requeued") {
 			t.Fatalf("expected success message, got:\n%s", out)
+		}
+	})
+
+	t.Run("request replay single", func(t *testing.T) {
+		var outBuf, errBuf bytes.Buffer
+		err := ExecuteCommand([]string{"request", "replay", "01ja2b3c4d5e6f7g8h9j0k1m2n", "--server", ts.URL}, &outBuf, &errBuf)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		out := outBuf.String()
+		if !strings.Contains(out, "Successfully requeued request 01ja2b3c4d5e6f7g8h9j0k1m2n for delivery") {
+			t.Fatalf("expected request replay success message, got:\n%s", out)
+		}
+	})
+
+	t.Run("requests alias replay single", func(t *testing.T) {
+		var outBuf, errBuf bytes.Buffer
+		err := ExecuteCommand([]string{"requests", "replay", "01ja2b3c4d5e6f7g8h9j0k1m2n", "--server", ts.URL, "-o", "json"}, &outBuf, &errBuf)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		out := outBuf.String()
+		if !strings.Contains(out, `"status": "requeued"`) || !strings.Contains(out, "01ja2b3c4d5e6f7g8h9j0k1m2n") {
+			t.Fatalf("expected json requeued output, got:\n%s", out)
 		}
 	})
 

@@ -90,6 +90,10 @@ func (m *mockDispatcherRepo) ReplayDLQRequest(ctx context.Context, id string) (*
 	return nil, nil
 }
 
+func (m *mockDispatcherRepo) ReplayRequest(ctx context.Context, id string) (*model.Request, error) {
+	return nil, nil
+}
+
 func (m *mockDispatcherRepo) ReplayAllDLQRequests(ctx context.Context, routeID string, limit int) ([]string, error) {
 	return nil, nil
 }

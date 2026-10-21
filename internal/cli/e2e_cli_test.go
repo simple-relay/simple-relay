@@ -199,4 +199,39 @@ func TestE2E_CLI_WithRealServer(t *testing.T) {
 			t.Fatalf("unexpected dlq replay-all output:\n%s", out)
 		}
 	})
+
+	// 7. Test request replay command on any historical request (e.g. success)
+	t.Run("e2e request replay", func(t *testing.T) {
+		reqSuccess := &model.Request{
+			ID:            "req_success_replay",
+			RouteID:       testRoute.ID,
+			Method:        "POST",
+			URL:           "https://test.internal/target",
+			Headers:       map[string]string{"Content-Type": "application/json"},
+			Body:          []byte(`{"ok": true}`),
+			Status:        model.RequestStatusSuccess,
+			AttemptsCount: 1,
+		}
+		if err := db.RequestRepo.CreateRequest(context.Background(), reqSuccess); err != nil {
+			t.Fatalf("failed to create reqSuccess: %v", err)
+		}
+
+		var outBuf, errBuf bytes.Buffer
+		if err := ExecuteCommand([]string{"request", "replay", "req_success_replay", "--server", server.URL}, &outBuf, &errBuf); err != nil {
+			t.Fatalf("request replay command failed: %v", err)
+		}
+		out := outBuf.String()
+		if !strings.Contains(out, "Successfully requeued request req_success_replay") {
+			t.Fatalf("unexpected request replay output:\n%s", out)
+		}
+
+		// Verify status transitioned back to pending with 0 attempts
+		reloaded, err := db.RequestRepo.GetRequestByID(context.Background(), "req_success_replay")
+		if err != nil {
+			t.Fatalf("failed to reload request: %v", err)
+		}
+		if reloaded.Status != model.RequestStatusPending || reloaded.AttemptsCount != 0 {
+			t.Fatalf("expected pending status with 0 attempts, got %s, %d", reloaded.Status, reloaded.AttemptsCount)
+		}
+	})
 }

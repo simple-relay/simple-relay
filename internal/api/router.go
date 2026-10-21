@@ -123,9 +123,11 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 		mux.HandleFunc("GET /api/v1/jobs/{job_id}", inspectHandler)
 	}
 	if opt.RequestRepo != nil {
-		requestsHandler := NewRequestsHandler(opt.RequestRepo, opt.AttemptRepo, logger)
+		requestsHandler := NewRequestsHandler(opt.RequestRepo, opt.AttemptRepo, logger).
+			WithWakeFn(opt.WakeFn)
 		mux.HandleFunc("GET /api/v1/requests", requestsHandler.ListRequests)
 		mux.HandleFunc("GET /api/v1/requests/{id}", requestsHandler.GetRequest)
+		mux.HandleFunc("POST /api/v1/requests/{id}/replay", requestsHandler.ReplayRequest)
 		mux.HandleFunc("GET /api/v1/queue/stats", func(w http.ResponseWriter, r *http.Request) {
 			pending, inFlight, err := opt.RequestRepo.GetQueueStats(r.Context())
 			if err != nil {
