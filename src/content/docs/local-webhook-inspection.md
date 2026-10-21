@@ -9,7 +9,7 @@ When developing webhook integrations locally, engineers are increasingly migrati
 
 However, once developers make the switch, they immediately encounter a frustrating limitation: **`cloudflared` does not have an interactive request inspector or replay UI** (unlike ngrok's well-known `http://localhost:4040`).
 
-By positioning **Simple Relay** between Cloudflare Tunnel and your local development server (`cloudflared` $\rightarrow$ Simple Relay $\rightarrow$ Local App), you unlock a local traffic inspector, crash-resilient webhook ingestion, and one-click request replay—bringing back the best parts of the ngrok developer experience while keeping the speed and freedom of Cloudflare Tunnels.
+By positioning **Simple Relay** between Cloudflare Tunnel and your local development server (`cloudflared` → Simple Relay → Local App), you unlock a local traffic inspector, crash-resilient webhook ingestion, and one-click request replay—bringing back the best parts of the ngrok developer experience while keeping the speed and freedom of Cloudflare Tunnels.
 
 ---
 
@@ -77,9 +77,12 @@ Simple Relay ships as a single static binary with no external infrastructure req
 # Run the binary locally
 relay
 
-# Or run with Docker
-docker run -d --name relay -p 8080:8080 simple-relay:latest
+# Or run with Docker (GHCR)
+docker run -d --name relay -p 8080:8080 ghcr.io/simple-relay/simple-relay:latest
 ```
+
+> [!TIP] Alternative Installation Methods
+> For other installation options including standalone binary releases, `go install`, and Docker Compose setups with persistent storage, see the [Getting Started / Quickstart Guide](/docs/quickstart).
 
 Open `http://localhost:8080/ui` in your browser. The embedded dashboard loads instantly with zero build steps or frontend servers.
 
@@ -124,7 +127,7 @@ Cloudflare will provide a public URL (e.g., `https://example-tunnel.trycloudflar
 
 ### Step 4: Configure Your Webhook Provider
 
-In your webhook provider's dashboard (e.g., Stripe Dashboard $\rightarrow$ Developers $\rightarrow$ Webhooks), register your public endpoint:
+In your webhook provider's dashboard (e.g., Stripe Dashboard → Developers → Webhooks), register your public endpoint:
 
 ```text
 https://example-tunnel.trycloudflare.com/api/v1/webhook/local-webhooks
