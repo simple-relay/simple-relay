@@ -129,7 +129,7 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 		mux.HandleFunc("GET /api/v1/requests/{id}", requestsHandler.GetRequest)
 		mux.HandleFunc("POST /api/v1/requests/{id}/replay", requestsHandler.ReplayRequest)
 		mux.HandleFunc("GET /api/v1/queue/stats", func(w http.ResponseWriter, r *http.Request) {
-			pending, inFlight, err := opt.RequestRepo.GetQueueStats(r.Context())
+			stats, err := opt.RequestRepo.GetQueueStats(r.Context())
 			if err != nil {
 				logger.Error("failed to get queue stats", "error", err)
 				w.Header().Set("Content-Type", "application/json")
@@ -138,15 +138,17 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, opts ...RouterOptions) h
 				return
 			}
 			status := "HEALTHY"
-			if pending+inFlight >= 1000 {
+			if stats.QueueDepth >= 1000 {
 				status = "BACKLOG"
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"pending":     pending,
-				"in_flight":   inFlight,
-				"queue_depth": pending + inFlight,
+				"pending":     stats.Pending,
+				"in_flight":   stats.InFlight,
+				"delayed":     stats.Delayed,
+				"dlq":         stats.DLQ,
+				"queue_depth": stats.QueueDepth,
 				"status":      status,
 			})
 		})

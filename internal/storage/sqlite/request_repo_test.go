@@ -819,21 +819,35 @@ func TestRequestRepo_GetQueueStats(t *testing.T) {
 	ctx := context.Background()
 
 	// Initial stats should be zero
-	p, inflight, err := reqRepo.GetQueueStats(ctx)
+	stats, err := reqRepo.GetQueueStats(ctx)
 	if err != nil {
 		t.Fatalf("failed to get initial queue stats: %v", err)
 	}
-	if p != 0 || inflight != 0 {
-		t.Fatalf("expected 0/0, got pending=%d, inFlight=%d", p, inflight)
+	if stats.Pending != 0 || stats.InFlight != 0 || stats.Delayed != 0 || stats.DLQ != 0 || stats.QueueDepth != 0 {
+		t.Fatalf("expected all zeros, got %+v", stats)
 	}
 
-	// Insert 2 pending, 1 processing, 1 success, 1 failed
+	now := time.Now().UTC()
+	past := now.Add(-10 * time.Minute)
+	future := now.Add(10 * time.Minute)
+
 	reqs := []*model.Request{
-		{RouteID: route.ID, Method: "POST", URL: "http://example.com/1", Status: model.RequestStatusPending, Headers: map[string]string{}},
+		// 1. Pending with past next_attempt_at -> counted in pending
+		{RouteID: route.ID, Method: "POST", URL: "http://example.com/1", Status: model.RequestStatusPending, NextAttemptAt: &past, Headers: map[string]string{}},
+		// 2. Pending with nil next_attempt_at -> counted in pending
 		{RouteID: route.ID, Method: "POST", URL: "http://example.com/2", Status: model.RequestStatusPending, Headers: map[string]string{}},
+		// 3. In-flight (processing) -> counted in in_flight
 		{RouteID: route.ID, Method: "POST", URL: "http://example.com/3", Status: model.RequestStatusProcessing, Headers: map[string]string{}},
+		// 4. Success -> not counted in queue stats
 		{RouteID: route.ID, Method: "POST", URL: "http://example.com/4", Status: model.RequestStatusSuccess, Headers: map[string]string{}},
-		{RouteID: route.ID, Method: "POST", URL: "http://example.com/5", Status: model.RequestStatusFailed, Headers: map[string]string{}},
+		// 5. Retrying failed with future next_attempt_at -> counted in delayed
+		{RouteID: route.ID, Method: "POST", URL: "http://example.com/5", Status: model.RequestStatusFailed, NextAttemptAt: &future, Headers: map[string]string{}},
+		// 6. Retrying failed with past next_attempt_at -> due now, counted in pending
+		{RouteID: route.ID, Method: "POST", URL: "http://example.com/6", Status: model.RequestStatusFailed, NextAttemptAt: &past, Headers: map[string]string{}},
+		// 7. Settled sync failed with nil next_attempt_at -> completed terminal failure, not pending or delayed
+		{RouteID: route.ID, Method: "POST", URL: "http://example.com/7", Status: model.RequestStatusFailed, NextAttemptAt: nil, Headers: map[string]string{}},
+		// 8. DLQ -> counted in dlq
+		{RouteID: route.ID, Method: "POST", URL: "http://example.com/8", Status: model.RequestStatusDLQ, Headers: map[string]string{}},
 	}
 	for _, req := range reqs {
 		if err := reqRepo.CreateRequest(ctx, req); err != nil {
@@ -841,11 +855,29 @@ func TestRequestRepo_GetQueueStats(t *testing.T) {
 		}
 	}
 
-	p, inflight, err = reqRepo.GetQueueStats(ctx)
+	stats, err = reqRepo.GetQueueStats(ctx)
 	if err != nil {
 		t.Fatalf("failed to get queue stats: %v", err)
 	}
-	if p != 2 || inflight != 1 {
-		t.Fatalf("expected pending=2, inFlight=1, got pending=%d, inFlight=%d", p, inflight)
+
+	// pending = 2 pending (req 1, 2) + 1 due retry (req 6) = 3
+	// in_flight = 1 (req 3)
+	// delayed = 1 (req 5)
+	// dlq = 1 (req 8)
+	// queue_depth = pending (3) + in_flight (1) = 4
+	if stats.Pending != 3 {
+		t.Errorf("expected pending=3, got %d", stats.Pending)
+	}
+	if stats.InFlight != 1 {
+		t.Errorf("expected in_flight=1, got %d", stats.InFlight)
+	}
+	if stats.Delayed != 1 {
+		t.Errorf("expected delayed=1, got %d", stats.Delayed)
+	}
+	if stats.DLQ != 1 {
+		t.Errorf("expected dlq=1, got %d", stats.DLQ)
+	}
+	if stats.QueueDepth != 4 {
+		t.Errorf("expected queue_depth=4, got %d", stats.QueueDepth)
 	}
 }

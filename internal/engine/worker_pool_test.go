@@ -115,8 +115,8 @@ func (m *mockWorkerRepo) ReplayRequest(ctx context.Context, id string) (*model.R
 func (m *mockWorkerRepo) ReplayAllDLQRequests(ctx context.Context, routeID string, limit int) ([]string, error) {
 	return nil, nil
 }
-func (m *mockWorkerRepo) GetQueueStats(ctx context.Context) (int64, int64, error) {
-	return 0, 0, nil
+func (m *mockWorkerRepo) GetQueueStats(ctx context.Context) (*model.QueueStats, error) {
+	return &model.QueueStats{}, nil
 }
 
 func (m *mockWorkerRepo) UpdateRequestStatus(ctx context.Context, id string, status model.RequestStatus, attemptsCount int, nextAttemptAt *time.Time, lastError *string) error {
