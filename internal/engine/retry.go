@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"math"
 	"math/rand/v2"
 	"net"
 	"net/http"
@@ -101,7 +102,9 @@ func (e *RetryEngine) CalculateBackoffWithOverrides(
 	}
 
 	maxRetryAfter := e.config.MaxRetryAfter
-	if maxBackoff > maxRetryAfter {
+	if maxBackoffMS > 0 {
+		maxRetryAfter = maxBackoff
+	} else if maxBackoff > maxRetryAfter {
 		maxRetryAfter = maxBackoff
 	}
 
@@ -165,6 +168,11 @@ func (e *RetryEngine) ParseRetryAfter(header string, now time.Time) (time.Durati
 	if secs, err := strconv.Atoi(header); err == nil {
 		if secs < 0 {
 			return 0, false
+		}
+		// Guard against int64 duration multiplication overflow (math.MaxInt64 / time.Second ≈ 9223372036s)
+		const maxSecs = int(math.MaxInt64 / int64(time.Second))
+		if secs > maxSecs {
+			return time.Duration(math.MaxInt64), true
 		}
 		return time.Duration(secs) * time.Second, true
 	}

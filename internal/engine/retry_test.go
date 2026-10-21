@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"math"
 	"net"
 	"syscall"
 	"testing"
@@ -67,6 +68,12 @@ func TestParseRetryAfter(t *testing.T) {
 			name:       "past date",
 			header:     "Thu, 08 Oct 2026 11:59:00 GMT",
 			wantDelay:  0,
+			wantParsed: true,
+		},
+		{
+			name:       "huge integer seconds does not overflow int64",
+			header:     "9223372037",
+			wantDelay:  time.Duration(math.MaxInt64),
 			wantParsed: true,
 		},
 		{
@@ -300,5 +307,17 @@ func TestCalculateBackoffWithOverrides(t *testing.T) {
 	}
 	if !nonZeroSeen {
 		t.Fatal("expected non-zero jittered backoff on attempt 35 with base_backoff_ms=60000, got all 0s (int64 overflow)")
+	}
+
+	// 6. MaxBackoff override < DefaultMaxRetryAfter (1000ms < 30s) bounds Retry-After to 1s
+	dClampedRoute := e.CalculateBackoffWithOverrides(1, model.RetryStrategyExponential, "20", 100, 1000)
+	if dClampedRoute != 1*time.Second {
+		t.Fatalf("expected Retry-After clamped to route maxBackoffMS=1000ms (1s), got %v", dClampedRoute)
+	}
+
+	// 7. Huge Retry-After value (overflowing int64 seconds) clamped to maxRetryAfter
+	dHugeRetryAfter := e.CalculateBackoffWithOverrides(1, model.RetryStrategyExponential, "9223372037", 100, 10000)
+	if dHugeRetryAfter != 10*time.Second {
+		t.Fatalf("expected huge Retry-After clamped to 10s, got %v", dHugeRetryAfter)
 	}
 }

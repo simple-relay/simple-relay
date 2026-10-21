@@ -132,6 +132,9 @@ To maintain extreme focus and operational simplicity:
 
 * **Writer Pool:** `dbWriter.SetMaxOpenConns(1)` with `PRAGMA busy_timeout = 5000`. Ensures zero SQLITE_BUSY race conditions.
 * **Reader Pool:** `dbReader.SetMaxOpenConns(runtime.NumCPU() * 2)` for concurrent dispatcher reads, UI dashboards, and status queries.
+* **Synchronous Modes & Fsync Throughput Trade-offs:**
+  * `NORMAL` (default): WAL operations sync to disk at checkpoint intervals. Delivers high sustained ingestion throughput (>10,000 req/s) with complete crash resilience against process aborts.
+  * `FULL`: Executes an immediate `fsync` on every transaction commit against sudden host power loss. In `RelaySync`, each proxied request performs 3 sequential writes (`CreateRequest`, `RecordAttempt`, `UpdateRequestStatus`) on the single writer. On cloud block storage (e.g. AWS EBS, GCP Persistent Disk) with 2–5ms fsync latency, global throughput in `FULL` mode is bounded around **50–100 req/s**. For high-throughput production workloads, retain `NORMAL` paired with Litestream continuous replication.
 
 ---
 

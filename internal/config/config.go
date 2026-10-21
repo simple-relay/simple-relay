@@ -203,8 +203,8 @@ func (c *Config) Validate() error {
 	if c.SQLiteSync != "NORMAL" && c.SQLiteSync != "FULL" {
 		return fmt.Errorf("invalid sqlite sync mode: %s (must be NORMAL or FULL)", c.SQLiteSync)
 	}
-	if c.MaxBodySizeMB <= 0 || c.MaxBodySizeMB > 10240 {
-		return fmt.Errorf("max body size must be between 1 and 10240 MB")
+	if c.MaxBodySizeMB <= 0 || c.MaxBodySizeMB > 100 {
+		return fmt.Errorf("max body size must be between 1 and 100 MB")
 	}
 	// Dynamic buffer resolution: 0 signifies auto-sizing to 2 * WorkerConcurrency
 	if c.DispatcherBuffer <= 0 {

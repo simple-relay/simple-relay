@@ -196,6 +196,18 @@ func TestConfig_Validate(t *testing.T) {
 		t.Fatal("expected error for zero MaxBodySizeMB")
 	}
 
+	cfg = DefaultConfig()
+	cfg.MaxBodySizeMB = 101
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for MaxBodySizeMB > 100")
+	}
+
+	cfg = DefaultConfig()
+	cfg.MaxBodySizeMB = 100
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("unexpected error for MaxBodySizeMB = 100: %v", err)
+	}
+
 	os.Setenv("RELAY_MAX_BODY_SIZE_MB", "not-a-number")
 	defer os.Unsetenv("RELAY_MAX_BODY_SIZE_MB")
 	if _, err := LoadFromEnv(); err == nil {
