@@ -14,6 +14,7 @@ import (
 	"github.com/simple-relay/simple-relay/internal/config"
 	"github.com/simple-relay/simple-relay/internal/model"
 	"github.com/simple-relay/simple-relay/internal/storage"
+	"github.com/simple-relay/simple-relay/internal/storage/sqlite"
 )
 
 func TestHealthzEndpoint(t *testing.T) {
@@ -382,5 +383,81 @@ func TestRouter_InternalDBError_Returns500(t *testing.T) {
 	}
 	if body["error"] != "Internal database error during authentication" {
 		t.Fatalf("unexpected error response: %s", body["error"])
+	}
+}
+
+func TestRouter_QueueStats_PayloadBreakdown(t *testing.T) {
+	db := setupTestAPIKeysDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	route := &model.Route{
+		ID:             "route_stats_test",
+		Name:           "Stats Test Route",
+		Type:           "inbound",
+		Mode:           "async",
+		Path:           "/stats-route",
+		DestinationURL: "http://example.com/dest",
+		MaxAttempts:    3,
+		TimeoutMS:      5000,
+	}
+	routeRepo := sqlite.NewRouteRepo(db)
+	if err := routeRepo.CreateRoute(ctx, route); err != nil {
+		t.Fatalf("failed to create route: %v", err)
+	}
+
+	now := time.Now().UTC()
+	past := now.Add(-5 * time.Minute)
+	future := now.Add(5 * time.Minute)
+
+	reqs := []*model.Request{
+		{RouteID: route.ID, Method: "POST", URL: "http://example.com", Status: model.RequestStatusPending, NextAttemptAt: &past, Headers: map[string]string{}},
+		{RouteID: route.ID, Method: "POST", URL: "http://example.com", Status: model.RequestStatusProcessing, Headers: map[string]string{}},
+		{RouteID: route.ID, Method: "POST", URL: "http://example.com", Status: model.RequestStatusFailed, NextAttemptAt: &future, Headers: map[string]string{}},
+		{RouteID: route.ID, Method: "POST", URL: "http://example.com", Status: model.RequestStatusDLQ, Headers: map[string]string{}},
+	}
+	for _, req := range reqs {
+		if err := db.RequestRepo.CreateRequest(ctx, req); err != nil {
+			t.Fatalf("failed to create request: %v", err)
+		}
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfg := config.DefaultConfig()
+	router := NewRouter(cfg, logger, RouterOptions{
+		RequestRepo: db.RequestRepo,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/queue/stats", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp["pending"] != float64(1) {
+		t.Errorf("expected pending=1, got %v", resp["pending"])
+	}
+	if resp["in_flight"] != float64(1) {
+		t.Errorf("expected in_flight=1, got %v", resp["in_flight"])
+	}
+	if resp["delayed"] != float64(1) {
+		t.Errorf("expected delayed=1, got %v", resp["delayed"])
+	}
+	if resp["dlq"] != float64(1) {
+		t.Errorf("expected dlq=1, got %v", resp["dlq"])
+	}
+	if resp["queue_depth"] != float64(2) {
+		t.Errorf("expected queue_depth=2, got %v", resp["queue_depth"])
+	}
+	if resp["status"] != "HEALTHY" {
+		t.Errorf("expected status=HEALTHY, got %v", resp["status"])
 	}
 }

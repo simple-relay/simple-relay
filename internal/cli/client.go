@@ -170,6 +170,8 @@ func (c *RelayClient) GetQueueStats(ctx context.Context) (pending, inFlight int6
 	type queueStatsResp struct {
 		Pending    int64  `json:"pending"`
 		InFlight   int64  `json:"in_flight"`
+		Delayed    int64  `json:"delayed"`
+		DLQ        int64  `json:"dlq"`
 		QueueDepth int64  `json:"queue_depth"`
 		Status     string `json:"status"`
 	}

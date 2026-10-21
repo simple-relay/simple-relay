@@ -748,35 +748,27 @@ func (r *RequestRepo) ListRequests(ctx context.Context, filter storage.RequestFi
 	return results, total, nil
 }
 
-// GetQueueStats aggregates count of pending and processing requests in a single round-trip.
-func (r *RequestRepo) GetQueueStats(ctx context.Context) (pending, inFlight int64, err error) {
+// GetQueueStats aggregates delivery metrics across lifecycle states in a single round-trip.
+func (r *RequestRepo) GetQueueStats(ctx context.Context) (*model.QueueStats, error) {
+	now := time.Now().UTC()
 	query := `
-		SELECT status, COUNT(*) 
-		FROM requests 
-		WHERE status IN ('pending', 'processing') 
-		GROUP BY status;
+		SELECT
+			(SELECT COUNT(*) FROM requests WHERE status IN ('pending', 'failed') AND ((status = 'pending' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)) OR (status = 'failed' AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?))),
+			(SELECT COUNT(*) FROM requests WHERE status = 'processing'),
+			(SELECT COUNT(*) FROM requests WHERE status IN ('pending', 'failed') AND status = 'failed' AND next_attempt_at > ?),
+			(SELECT COUNT(*) FROM requests WHERE status = 'dlq');
 	`
-	rows, err := r.db.Reader().QueryContext(ctx, query)
+	var stats model.QueueStats
+	err := r.db.Reader().QueryRowContext(ctx, query, now, now, now).Scan(
+		&stats.Pending,
+		&stats.InFlight,
+		&stats.Delayed,
+		&stats.DLQ,
+	)
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to aggregate queue stats: %w", err)
+		return nil, fmt.Errorf("failed to aggregate queue stats: %w", err)
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var status string
-		var count int64
-		if err := rows.Scan(&status, &count); err != nil {
-			return 0, 0, fmt.Errorf("failed to scan queue stats row: %w", err)
-		}
-		switch status {
-		case "pending":
-			pending = count
-		case "processing":
-			inFlight = count
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return 0, 0, fmt.Errorf("queue stats iteration error: %w", err)
-	}
-	return pending, inFlight, nil
+	stats.QueueDepth = stats.Pending + stats.InFlight
+	return &stats, nil
 }

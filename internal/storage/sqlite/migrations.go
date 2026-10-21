@@ -47,6 +47,9 @@ WHERE status IN ('pending', 'failed');
 CREATE INDEX IF NOT EXISTS idx_requests_processing ON requests (status)
 WHERE status = 'processing';
 
+CREATE INDEX IF NOT EXISTS idx_requests_dlq ON requests (status)
+WHERE status = 'dlq';
+
 CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests (created_at);
 
 CREATE TABLE IF NOT EXISTS attempts (
@@ -100,6 +103,10 @@ func (db *DB) Migrate(ctx context.Context) error {
 				return fmt.Errorf("failed to add %s column to routes: %w", col.name, err)
 			}
 		}
+	}
+
+	if _, err := db.writer.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_requests_dlq ON requests (status) WHERE status = 'dlq';`); err != nil {
+		return fmt.Errorf("failed to ensure idx_requests_dlq: %w", err)
 	}
 
 	return nil

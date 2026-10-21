@@ -113,3 +113,50 @@ func TestIndexHTML_RetryBackoffAndNonIdempotentControls(t *testing.T) {
 		}
 	}
 }
+
+func TestIndexHTML_MetricsOverview(t *testing.T) {
+	data, err := FS.ReadFile("index.html")
+	if err != nil {
+		t.Fatalf("failed to read index.html: %v", err)
+	}
+
+	content := string(data)
+	expectedSubstrings := []string{
+		`setTab('metrics')`,
+		`x-show="currentTab === 'metrics'"`,
+		`fetchQueueStats()`,
+		`filterRequestsByStatus('pending')`,
+		`filterRequestsByStatus('processing')`,
+		`filterRequestsByStatus('failed')`,
+		`queueStats.pending`,
+		`queueStats.in_flight`,
+		`queueStats.delayed`,
+		`queueStats.dlq`,
+		`queueStats.queue_depth`,
+		`queueStats.status`,
+		`recentRequests`,
+		`goToRequest`,
+		`Recent Activity`,
+		`refreshProgress`,
+		`startRefreshTicker()`,
+		`manualRefreshQueueStats()`,
+	}
+
+	for _, substr := range expectedSubstrings {
+		if !strings.Contains(content, substr) {
+			t.Errorf("expected index.html to contain %q", substr)
+		}
+	}
+
+	// Verify sidebar nav order: metrics -> requests -> dlq -> routes -> api-keys
+	idxMetrics := strings.Index(content, `setTab('metrics')`)
+	idxRequests := strings.Index(content, `setTab('requests')`)
+	idxDLQ := strings.Index(content, `setTab('dlq')`)
+	idxRoutes := strings.Index(content, `setTab('routes')`)
+	idxAPIKeys := strings.Index(content, `setTab('api-keys')`)
+
+	if !(idxMetrics < idxRequests && idxRequests < idxDLQ && idxDLQ < idxRoutes && idxRoutes < idxAPIKeys) {
+		t.Errorf("expected sidebar tab order metrics -> requests -> dlq -> routes -> api-keys, got indices: metrics=%d, requests=%d, dlq=%d, routes=%d, api-keys=%d",
+			idxMetrics, idxRequests, idxDLQ, idxRoutes, idxAPIKeys)
+	}
+}

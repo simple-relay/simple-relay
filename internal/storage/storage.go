@@ -49,7 +49,7 @@ type RequestRepository interface {
 	ReplayDLQRequest(ctx context.Context, id string) (*model.Request, error)
 	ReplayAllDLQRequests(ctx context.Context, routeID string, limit int) ([]string, error)
 	ReplayRequest(ctx context.Context, id string) (*model.Request, error)
-	GetQueueStats(ctx context.Context) (pending, inFlight int64, err error)
+	GetQueueStats(ctx context.Context) (*model.QueueStats, error)
 }
 
 // AttemptRepository defines the storage operations for attempt audit logs.

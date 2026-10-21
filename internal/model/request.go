@@ -47,6 +47,15 @@ type RequestMetadata struct {
 	UpdatedAt     time.Time     `json:"updated_at"`
 }
 
+// QueueStats represents aggregate counts of requests across delivery lifecycle states.
+type QueueStats struct {
+	Pending    int64 `json:"pending"`
+	InFlight   int64 `json:"in_flight"`
+	Delayed    int64 `json:"delayed"`
+	DLQ        int64 `json:"dlq"`
+	QueueDepth int64 `json:"queue_depth"`
+}
+
 var (
 	ErrRequestIDRequired      = errors.New("request id is required")
 	ErrRequestRouteIDRequired = errors.New("route_id is required")

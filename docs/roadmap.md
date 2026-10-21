@@ -156,6 +156,11 @@
 - [x] **DLQ Dashboard & Replay Action** ([#13](https://github.com/simple-relay/simple-relay/issues/13))
   - Dedicated view for failed/DLQ events.
   - One-click individual replay and bulk replay buttons.
+- [x] **Delivery Overview Metrics Summary Cards & Dashboard Telemetry** ([#90](https://github.com/simple-relay/simple-relay/issues/90))
+  - Aggregated single round-trip SQLite query for pending, in-flight, delayed, and DLQ metrics.
+  - Dedicated Metrics tab on embedded dashboard sidebar with interactive click-filtering and real-time status banner.
+  - Reordered sidebar navigation prioritizing runtime telemetry over route configuration.
+  - See design specification: [2026-10-21-delivery-overview-metrics-cards-design.md](specs/2026-10-21-delivery-overview-metrics-cards-design.md).
 - [ ] **Dynamic URL Navigation & Deep Linking for Dashboard** ([#49](https://github.com/simple-relay/simple-relay/issues/49))
   - Synchronize active dashboard tab state (`routes`, `requests`, `dlq`) with browser URL hash/history.
   - Support deep-linking and browser back/forward navigation for request inspector drawer (`#requests?inspect=<ulid>`).
