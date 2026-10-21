@@ -35,6 +35,12 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.TrustProxy {
 		t.Fatalf("expected default TrustProxy false, got true")
 	}
+	if cfg.SQLiteSync != "NORMAL" {
+		t.Fatalf("expected default SQLiteSync NORMAL, got %s", cfg.SQLiteSync)
+	}
+	if cfg.MaxBodySizeMB != 10 {
+		t.Fatalf("expected default MaxBodySizeMB 10, got %d", cfg.MaxBodySizeMB)
+	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -48,6 +54,8 @@ func TestLoadFromEnv(t *testing.T) {
 	os.Setenv("RELAY_CLEANER_INTERVAL", "30m")
 	os.Setenv("RELAY_DRAIN_TIMEOUT", "45s")
 	os.Setenv("RELAY_TRUST_PROXY", "true")
+	os.Setenv("RELAY_SQLITE_SYNC", "full")
+	os.Setenv("RELAY_MAX_BODY_SIZE_MB", "25")
 	defer func() {
 		os.Unsetenv("RELAY_PORT")
 		os.Unsetenv("RELAY_HOST")
@@ -59,6 +67,8 @@ func TestLoadFromEnv(t *testing.T) {
 		os.Unsetenv("RELAY_CLEANER_INTERVAL")
 		os.Unsetenv("RELAY_DRAIN_TIMEOUT")
 		os.Unsetenv("RELAY_TRUST_PROXY")
+		os.Unsetenv("RELAY_SQLITE_SYNC")
+		os.Unsetenv("RELAY_MAX_BODY_SIZE_MB")
 	}()
 
 	cfg, err := LoadFromEnv()
@@ -95,6 +105,12 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if !cfg.TrustProxy {
 		t.Fatalf("expected TrustProxy true when RELAY_TRUST_PROXY=true")
+	}
+	if cfg.SQLiteSync != "FULL" {
+		t.Fatalf("expected SQLiteSync FULL, got %s", cfg.SQLiteSync)
+	}
+	if cfg.MaxBodySizeMB != 25 {
+		t.Fatalf("expected MaxBodySizeMB 25, got %d", cfg.MaxBodySizeMB)
 	}
 }
 
@@ -166,5 +182,35 @@ func TestConfig_Validate(t *testing.T) {
 	cfg.AdminPassword = "adminsecret123"
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("unexpected error for valid admin password: %v", err)
+	}
+
+	cfg = DefaultConfig()
+	cfg.SQLiteSync = "OFF"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for invalid SQLiteSync OFF")
+	}
+
+	cfg = DefaultConfig()
+	cfg.MaxBodySizeMB = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for zero MaxBodySizeMB")
+	}
+
+	cfg = DefaultConfig()
+	cfg.MaxBodySizeMB = 101
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for MaxBodySizeMB > 100")
+	}
+
+	cfg = DefaultConfig()
+	cfg.MaxBodySizeMB = 100
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("unexpected error for MaxBodySizeMB = 100: %v", err)
+	}
+
+	os.Setenv("RELAY_MAX_BODY_SIZE_MB", "not-a-number")
+	defer os.Unsetenv("RELAY_MAX_BODY_SIZE_MB")
+	if _, err := LoadFromEnv(); err == nil {
+		t.Fatal("expected error when RELAY_MAX_BODY_SIZE_MB is invalid")
 	}
 }

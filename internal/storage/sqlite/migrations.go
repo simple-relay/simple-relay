@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS routes (
     max_attempts INTEGER NOT NULL DEFAULT 5,
     timeout_ms INTEGER NOT NULL DEFAULT 10000,
     retry_backoff_strategy TEXT DEFAULT 'exp',
+    base_backoff_ms INTEGER NOT NULL DEFAULT 0,
+    max_backoff_ms INTEGER NOT NULL DEFAULT 0,
+    retry_non_idempotent INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -75,12 +78,27 @@ func (db *DB) Migrate(ctx context.Context) error {
 		return fmt.Errorf("failed to execute sqlite schema migration: %w", err)
 	}
 
-	// Ensure validation_rules column exists for existing databases
-	var count int
-	err := db.writer.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('routes') WHERE name = 'validation_rules';`).Scan(&count)
-	if err == nil && count == 0 {
-		if _, err := db.writer.ExecContext(ctx, `ALTER TABLE routes ADD COLUMN validation_rules TEXT DEFAULT '[]';`); err != nil {
-			return fmt.Errorf("failed to add validation_rules column to routes: %w", err)
+	// Ensure newer route columns exist for existing databases
+	alterColumns := []struct {
+		name string
+		ddl  string
+	}{
+		{name: "validation_rules", ddl: `ALTER TABLE routes ADD COLUMN validation_rules TEXT DEFAULT '[]';`},
+		{name: "base_backoff_ms", ddl: `ALTER TABLE routes ADD COLUMN base_backoff_ms INTEGER NOT NULL DEFAULT 0;`},
+		{name: "max_backoff_ms", ddl: `ALTER TABLE routes ADD COLUMN max_backoff_ms INTEGER NOT NULL DEFAULT 0;`},
+		{name: "retry_non_idempotent", ddl: `ALTER TABLE routes ADD COLUMN retry_non_idempotent INTEGER NOT NULL DEFAULT 0;`},
+	}
+
+	for _, col := range alterColumns {
+		var count int
+		err := db.writer.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('routes') WHERE name = ?;`, col.name).Scan(&count)
+		if err != nil {
+			return fmt.Errorf("failed to inspect %s column on routes: %w", col.name, err)
+		}
+		if count == 0 {
+			if _, err := db.writer.ExecContext(ctx, col.ddl); err != nil {
+				return fmt.Errorf("failed to add %s column to routes: %w", col.name, err)
+			}
 		}
 	}
 

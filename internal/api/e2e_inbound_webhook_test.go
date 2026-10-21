@@ -51,7 +51,7 @@ func TestE2E_InboundWebhookDeliveryPipeline(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "e2e_webhook.db")
 
-	db, err := sqlite.Open(dbPath)
+	db, err := sqlite.Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestE2E_InboundWebhook_WithSignatureVerification(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "e2e_webhook_sig.db")
 
-	db, err := sqlite.Open(dbPath)
+	db, err := sqlite.Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}

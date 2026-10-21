@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/simple-relay/simple-relay/internal/storage"
@@ -29,7 +30,15 @@ var _ storage.Storage = (*DB)(nil)
 // Open initializes SQLite in WAL mode with connection isolation:
 // - Writer pool: 1 connection (SetMaxOpenConns(1)) to prevent lock contention.
 // - Reader pool: NumCPU*2 connections for concurrent reads.
-func Open(dsn string) (*DB, error) {
+func Open(dsn string, syncMode string) (*DB, error) {
+	mode := strings.ToUpper(strings.TrimSpace(syncMode))
+	if mode == "" {
+		mode = "NORMAL"
+	}
+	if mode != "NORMAL" && mode != "FULL" {
+		return nil, fmt.Errorf("invalid sqlite synchronous mode %q (must be NORMAL or FULL)", syncMode)
+	}
+
 	// Writer connection pool
 	writer, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -69,7 +78,7 @@ func Open(dsn string) (*DB, error) {
 
 	pragmas := []string{
 		"PRAGMA journal_mode = WAL;",
-		"PRAGMA synchronous = NORMAL;",
+		fmt.Sprintf("PRAGMA synchronous = %s;", mode),
 		"PRAGMA busy_timeout = 5000;",
 		"PRAGMA foreign_keys = ON;",
 		"PRAGMA auto_vacuum = INCREMENTAL;",

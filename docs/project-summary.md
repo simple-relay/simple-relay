@@ -194,7 +194,7 @@ For synchronous outbound proxy calls, if the caller closes the TCP connection, R
 
 ### 3. Method-aware retry & Idempotency
 
-Idempotency headers (`X-Relay-Request-ID`, `Idempotency-Key`) are propagated downstream. Unsafe operations (POST, PUT, PATCH) should only retry when idempotent or explicitly enabled per route.
+Idempotency headers (`X-Relay-Request-ID`, `Idempotency-Key`) are propagated downstream. Non-idempotent synchronous operations (`POST`, `PATCH`) only retry when an idempotency key is provided or `retry_non_idempotent` is explicitly enabled on the route.
 
 ### 4. Storage bloat control
 

@@ -14,7 +14,7 @@ import (
 
 func TestE2E_ColdBootAutoSeedingAndCLI(t *testing.T) {
 	tempDB := t.TempDir() + "/test_relay.db"
-	db, err := sqlite.Open(tempDB)
+	db, err := sqlite.Open(tempDB, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestE2E_ColdBootAutoSeedingAndCLI(t *testing.T) {
 
 func TestE2E_ProtectedMode_NoAutoSeeding(t *testing.T) {
 	tempDB := t.TempDir() + "/test_relay_protected.db"
-	db, err := sqlite.Open(tempDB)
+	db, err := sqlite.Open(tempDB, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}

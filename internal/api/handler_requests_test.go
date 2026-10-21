@@ -18,7 +18,7 @@ func TestRequestsHandler_ListAndDetail(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test_req_handler.db")
 
-	db, err := sqlite.Open(dbPath)
+	db, err := sqlite.Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}

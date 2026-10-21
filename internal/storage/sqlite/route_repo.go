@@ -46,12 +46,18 @@ func (r *RouteRepo) CreateRoute(ctx context.Context, route *model.Route) error {
 		return fmt.Errorf("failed to marshal validation rules: %w", err)
 	}
 
+	retryNonIdem := 0
+	if route.RetryNonIdempotent {
+		retryNonIdem = 1
+	}
+
 	query := `
 		INSERT INTO routes (
 			id, name, type, mode, path, destination_url,
 			signature_provider, signature_secret, validation_rules, max_attempts,
-			timeout_ms, retry_backoff_strategy, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+			timeout_ms, retry_backoff_strategy, base_backoff_ms, max_backoff_ms,
+			retry_non_idempotent, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 	`
 
 	_, err = r.db.Writer().ExecContext(ctx, query,
@@ -67,6 +73,9 @@ func (r *RouteRepo) CreateRoute(ctx context.Context, route *model.Route) error {
 		route.MaxAttempts,
 		route.TimeoutMS,
 		route.RetryBackoffStrategy,
+		route.BaseBackoffMS,
+		route.MaxBackoffMS,
+		retryNonIdem,
 		route.CreatedAt.Format(time.RFC3339Nano),
 		route.UpdatedAt.Format(time.RFC3339Nano),
 	)
@@ -86,7 +95,8 @@ func (r *RouteRepo) GetRouteByID(ctx context.Context, id string) (*model.Route, 
 	query := `
 		SELECT id, name, type, mode, path, destination_url,
 		       signature_provider, signature_secret, validation_rules, max_attempts,
-		       timeout_ms, retry_backoff_strategy, created_at, updated_at
+		       timeout_ms, retry_backoff_strategy, base_backoff_ms, max_backoff_ms,
+		       retry_non_idempotent, created_at, updated_at
 		FROM routes WHERE id = ?;
 	`
 	return r.scanRoute(r.db.Reader().QueryRowContext(ctx, query, id))
@@ -97,7 +107,8 @@ func (r *RouteRepo) GetRouteByName(ctx context.Context, name string) (*model.Rou
 	query := `
 		SELECT id, name, type, mode, path, destination_url,
 		       signature_provider, signature_secret, validation_rules, max_attempts,
-		       timeout_ms, retry_backoff_strategy, created_at, updated_at
+		       timeout_ms, retry_backoff_strategy, base_backoff_ms, max_backoff_ms,
+		       retry_non_idempotent, created_at, updated_at
 		FROM routes WHERE name = ?;
 	`
 	return r.scanRoute(r.db.Reader().QueryRowContext(ctx, query, name))
@@ -108,7 +119,8 @@ func (r *RouteRepo) GetRouteByPath(ctx context.Context, path string) (*model.Rou
 	query := `
 		SELECT id, name, type, mode, path, destination_url,
 		       signature_provider, signature_secret, validation_rules, max_attempts,
-		       timeout_ms, retry_backoff_strategy, created_at, updated_at
+		       timeout_ms, retry_backoff_strategy, base_backoff_ms, max_backoff_ms,
+		       retry_non_idempotent, created_at, updated_at
 		FROM routes WHERE path = ?;
 	`
 	return r.scanRoute(r.db.Reader().QueryRowContext(ctx, query, path))
@@ -119,7 +131,8 @@ func (r *RouteRepo) ListRoutes(ctx context.Context) ([]*model.Route, error) {
 	query := `
 		SELECT id, name, type, mode, path, destination_url,
 		       signature_provider, signature_secret, validation_rules, max_attempts,
-		       timeout_ms, retry_backoff_strategy, created_at, updated_at
+		       timeout_ms, retry_backoff_strategy, base_backoff_ms, max_backoff_ms,
+		       retry_non_idempotent, created_at, updated_at
 		FROM routes ORDER BY created_at DESC, id DESC;
 	`
 
@@ -132,11 +145,12 @@ func (r *RouteRepo) ListRoutes(ctx context.Context) ([]*model.Route, error) {
 	var routes []*model.Route
 	for rows.Next() {
 		var (
-			rt        model.Route
-			createdAt string
-			updatedAt string
-			secret    sql.NullString
-			rules     sql.NullString
+			rt           model.Route
+			createdAt    string
+			updatedAt    string
+			secret       sql.NullString
+			rules        sql.NullString
+			retryNonIdem int
 		)
 
 		err := rows.Scan(
@@ -152,6 +166,9 @@ func (r *RouteRepo) ListRoutes(ctx context.Context) ([]*model.Route, error) {
 			&rt.MaxAttempts,
 			&rt.TimeoutMS,
 			&rt.RetryBackoffStrategy,
+			&rt.BaseBackoffMS,
+			&rt.MaxBackoffMS,
+			&retryNonIdem,
 			&createdAt,
 			&updatedAt,
 		)
@@ -159,6 +176,7 @@ func (r *RouteRepo) ListRoutes(ctx context.Context) ([]*model.Route, error) {
 			return nil, fmt.Errorf("failed to scan route row: %w", err)
 		}
 
+		rt.RetryNonIdempotent = retryNonIdem != 0
 		if secret.Valid {
 			rt.SignatureSecret = secret.String
 		}
@@ -193,6 +211,11 @@ func (r *RouteRepo) UpdateRoute(ctx context.Context, route *model.Route) error {
 		return fmt.Errorf("failed to marshal validation rules: %w", err)
 	}
 
+	retryNonIdem := 0
+	if route.RetryNonIdempotent {
+		retryNonIdem = 1
+	}
+
 	query := `
 		UPDATE routes SET
 			name = ?,
@@ -206,6 +229,9 @@ func (r *RouteRepo) UpdateRoute(ctx context.Context, route *model.Route) error {
 			max_attempts = ?,
 			timeout_ms = ?,
 			retry_backoff_strategy = ?,
+			base_backoff_ms = ?,
+			max_backoff_ms = ?,
+			retry_non_idempotent = ?,
 			updated_at = ?
 		WHERE id = ?;
 	`
@@ -222,6 +248,9 @@ func (r *RouteRepo) UpdateRoute(ctx context.Context, route *model.Route) error {
 		route.MaxAttempts,
 		route.TimeoutMS,
 		route.RetryBackoffStrategy,
+		route.BaseBackoffMS,
+		route.MaxBackoffMS,
+		retryNonIdem,
 		route.UpdatedAt.Format(time.RFC3339Nano),
 		route.ID,
 	)
@@ -265,11 +294,12 @@ func (r *RouteRepo) DeleteRoute(ctx context.Context, id string) error {
 
 func (r *RouteRepo) scanRoute(row *sql.Row) (*model.Route, error) {
 	var (
-		rt        model.Route
-		createdAt string
-		updatedAt string
-		secret    sql.NullString
-		rules     sql.NullString
+		rt           model.Route
+		createdAt    string
+		updatedAt    string
+		secret       sql.NullString
+		rules        sql.NullString
+		retryNonIdem int
 	)
 
 	err := row.Scan(
@@ -285,6 +315,9 @@ func (r *RouteRepo) scanRoute(row *sql.Row) (*model.Route, error) {
 		&rt.MaxAttempts,
 		&rt.TimeoutMS,
 		&rt.RetryBackoffStrategy,
+		&rt.BaseBackoffMS,
+		&rt.MaxBackoffMS,
+		&retryNonIdem,
 		&createdAt,
 		&updatedAt,
 	)
@@ -295,6 +328,8 @@ func (r *RouteRepo) scanRoute(row *sql.Row) (*model.Route, error) {
 		}
 		return nil, fmt.Errorf("failed to scan route: %w", err)
 	}
+
+	rt.RetryNonIdempotent = retryNonIdem != 0
 
 	if secret.Valid {
 		rt.SignatureSecret = secret.String

@@ -34,7 +34,7 @@ func setupTestWebhookServer(t *testing.T, maxBodyBytes int64) (*sqlite.DB, *engi
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test_webhook.db")
 
-	db, err := sqlite.Open(dbPath)
+	db, err := sqlite.Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}

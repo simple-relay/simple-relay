@@ -51,6 +51,10 @@ func NewWorkerPool(
 		concurrency = 20
 	}
 
+	if retryEngine == nil {
+		retryEngine = NewAsyncRetryEngine()
+	}
+
 	client := cfg.Client
 	if client == nil {
 		client = &http.Client{
@@ -221,7 +225,7 @@ func (wp *WorkerPool) processJob(ctx context.Context, req *model.Request) {
 
 	// Handle failure / retries
 	if newAttempts < route.MaxAttempts {
-		delay := wp.retryEngine.CalculateBackoff(newAttempts, route.RetryBackoffStrategy, retryAfterHeader)
+		delay := wp.retryEngine.CalculateBackoffWithOverrides(newAttempts, route.RetryBackoffStrategy, retryAfterHeader, route.BaseBackoffMS, route.MaxBackoffMS)
 		nextAttemptAt := time.Now().UTC().Add(delay)
 		_ = wp.reqRepo.UpdateRequestStatus(ctx, req.ID, model.RequestStatusFailed, newAttempts, &nextAttemptAt, errMsg)
 	} else {

@@ -23,7 +23,7 @@ func setupTestDLQServer(t *testing.T) (*sqlite.DB, *engine.RouteRegistry, *int32
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test_dlq.db")
 
-	db, err := sqlite.Open(dbPath)
+	db, err := sqlite.Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}

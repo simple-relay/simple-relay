@@ -76,6 +76,9 @@ type Route struct {
 	MaxAttempts          int               `json:"max_attempts"`
 	TimeoutMS            int               `json:"timeout_ms"`
 	RetryBackoffStrategy RetryStrategy     `json:"retry_backoff_strategy"`
+	BaseBackoffMS        int               `json:"base_backoff_ms"`
+	MaxBackoffMS         int               `json:"max_backoff_ms"`
+	RetryNonIdempotent   bool              `json:"retry_non_idempotent"`
 	CreatedAt            time.Time         `json:"created_at"`
 	UpdatedAt            time.Time         `json:"updated_at"`
 }
@@ -89,6 +92,9 @@ var (
 	ErrRouteInvalidMode                = errors.New("invalid route mode; must be 'sync' or 'async'")
 	ErrRouteInvalidMaxAttempts         = errors.New("max_attempts must be at least 1")
 	ErrRouteInvalidTimeout             = errors.New("timeout_ms must be greater than 0")
+	ErrRouteInvalidBaseBackoff         = errors.New("base_backoff_ms must be greater than or equal to 0")
+	ErrRouteInvalidMaxBackoff          = errors.New("max_backoff_ms must be greater than or equal to 0")
+	ErrRouteBackoffRange               = errors.New("base_backoff_ms cannot be greater than max_backoff_ms")
 	ErrRouteSignatureSecretRequired    = errors.New("signature_secret is required when signature_provider is enabled")
 	ErrRouteInvalidSignatureProvider   = errors.New("invalid signature_provider")
 	ErrRouteValidationRulesInboundOnly = errors.New("validation_rules are only supported on inbound routes")
@@ -123,6 +129,15 @@ func (r *Route) Validate() error {
 	}
 	if r.TimeoutMS <= 0 {
 		return ErrRouteInvalidTimeout
+	}
+	if r.BaseBackoffMS < 0 || time.Duration(r.BaseBackoffMS)*time.Millisecond < 0 {
+		return ErrRouteInvalidBaseBackoff
+	}
+	if r.MaxBackoffMS < 0 || time.Duration(r.MaxBackoffMS)*time.Millisecond < 0 {
+		return ErrRouteInvalidMaxBackoff
+	}
+	if r.BaseBackoffMS > 0 && r.MaxBackoffMS > 0 && r.BaseBackoffMS > r.MaxBackoffMS {
+		return ErrRouteBackoffRange
 	}
 
 	if len(r.ValidationRules) > 0 {

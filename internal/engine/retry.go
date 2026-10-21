@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"math"
 	"math/rand/v2"
 	"net"
 	"net/http"
@@ -19,6 +20,10 @@ const (
 	DefaultBaseBackoff   = 100 * time.Millisecond
 	DefaultMaxBackoff    = 10 * time.Second
 	DefaultMaxRetryAfter = 30 * time.Second
+
+	DefaultAsyncBaseBackoff   = 5 * time.Second
+	DefaultAsyncMaxBackoff    = 15 * time.Minute
+	DefaultAsyncMaxRetryAfter = 15 * time.Minute
 )
 
 // RetryConfig encapsulates timing parameters for backoff calculation.
@@ -54,17 +59,66 @@ func NewRetryEngine(cfg ...RetryConfig) *RetryEngine {
 	return &RetryEngine{config: c}
 }
 
+// NewAsyncRetryEngine initializes a RetryEngine with asynchronous worker backoff defaults (5s base, 15m max).
+func NewAsyncRetryEngine() *RetryEngine {
+	return NewRetryEngine(RetryConfig{
+		BaseBackoff:   DefaultAsyncBaseBackoff,
+		MaxBackoff:    DefaultAsyncMaxBackoff,
+		MaxRetryAfter: DefaultAsyncMaxRetryAfter,
+	})
+}
+
 // CalculateBackoff calculates the wait duration before the next attempt.
 // If retryAfterHeader is provided and valid, it takes precedence (capped at MaxRetryAfter).
 // Otherwise, it computes backoff using the configured strategy with Full Jitter.
 func (e *RetryEngine) CalculateBackoff(attempt int, strategy model.RetryStrategy, retryAfterHeader string) time.Duration {
+	return e.CalculateBackoffWithOverrides(attempt, strategy, retryAfterHeader, 0, 0)
+}
+
+// CalculateBackoffWithOverrides computes the wait duration before the next attempt,
+// applying optional per-route baseBackoffMS and maxBackoffMS overrides when > 0.
+func (e *RetryEngine) CalculateBackoffWithOverrides(
+	attempt int,
+	strategy model.RetryStrategy,
+	retryAfterHeader string,
+	baseBackoffMS int,
+	maxBackoffMS int,
+) time.Duration {
+	baseBackoff := e.config.BaseBackoff
+	if baseBackoffMS > 0 {
+		baseBackoff = time.Duration(baseBackoffMS) * time.Millisecond
+	}
+
+	maxBackoff := e.config.MaxBackoff
+	if maxBackoffMS > 0 {
+		maxBackoff = time.Duration(maxBackoffMS) * time.Millisecond
+	}
+	if baseBackoff > maxBackoff {
+		if baseBackoffMS == 0 && maxBackoffMS > 0 {
+			baseBackoff = maxBackoff
+		} else {
+			maxBackoff = baseBackoff
+		}
+	}
+
+	maxRetryAfter := e.config.MaxRetryAfter
+	if maxBackoffMS > 0 {
+		maxRetryAfter = maxBackoff
+	} else if maxBackoff > maxRetryAfter {
+		maxRetryAfter = maxBackoff
+	}
+
 	if retryAfterHeader != "" {
 		if delay, ok := e.ParseRetryAfter(retryAfterHeader, time.Now().UTC()); ok {
-			if delay > e.config.MaxRetryAfter {
-				return e.config.MaxRetryAfter
+			if delay > maxRetryAfter {
+				return maxRetryAfter
 			}
 			return delay
 		}
+	}
+
+	if baseBackoff <= 0 || maxBackoff <= 0 {
+		return 0
 	}
 
 	var maxWait time.Duration
@@ -73,20 +127,25 @@ func (e *RetryEngine) CalculateBackoff(attempt int, strategy model.RetryStrategy
 		if attempt < 1 {
 			attempt = 1
 		}
-		maxWait = e.config.BaseBackoff * time.Duration(attempt)
+		if time.Duration(attempt) > maxBackoff/baseBackoff {
+			maxWait = maxBackoff
+		} else {
+			maxWait = baseBackoff * time.Duration(attempt)
+		}
 	default: // Exponential
-		exp := attempt - 1
-		if exp < 0 {
-			exp = 0
+		// Double iteratively up to maxBackoff so high attempt counts + large baseBackoff never overflow int64 💀.
+		maxWait = baseBackoff
+		for i := 1; i < attempt && maxWait < maxBackoff; i++ {
+			if maxWait > maxBackoff/2 {
+				maxWait = maxBackoff
+				break
+			}
+			maxWait *= 2
 		}
-		if exp > 30 {
-			exp = 30
-		}
-		maxWait = e.config.BaseBackoff * time.Duration(1<<exp)
 	}
 
-	if maxWait > e.config.MaxBackoff {
-		maxWait = e.config.MaxBackoff
+	if maxWait > maxBackoff {
+		maxWait = maxBackoff
 	}
 	if maxWait <= 0 {
 		return 0
@@ -109,6 +168,11 @@ func (e *RetryEngine) ParseRetryAfter(header string, now time.Time) (time.Durati
 	if secs, err := strconv.Atoi(header); err == nil {
 		if secs < 0 {
 			return 0, false
+		}
+		// Guard against int64 duration multiplication overflow (math.MaxInt64 / time.Second ≈ 9223372036s)
+		const maxSecs = int(math.MaxInt64 / int64(time.Second))
+		if secs > maxSecs {
+			return time.Duration(math.MaxInt64), true
 		}
 		return time.Duration(secs) * time.Second, true
 	}

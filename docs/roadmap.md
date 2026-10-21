@@ -200,6 +200,11 @@
   - Implement active SQLite WAL checkpointing (`PRAGMA wal_checkpoint(PASSIVE)` / `TRUNCATE`) in the background cleaner to prevent unbounded WAL file growth during continuous high-throughput bursts.
   - Full benchmark data and analysis available in [benchmarks.md](benchmarks.md).
   - See design specification: [2026-10-13-configurable-dispatcher-concurrency-and-active-wal-checkpointing-design.md](specs/2026-10-13-configurable-dispatcher-concurrency-and-active-wal-checkpointing-design.md).
+- [x] **Decoupled Sync/Async Retry Backoff Profiles & Configurable SQLite Synchronous Mode** ([#83](https://github.com/simple-relay/simple-relay/issues/83))
+  - Separate default retry backoff profiles between synchronous proxy (`100ms` base, `10s` max) and asynchronous worker delivery (`5s` base, `15m` max).
+  - Support per-route `base_backoff_ms` and `max_backoff_ms` overrides and idempotency-aware `retry_non_idempotent` gate for synchronous `POST`/`PATCH` calls.
+  - Expose `RELAY_SQLITE_SYNC` (`NORMAL` | `FULL`, default `NORMAL`) and `RELAY_MAX_BODY_SIZE_MB` (default `10`).
+  - See design specification: [2026-10-20-retry-backoff-profiles-and-sqlite-sync-design.md](specs/2026-10-20-retry-backoff-profiles-and-sqlite-sync-design.md).
 - [x] **Zero-Downtime Live Binary Upgrade & Socket Handoff** ([#51](https://github.com/simple-relay/simple-relay/issues/51))
   - Implement socket inheritance / listener handover via file descriptor passing (`net.FileListener`) across process restarts.
   - Add UNIX signal listener for `SIGUSR2` to spawn the upgraded binary without terminating network traffic.

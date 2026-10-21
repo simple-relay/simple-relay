@@ -123,6 +123,34 @@ func TestRoute_Validate(t *testing.T) {
 	if err := validRulesRoute.Validate(); err != nil {
 		t.Fatalf("expected valid rules route, got: %v", err)
 	}
+
+	// Backoff override & RetryNonIdempotent validation tests
+	negativeBaseRoute := validRoute
+	negativeBaseRoute.BaseBackoffMS = -100
+	if err := negativeBaseRoute.Validate(); err != ErrRouteInvalidBaseBackoff {
+		t.Fatalf("expected ErrRouteInvalidBaseBackoff, got: %v", err)
+	}
+
+	negativeMaxRoute := validRoute
+	negativeMaxRoute.MaxBackoffMS = -1000
+	if err := negativeMaxRoute.Validate(); err != ErrRouteInvalidMaxBackoff {
+		t.Fatalf("expected ErrRouteInvalidMaxBackoff, got: %v", err)
+	}
+
+	invertedRangeRoute := validRoute
+	invertedRangeRoute.BaseBackoffMS = 20000
+	invertedRangeRoute.MaxBackoffMS = 5000
+	if err := invertedRangeRoute.Validate(); err != ErrRouteBackoffRange {
+		t.Fatalf("expected ErrRouteBackoffRange, got: %v", err)
+	}
+
+	validBackoffOverrideRoute := validRoute
+	validBackoffOverrideRoute.BaseBackoffMS = 5000
+	validBackoffOverrideRoute.MaxBackoffMS = 900000
+	validBackoffOverrideRoute.RetryNonIdempotent = true
+	if err := validBackoffOverrideRoute.Validate(); err != nil {
+		t.Fatalf("expected valid route with backoff overrides, got: %v", err)
+	}
 }
 
 func TestRequest_Validate(t *testing.T) {

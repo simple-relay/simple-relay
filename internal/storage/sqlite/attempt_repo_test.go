@@ -15,7 +15,7 @@ func setupTestDBWithParentRequest(t *testing.T) (*DB, *RequestRepo, *AttemptRepo
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test_attempt.db")
 
-	db, err := Open(dbPath)
+	db, err := Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open test sqlite: %v", err)
 	}

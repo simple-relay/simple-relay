@@ -14,7 +14,7 @@ func setupTestRetentionDB(t *testing.T) (*DB, func()) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "retention_test.db")
 
-	db, err := Open(dbPath)
+	db, err := Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open test sqlite database: %v", err)
 	}

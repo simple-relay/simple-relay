@@ -96,6 +96,8 @@ var knownServerFlags = map[string]bool{
 	"cleaner-interval":   true,
 	"drain-timeout":      true,
 	"trust-proxy":        true,
+	"sqlite-sync":        true,
+	"max-body-size-mb":   true,
 }
 
 func normalizeArgs(args []string) []string {

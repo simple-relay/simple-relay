@@ -20,7 +20,7 @@ func TestE2E_CLI_WithRealServer(t *testing.T) {
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "test_relay.db")
 
-	db, err := sqlite.Open(dbPath)
+	db, err := sqlite.Open(dbPath, "NORMAL")
 	if err != nil {
 		t.Fatalf("failed to open sqlite database: %v", err)
 	}
