@@ -140,3 +140,70 @@ func TestAttemptRepo_ForeignKeyViolation(t *testing.T) {
 		t.Fatal("expected foreign key constraint violation error, got nil")
 	}
 }
+
+func TestAttemptRepo_ListAttemptsChronologicalReplayOrder(t *testing.T) {
+	db, _, attemptRepo, req := setupTestDBWithParentRequest(t)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	// Simulate initial run: attempt 1, attempt 2
+	t0 := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Second)
+	t1 := time.Now().UTC().Add(-9 * time.Minute).Truncate(time.Second)
+	att1 := &model.Attempt{
+		ID:            model.NewULID(),
+		RequestID:     req.ID,
+		AttemptNumber: 1,
+		ExecutedAt:    t0,
+		DurationMS:    50,
+	}
+	att2 := &model.Attempt{
+		ID:            model.NewULID(),
+		RequestID:     req.ID,
+		AttemptNumber: 2,
+		ExecutedAt:    t1,
+		DurationMS:    60,
+	}
+
+	// Simulate replay run: attempt 1, attempt 2 (overlapping attempt_numbers)
+	t2 := time.Now().UTC().Add(-2 * time.Minute).Truncate(time.Second)
+	t3 := time.Now().UTC().Truncate(time.Second)
+	att3 := &model.Attempt{
+		ID:            model.NewULID(),
+		RequestID:     req.ID,
+		AttemptNumber: 1,
+		ExecutedAt:    t2,
+		DurationMS:    40,
+	}
+	att4 := &model.Attempt{
+		ID:            model.NewULID(),
+		RequestID:     req.ID,
+		AttemptNumber: 2,
+		ExecutedAt:    t3,
+		DurationMS:    45,
+	}
+
+	for _, a := range []*model.Attempt{att1, att2, att3, att4} {
+		if err := attemptRepo.RecordAttempt(ctx, a); err != nil {
+			t.Fatalf("failed to record attempt %s: %v", a.ID, err)
+		}
+	}
+
+	attempts, err := attemptRepo.ListAttemptsByRequestID(ctx, req.ID)
+	if err != nil {
+		t.Fatalf("ListAttemptsByRequestID failed: %v", err)
+	}
+
+	if len(attempts) != 4 {
+		t.Fatalf("expected 4 attempts, got %d", len(attempts))
+	}
+
+	// Ensure chronological order [att1, att2, att3, att4] rather than interleaved attempt_number [att1, att3, att2, att4]
+	expectedIDs := []string{att1.ID, att2.ID, att3.ID, att4.ID}
+	for i, expectedID := range expectedIDs {
+		if attempts[i].ID != expectedID {
+			t.Errorf("at index %d: expected attempt ID %s (attempt_number=%d, executed_at=%v), got ID %s (attempt_number=%d, executed_at=%v)",
+				i, expectedID, attempts[i].AttemptNumber, attempts[i].ExecutedAt, attempts[i].ID, attempts[i].AttemptNumber, attempts[i].ExecutedAt)
+		}
+	}
+}

@@ -526,8 +526,10 @@ func (r *RequestRepo) ReplayDLQRequest(ctx context.Context, id string) (*model.R
 	return r.GetRequestByID(ctx, id)
 }
 
-// ReplayRequest atomically transitions any terminal request ('success', 'failed', 'dlq') to 'pending' state.
-// If the request is currently in 'pending' or 'processing' state, it returns storage.ErrConflict.
+// ReplayRequest atomically transitions a request ('success', 'failed', 'dlq') to 'pending' state.
+// For async requests waiting in backoff delay ('failed' with next_attempt_at in the future), replay intentionally
+// resets next_attempt_at to now and attempts_count to 0, granting developers immediate redelivery triage without delay ⚡.
+// If the request is currently actively queued or in-flight ('pending' or 'processing'), it returns storage.ErrConflict.
 func (r *RequestRepo) ReplayRequest(ctx context.Context, id string) (*model.Request, error) {
 	now := time.Now().UTC()
 	query := `
@@ -562,7 +564,14 @@ func (r *RequestRepo) ReplayRequest(ctx context.Context, id string) (*model.Requ
 		return nil, fmt.Errorf("failed to inspect status for request %s: %w", id, checkErr)
 	}
 
-	return r.GetRequestByID(ctx, id)
+	// Return a lean Request struct without re-querying heavy body BLOBs or unmarshaling headers ⚡
+	return &model.Request{
+		ID:            id,
+		Status:        model.RequestStatusPending,
+		AttemptsCount: 0,
+		NextAttemptAt: &now,
+		UpdatedAt:     now,
+	}, nil
 }
 
 // ReplayAllDLQRequests atomically batches up to limit DLQ requests and transitions them to 'pending'.
