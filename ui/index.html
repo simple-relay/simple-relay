@@ -473,10 +473,9 @@
             <thead class="bg-app-sidebar text-gray-300 text-[11px] uppercase tracking-wider font-semibold">
               <tr>
                 <th class="px-5 py-3">Route Identifier</th>
-                <th class="px-5 py-3">Type & Mode</th>
+                <th class="px-5 py-3">Type / Mode / Verification</th>
                 <th class="px-5 py-3">Listen Path</th>
                 <th class="px-5 py-3">Destination Target</th>
-                <th class="px-5 py-3">Verification</th>
                 <th class="px-5 py-3">Policy</th>
                 <th class="px-5 py-3 text-right">Actions</th>
               </tr>
@@ -485,19 +484,30 @@
               <template x-for="r in routes" :key="r.id">
                 <tr class="bg-app-row transition-colors">
                   <td class="px-5 py-3.5 font-bold text-white font-mono" x-text="r.name"></td>
-                  <td class="px-5 py-3.5 space-x-1">
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-bold"
-                          :class="r.type === 'inbound' ? 'bg-status-success' : 'bg-status-purple'">
-                      <span class="w-1.5 h-1.5 rounded-full mr-1" :class="r.type === 'inbound' ? 'bg-green-400' : 'bg-purple-400'"></span>
-                      <span x-text="r.type"></span>
-                    </span>
-                    <span class="px-1.5 py-0.5 rounded text-[10px] bg-app-elevated text-gray-300 font-mono border border-app" x-text="r.mode"></span>
-                  </td>
-                  <td class="px-5 py-3.5 font-mono text-blue-400 font-medium" x-text="r.path"></td>
-                  <td class="px-5 py-3.5 font-mono text-gray-300 truncate max-w-xs" :title="r.destination_url" x-text="r.destination_url"></td>
                   <td class="px-5 py-3.5">
-                    <span class="px-2 py-0.5 rounded bg-app-elevated text-gray-200 font-mono text-[11px] border border-app" x-text="getRouteVerificationLabel(r)"></span>
+                    <div class="flex items-center flex-wrap gap-1.5">
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-bold"
+                            :class="r.type === 'inbound' ? 'bg-status-success' : 'bg-status-purple'">
+                        <span class="w-1.5 h-1.5 rounded-full mr-1" :class="r.type === 'inbound' ? 'bg-green-400' : 'bg-purple-400'"></span>
+                        <span x-text="r.type"></span>
+                      </span>
+                      <span class="px-1.5 py-0.5 rounded text-[10px] bg-app-elevated text-gray-300 font-mono border border-app" x-text="r.mode"></span>
+                      <span class="px-1.5 py-0.5 rounded bg-app-elevated text-gray-200 font-mono text-[10px] border border-app" x-text="getRouteVerificationLabel(r)"></span>
+                    </div>
                   </td>
+                  <td class="px-5 py-3.5 font-mono text-blue-400 font-medium">
+                    <div class="inline-flex items-center space-x-1.5">
+                      <span x-text="r.path"></span>
+                      <button @click.stop="copy(getFullRouteUrl(r.path))"
+                              class="text-gray-400 hover:text-white p-0.5 rounded transition"
+                              title="Copy full webhook endpoint URL">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v2.25A2.25 2.25 0 0 1 13.5 21.75h-9A2.25 2.25 0 0 1 2.25 19.5v-9A2.25 2.25 0 0 1 4.5 8.25h2.25m6.75 6.75H19.5A2.25 2.25 0 0 0 21.75 12.75v-9A2.25 2.25 0 0 0 19.5 1.5h-9A2.25 2.25 0 0 0 8.25 3.75v2.25"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                  <td class="px-5 py-3.5 font-mono text-gray-300 truncate max-w-xs" :title="r.destination_url" x-text="r.destination_url"></td>
                   <td class="px-5 py-3.5 text-gray-300 font-mono text-[11px]">
                     <span x-text="r.max_attempts + ' att'"></span> • <span x-text="(r.timeout_ms / 1000) + 's'"></span> • <span class="text-gray-400" x-text="formatRouteBackoff(r)"></span>
                   </td>
@@ -508,7 +518,7 @@
                 </tr>
               </template>
               <tr x-show="routes.length === 0">
-                <td colspan="7" class="px-5 py-10 text-center text-gray-400 text-sm">
+                <td colspan="6" class="px-5 py-10 text-center text-gray-400 text-sm">
                   No delivery routes configured yet. Click "Create Route" to register your first endpoint.
                 </td>
               </tr>
@@ -813,11 +823,22 @@
   <!-- ========================================== -->
   <!-- SLIDE-OVER REQUEST INSPECTION DRAWER -->
   <!-- ========================================== -->
+  <!-- Non-blocking backdrop overlay: lightly dims background content without blocking clicks -->
+  <div x-show="drawerOpen"
+       x-cloak
+       x-transition:enter="transition-opacity ease-out duration-150"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition-opacity ease-in duration-100"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       class="fixed inset-0 bg-black/30 z-40 pointer-events-none"></div>
+
   <div x-show="drawerOpen"
        class="fixed inset-y-0 right-0 z-50 flex drawer-container pointer-events-none"
        x-cloak
        @keydown.escape.window="closeDrawer()">
-    <div class="w-full bg-app-surface border-l border-app flex flex-col shadow-2xl relative pointer-events-auto"
+    <div class="w-full bg-app-surface border-l border-slate-700/80 flex flex-col shadow-[-16px_0_30px_rgba(0,0,0,0.5)] relative pointer-events-auto"
          @click.outside="handleDrawerClickOutside($event)">
         
         <!-- Drawer Header -->
@@ -884,27 +905,24 @@
             </div>
           </div>
 
-          <!-- Headers & Body Split -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <!-- Headers -->
-            <div>
-              <div class="flex items-center justify-between mb-1.5">
-                <span class="text-[11px] font-bold uppercase tracking-wider text-gray-300">Request Headers</span>
-                <button @click="copy(JSON.stringify(requestDetail?.headers, null, 2))" class="text-xs text-blue-400 hover:text-blue-300 font-semibold">Copy</button>
-              </div>
-              <pre class="bg-app-elevated p-3 rounded border border-app text-xs text-gray-200 font-mono overflow-x-auto h-64 overflow-y-auto select-all"
-                   x-text="JSON.stringify(requestDetail?.headers, null, 2)"></pre>
+          <!-- Request Headers Row -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-gray-300">Request Headers</span>
+              <button @click="copy(formatJSON(requestDetail?.headers))" class="text-xs text-blue-400 hover:text-blue-300 font-semibold transition">Copy</button>
             </div>
+            <pre class="bg-app-elevated p-3 rounded border border-app text-xs text-gray-200 font-mono overflow-x-auto max-h-60 overflow-y-auto whitespace-pre"
+                 x-text="formatJSON(requestDetail?.headers)"></pre>
+          </div>
 
-            <!-- Body -->
-            <div>
-              <div class="flex items-center justify-between mb-1.5">
-                <span class="text-[11px] font-bold uppercase tracking-wider text-gray-300">Request Body Payload</span>
-                <button @click="copy(requestDetail?.body)" class="text-xs text-blue-400 hover:text-blue-300 font-semibold">Copy</button>
-              </div>
-              <pre class="bg-app-elevated p-3 rounded border border-app text-xs text-gray-200 font-mono overflow-x-auto h-64 overflow-y-auto whitespace-pre-wrap select-all"
-                   x-text="requestDetail?.body || '(Empty body)'"></pre>
+          <!-- Request Body Payload Row -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-gray-300">Request Body Payload</span>
+              <button @click="copy(formatJSON(requestDetail?.body) || requestDetail?.body)" class="text-xs text-blue-400 hover:text-blue-300 font-semibold transition">Copy</button>
             </div>
+            <pre class="bg-app-elevated p-3 rounded border border-app text-xs text-gray-200 font-mono overflow-x-auto max-h-80 overflow-y-auto whitespace-pre"
+                 x-text="formatJSON(requestDetail?.body) || '(Empty body)'"></pre>
           </div>
 
           <!-- Execution & Retries History Timeline -->
@@ -930,8 +948,12 @@
                   </template>
                   <template x-if="att.response_body">
                     <div>
-                      <div class="text-gray-400 text-[10px] uppercase font-bold mb-1">Response Body Preview (Max 32KB):</div>
-                      <pre class="bg-app-input p-2 rounded text-[11px] text-gray-200 font-mono overflow-x-auto max-h-36" x-text="att.response_body"></pre>
+                      <div class="flex items-center justify-between mb-1">
+                        <span class="text-gray-400 text-[10px] uppercase font-bold">Response Body Preview (Max 32KB):</span>
+                        <button @click="copy(formatJSON(att.response_body) || att.response_body)" class="text-xs text-blue-400 hover:text-blue-300 font-semibold transition">Copy</button>
+                      </div>
+                      <pre class="bg-app-input p-2.5 rounded text-[11px] text-gray-200 font-mono overflow-x-auto max-h-72 overflow-y-auto whitespace-pre"
+                           x-text="formatJSON(att.response_body)"></pre>
                     </div>
                   </template>
                 </div>
@@ -952,11 +974,11 @@
   <!-- ========================================== -->
   <div x-show="routeDrawerOpen" class="fixed inset-0 z-50 overflow-hidden" x-cloak
        @keydown.escape.window="closeRouteDrawer()">
-    <div class="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+    <div class="absolute inset-0 bg-black/30 transition-opacity"
          @click="closeRouteDrawer()"></div>
 
     <div class="fixed inset-y-0 right-0 max-w-full flex route-drawer-container">
-      <div class="w-full bg-app-surface border-l border-app flex flex-col shadow-2xl relative z-10">
+      <div class="w-full bg-app-surface border-l border-slate-700/80 flex flex-col shadow-[-16px_0_30px_rgba(0,0,0,0.5)] relative z-10">
         
         <!-- Header -->
         <div class="px-6 py-4 bg-app-sidebar border-b border-app flex items-center justify-between shrink-0">
@@ -1498,8 +1520,61 @@
 
         copy(text) {
           if (!text) return;
-          navigator.clipboard.writeText(text);
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).catch(() => {
+              this.fallbackCopy(text);
+            });
+          } else {
+            this.fallbackCopy(text);
+          }
           this.showToast('info', 'Copied to clipboard');
+        },
+
+        fallbackCopy(text) {
+          const textArea = document.createElement('textarea');
+          textArea.value = text;
+          textArea.style.position = 'fixed';
+          textArea.style.opacity = '0';
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          try {
+            document.execCommand('copy');
+          } catch (_) {}
+          document.body.removeChild(textArea);
+        },
+
+        getFullRouteUrl(path) {
+          if (!path) return '';
+          const origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
+          const cleanPath = path.startsWith('/') ? path : '/' + path;
+          return `${origin}${cleanPath}`;
+        },
+
+        formatJSON(content) {
+          if (content === null || content === undefined || content === '') {
+            return '';
+          }
+          if (typeof content === 'object') {
+            try {
+              return JSON.stringify(content, null, 2);
+            } catch (_) {
+              return String(content);
+            }
+          }
+          if (typeof content === 'string') {
+            const trimmed = content.trim();
+            if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+              try {
+                const parsed = JSON.parse(trimmed);
+                return JSON.stringify(parsed, null, 2);
+              } catch (_) {
+                return content;
+              }
+            }
+            return content;
+          }
+          return String(content);
         },
 
         copyAsCurl(req) {

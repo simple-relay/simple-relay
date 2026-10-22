@@ -160,3 +160,33 @@ func TestIndexHTML_MetricsOverview(t *testing.T) {
 			idxMetrics, idxRequests, idxDLQ, idxRoutes, idxAPIKeys)
 	}
 }
+
+func TestIndexHTML_RouteEndpointCopyAndJSONFormatting(t *testing.T) {
+	data, err := FS.ReadFile("index.html")
+	if err != nil {
+		t.Fatalf("failed to read index.html: %v", err)
+	}
+
+	content := string(data)
+	expectedSubstrings := []string{
+		`Type / Mode / Verification`,
+		`getFullRouteUrl(r.path)`,
+		`getFullRouteUrl(path)`,
+		`formatJSON(requestDetail?.headers)`,
+		`formatJSON(requestDetail?.body)`,
+		`formatJSON(att.response_body)`,
+		`Response Body Preview (Max 32KB):`,
+		`bg-black/30 z-40 pointer-events-none`,
+	}
+
+	for _, substr := range expectedSubstrings {
+		if !strings.Contains(content, substr) {
+			t.Errorf("expected index.html to contain %q", substr)
+		}
+	}
+
+	// Verify select-all is removed from request headers and body payload pre tags in inspection drawer
+	if strings.Contains(content, `Request Headers</span>`) && strings.Contains(content, `overflow-y-auto select-all`) {
+		t.Errorf("expected select-all to be removed from Request Headers and Request Body pre elements")
+	}
+}
