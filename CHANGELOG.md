@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/simple-relay/simple-relay/compare/v0.9.0...v0.10.0) (2026-10-22)
+
+
+### Features
+
+* **ui:** improve route endpoint copying and request inspection formatting ([#95](https://github.com/simple-relay/simple-relay/issues/95)) ([f2b436e](https://github.com/simple-relay/simple-relay/commit/f2b436e0c60a2dc77aa47e931d43f4156de19234))
+
 ## [0.9.0](https://github.com/simple-relay/simple-relay/compare/v0.8.1...v0.9.0) (2026-10-21)
 
 
