@@ -51,3 +51,12 @@ jobs:
       - name: Verify static compilation (no CGO)
         run: |
           CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /dev/null ./cmd/relay
+
+      - name: Verify install.sh script
+        run: |
+          mkdir -p /tmp/ci-test-bin
+          BINDIR=/tmp/ci-test-bin sh install.sh
+          /tmp/ci-test-bin/simple-relay --help >/dev/null
+          /tmp/ci-test-bin/relay --help >/dev/null
+          test -L /tmp/ci-test-bin/relay
+          rm -rf /tmp/ci-test-bin
