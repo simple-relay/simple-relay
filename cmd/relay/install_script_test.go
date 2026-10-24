@@ -140,6 +140,41 @@ func TestInstallScript_MockServer(t *testing.T) {
 		}
 	})
 
+	t.Run("skip symlink when regular file exists", func(t *testing.T) {
+		tempBinDir := t.TempDir()
+		existingRelay := filepath.Join(tempBinDir, "relay")
+		if err := os.WriteFile(existingRelay, []byte("existing custom relay binary"), 0755); err != nil {
+			t.Fatalf("failed to create existing relay file: %v", err)
+		}
+
+		cmd := exec.Command("sh", absScript)
+		cmd.Env = append(os.Environ(),
+			"GITHUB_HOST="+server.URL,
+			"GITHUB_REPO=simple-relay/simple-relay",
+			"BINDIR="+tempBinDir,
+		)
+
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("install.sh failed: %v\nOutput: %s", err, string(output))
+		}
+
+		symInfo, err := os.Lstat(existingRelay)
+		if err != nil {
+			t.Fatalf("failed to stat relay: %v", err)
+		}
+		if symInfo.Mode()&os.ModeSymlink != 0 {
+			t.Errorf("expected regular file to remain untouched, but it was replaced with a symlink")
+		}
+		content, _ := os.ReadFile(existingRelay)
+		if string(content) != "existing custom relay binary" {
+			t.Errorf("expected content 'existing custom relay binary', got '%s'", string(content))
+		}
+		if !strings.Contains(string(output), "skipping symlink") {
+			t.Errorf("expected output to mention skipping symlink, got: %s", string(output))
+		}
+	})
+
 	t.Run("checksum failure aborts", func(t *testing.T) {
 		tempBinDir := t.TempDir()
 

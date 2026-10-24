@@ -118,7 +118,7 @@ resolve_version() {
     if [ "$DOWNLOADER" = "curl" ]; then
       LATEST_URL="$(curl -sLI -o /dev/null -w '%{url_effective}' "${GITHUB_HOST}/${GITHUB_REPO}/releases/latest")"
     else
-      LATEST_URL="$(wget -S --spider --max-redirect=0 "${GITHUB_HOST}/${GITHUB_REPO}/releases/latest" 2>&1 | awk '/Location:/{print $2}' | tr -d '\r')"
+      LATEST_URL="$(wget -S --spider --max-redirect=0 "${GITHUB_HOST}/${GITHUB_REPO}/releases/latest" 2>&1 | awk '/Location:/{print $2}' | tr -d '\r' | tail -n 1)"
     fi
     TAG="${LATEST_URL##*/}"
     if [ -z "$TAG" ] || [ "$TAG" = "latest" ]; then
@@ -186,15 +186,18 @@ resolve_bindir() {
       fi
     fi
   else
-    # Default to /usr/local/bin if writable or if sudo is available
+    # Default to /usr/local/bin if writable or running as root
     DEFAULT_DIR="/usr/local/bin"
+    mkdir -p "$DEFAULT_DIR" 2>/dev/null || true
     if [ -w "$DEFAULT_DIR" ]; then
       TARGET_DIR="$DEFAULT_DIR"
-    elif command -v sudo >/dev/null 2>&1; then
+    elif [ "$(id -u 2>/dev/null || echo 1)" = "0" ]; then
+      TARGET_DIR="$DEFAULT_DIR"
+    elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
       TARGET_DIR="$DEFAULT_DIR"
       USE_SUDO="sudo"
     else
-      # Fallback to user-local directory
+      # Fallback to user-local directory for unprivileged users
       USER_LOCAL_DIR="${HOME}/.local/bin"
       mkdir -p "$USER_LOCAL_DIR"
       TARGET_DIR="$USER_LOCAL_DIR"
@@ -212,7 +215,7 @@ generate_suggested_password() {
     SUGGESTED_PASS="$(openssl rand -hex 8 2>/dev/null || true)"
   fi
   if [ -z "$SUGGESTED_PASS" ]; then
-    SUGGESTED_PASS="relay_admin_secret_key"
+    SUGGESTED_PASS="<choose-a-strong-password>"
   fi
 }
 
@@ -231,8 +234,15 @@ main() {
   log_info "Installing Simple Relay ${COLOR_BOLD}${TAG}${COLOR_RESET} (${OS}/${ARCH})..."
 
   TMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t 'simple-relay-install')"
+  if [ -z "${TMP_DIR:-}" ] || [ ! -d "$TMP_DIR" ]; then
+    log_error "Failed to create temporary directory."
+    exit 1
+  fi
+
   cleanup() {
-    rm -rf "$TMP_DIR"
+    if [ -n "${TMP_DIR:-}" ] && [ -d "$TMP_DIR" ]; then
+      rm -rf "$TMP_DIR"
+    fi
   }
   trap cleanup EXIT INT TERM
 
@@ -263,11 +273,21 @@ main() {
   if [ -n "$USE_SUDO" ]; then
     sudo cp "${TMP_DIR}/simple-relay" "${TARGET_DIR}/simple-relay"
     sudo chmod 755 "${TARGET_DIR}/simple-relay"
-    (cd "$TARGET_DIR" && sudo ln -sf simple-relay relay)
   else
     cp "${TMP_DIR}/simple-relay" "${TARGET_DIR}/simple-relay"
     chmod 755 "${TARGET_DIR}/simple-relay"
-    (cd "$TARGET_DIR" && ln -sf simple-relay relay)
+  fi
+
+  SYMLINK_CREATED="false"
+  if [ -e "${TARGET_DIR}/relay" ] && [ ! -L "${TARGET_DIR}/relay" ]; then
+    log_warn "A regular file '${TARGET_DIR}/relay' already exists, skipping symlink."
+  else
+    if [ -n "$USE_SUDO" ]; then
+      (cd "$TARGET_DIR" && sudo ln -sf simple-relay relay)
+    else
+      (cd "$TARGET_DIR" && ln -sf simple-relay relay)
+    fi
+    SYMLINK_CREATED="true"
   fi
 
   # Smoke test installed binary
@@ -282,7 +302,11 @@ main() {
   printf "%b============================================================%b\n" "${COLOR_SUCCESS}" "${COLOR_RESET}"
   printf "%bSimple Relay %s installed successfully!%b\n" "${COLOR_BOLD}" "${TAG}" "${COLOR_RESET}"
   printf "Binary:  %s/simple-relay\n" "${TARGET_DIR}"
-  printf "Symlink: %s/relay\n" "${TARGET_DIR}"
+  if [ "$SYMLINK_CREATED" = "true" ]; then
+    printf "Symlink: %s/relay\n" "${TARGET_DIR}"
+  else
+    printf "Symlink: %s/relay (skipped: regular file exists)\n" "${TARGET_DIR}"
+  fi
   printf "%b============================================================%b\n" "${COLOR_SUCCESS}" "${COLOR_RESET}"
   echo ""
   printf "Quickstart commands:\n"
