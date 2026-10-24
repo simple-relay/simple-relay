@@ -163,16 +163,16 @@ const socialProofLogos = [
           <div class="flex items-start gap-2">
             <span class="text-[#0066cc] select-none">$</span>
             <div class="text-white select-all">
-              <span>git clone https://github.com/simple-relay/simple-relay.git &amp;&amp; cd simple-relay</span><br/>
-              <span>CGO_ENABLED=0 go build -o relay ./cmd/relay &amp;&amp; ./relay</span>
+              <span>curl -fsSL https://raw.githubusercontent.com/simple-relay/simple-relay/main/install.sh | sh</span><br/>
+              <span>relay</span>
             </div>
           </div>
           <div class="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-[11px] text-[#6e6e73]">
             <span class="flex items-center gap-1.5 text-emerald-400">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              Zero-CGO Pure Static Binary
+              Linux &amp; macOS (amd64 / arm64)
             </span>
-            <span>SQLite WAL embedded</span>
+            <span>Windows: <a href="https://github.com/simple-relay/simple-relay/releases" target="_blank" rel="noopener noreferrer" class="text-[#a1a1a6] hover:text-white underline">GitHub Releases &rarr;</a></span>
           </div>
         </div>
       </div>
@@ -181,7 +181,7 @@ const socialProofLogos = [
         let currentTab = 'docker';
         const commands = {
           docker: "docker run -d --name simple-relay -p 8080:8080 -v relay-data:/data -e RELAY_DB_PATH=/data/relay.db ghcr.io/simple-relay/simple-relay:latest",
-          binary: "git clone https://github.com/simple-relay/simple-relay.git && cd simple-relay && CGO_ENABLED=0 go build -o relay ./cmd/relay && ./relay"
+          binary: "curl -fsSL https://raw.githubusercontent.com/simple-relay/simple-relay/main/install.sh | sh && relay"
         };
 
         function switchQuickstart(tab) {

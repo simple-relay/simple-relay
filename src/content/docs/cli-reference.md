@@ -15,6 +15,12 @@ Rather than opening or locking the SQLite database directly, CLI subcommands int
 
 Simple Relay is distributed as a single static binary with CGO disabled:
 
+### One-Line Install (Linux & macOS — Recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/simple-relay/simple-relay/main/install.sh | sh
+```
+
 ### Compile from Source
 
 ```bash

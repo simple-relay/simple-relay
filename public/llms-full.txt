@@ -83,7 +83,25 @@ Get Simple Relay running and test your first reliable HTTP delivery in under 60 
 
 ## 1. Run Simple Relay
 
-### Option A: Using Docker (Recommended)
+### Option A: One-Line Install (Linux & macOS — Recommended)
+
+Install the precompiled standalone static binary directly without Docker or Go toolchains:
+
+```bash
+# Download and install latest release to /usr/local/bin (or ~/.local/bin)
+curl -fsSL https://raw.githubusercontent.com/simple-relay/simple-relay/main/install.sh | sh
+
+# Start relay (development mode, zero config)
+relay
+
+# Or run with an admin password (production mode)
+RELAY_ADMIN_PASSWORD="your-secure-password" relay
+```
+
+> [!NOTE] Windows Support
+> `install.sh` supports Linux and macOS (`amd64`, `arm64`). For Windows, download precompiled binaries directly from **[GitHub Releases](https://github.com/simple-relay/simple-relay/releases)** or run with Docker.
+
+### Option B: Using Docker
 
 Run the container in daemon mode, mounting a local folder for persistence:
 
@@ -97,21 +115,26 @@ docker run -d \
   ghcr.io/simple-relay/simple-relay:latest
 ```
 
-### Option B: Standalone Binary
+### Option C: Precompiled Binaries (Manual / Windows)
 
-Download the compiled static binary from GitHub Releases or install via Go:
+Download the archive for your operating system and architecture from **[GitHub Releases](https://github.com/simple-relay/simple-relay/releases)**:
+- **Linux:** `simple-relay_<version>_linux_<amd64|arm64>.tar.gz`
+- **macOS:** `simple-relay_<version>_darwin_<amd64|arm64>.tar.gz`
+- **Windows:** `simple-relay_<version>_windows_amd64.zip`
+
+Extract the binary and execute:
 
 ```bash
-# Using Go 1.22+
-go install github.com/simple-relay/simple-relay/cmd/relay@latest
+# Linux / macOS
+./simple-relay
 
-# Run the relay
-relay --port 8080 --db ./relay.db
+# Windows (Command Prompt / PowerShell)
+.\simple-relay.exe
 ```
 
-### Option C: Build from Source (Git Clone)
+### Option D: Build from Source (Git Clone or Go Install)
 
-Clone the repository and compile the binary with standard Go:
+Clone the repository and compile the static binary with pure Go (no CGO required):
 
 ```bash
 git clone https://github.com/simple-relay/simple-relay.git
@@ -121,7 +144,13 @@ cd simple-relay
 CGO_ENABLED=0 go build -o relay ./cmd/relay
 
 # Run the compiled binary
-./relay --port 8080 --db ./relay.db
+./relay
+```
+
+Or install via Go toolchain (Go 1.22+):
+
+```bash
+go install github.com/simple-relay/simple-relay/cmd/relay@latest
 ```
 
 Verify that the relay is healthy:
@@ -204,6 +233,7 @@ You can view:
 ## What's Next?
 
 - Configure **[HMAC Signatures](/docs/stripe-github)** for Stripe or GitHub.
+- Set up **[Local Webhook Inspection with Cloudflare Tunnel](/docs/local-webhook-inspection)** for crash-resilient restarts and one-click replay during local development.
 - Understand the **[Retries and Dead Letter Queue](/docs/retries-and-dlq)** mechanism.
 - Inspect daemon health, queue backlog, and DLQ from your terminal using the **[CLI Reference](/docs/cli-reference)**.
 - Check out the complete **[REST API Reference](/docs/api-reference)**.
@@ -334,6 +364,7 @@ app.post('/api/webhooks/stripe', async (req, res) => {
 ## Next Steps
 
 - Follow the **[Stripe & GitHub Recipe](/docs/stripe-github)** for copy-paste HMAC examples.
+- Set up **[Local Webhook Inspection with Cloudflare Tunnel](/docs/local-webhook-inspection)** for local payload debugging and one-click replay.
 - Learn about **[Retries and the Dead Letter Queue](/docs/retries-and-dlq)**.
 
 ----------------------------------------
@@ -551,6 +582,7 @@ relay dlq replay-all -y
 ## Next Steps
 
 - Check out **[Handling 429 Rate Limits](/docs/rate-limits-429)**.
+- Learn how to inspect and replay any request (including 200 OK) during local development in **[Local Webhook Inspection](/docs/local-webhook-inspection)**.
 - Manage and triage DLQ via the terminal with the **[CLI Reference](/docs/cli-reference)**.
 - Review **[REST API Specifications](/docs/api-reference)** for all DLQ endpoints.
 
@@ -937,6 +969,197 @@ curl -X POST http://localhost:8080/api/v1/routes \
 
 ----------------------------------------
 
+
+================================================================================
+# SECTION: RECIPES & GUIDES
+================================================================================
+
+## Recipe: Local Webhook Inspection with Cloudflare Tunnel
+Source: https://simplerelay.dev/docs/local-webhook-inspection
+
+When developing webhook integrations locally, engineers are increasingly migrating from ngrok to **Cloudflare Tunnel (`cloudflared`)**. Cloudflare Tunnel offers a generous, production-grade free tier with stable custom domains, zero bandwidth throttling, and no disruptive interstitial warning pages.
+
+However, once developers make the switch, they immediately encounter a frustrating limitation: **`cloudflared` does not have an interactive request inspector or replay UI** (unlike ngrok's well-known `http://localhost:4040`).
+
+By positioning **Simple Relay** between Cloudflare Tunnel and your local development server (`cloudflared` → Simple Relay → Local App), you unlock a local traffic inspector, crash-resilient webhook ingestion, and one-click request replay—bringing back the best parts of the ngrok developer experience while keeping the speed and freedom of Cloudflare Tunnels.
+
+---
+
+## 1. The Dilemma: Why Developers Miss ngrok's `localhost:4040`
+
+Cloudflare Tunnel is engineered purely as a fast, secure network tunnel between the edge and your machine. It pipes raw TCP/HTTP streams directly to your local application port and intentionally maintains zero local state or request logs.
+
+During active webhook development, this creates three major developer pain points:
+
+1. **No Visual Traffic Inspector:** You cannot inspect incoming HTTP headers, cryptographic HMAC signatures (`Stripe-Signature`, `X-Hub-Signature-256`), or payload JSON without polluting application code with debug middleware or temporary `console.log` statements.
+2. **No One-Click Replay:** When testing a bug fix or edge case in your local webhook handler, you are forced to re-trigger test events manually inside external vendor dashboards (such as re-running a dummy checkout session in Stripe or pushing commits to GitHub).
+3. **Dropped Webhooks During Server Restarts:** When your local server hot-reloads (e.g., via `nodemon`, `cargo watch`, or `go run`), any incoming webhook delivered by the tunnel is immediately rejected with `connection refused`. The external vendor flags your endpoint as failing and applies exponential backoff penalties.
+
+### Feature Comparison Matrix
+
+| Capability | Cloudflare Tunnel Alone | ngrok (Free Tier) | Cloudflare Tunnel + Simple Relay |
+| :--- | :---: | :---: | :---: |
+| **Stable Custom URLs** | Free | Paid ($8+/mo) | **Free** (via Cloudflare) |
+| **Zero Interstitial Warning Pages** | Yes | No (Free tier warning) | **Yes** |
+| **Visual Webhook Inspector UI** | No | Yes (`localhost:4040`) | **Yes (`localhost:8080/ui`)** |
+| **One-Click Request Replay** | No | Yes | **Yes (UI & CLI)** |
+| **Replay Any Historical Request (including 200 OK)** | No | No (DLQ/failures only) | **Yes (success, failed, dlq)** |
+| **Zero-Loss During Server Restarts** | No (Connection refused) | No (Connection refused) | **Yes (SQLite WAL buffering)** |
+| **Preserves Cryptographic Signatures** | Yes | Yes | **Yes (Zero-byte mutation)** |
+| **Cost** | 100% Free | Freemium / Paid | **100% Free & Open Source** |
+
+---
+
+## 2. Traffic Architecture
+
+```mermaid
+flowchart LR
+    subgraph External["External Services"]
+        Sender["Webhook Providers<br/><b>(Stripe, GitHub, Shopify)</b>"]
+    end
+
+    subgraph Host["Local Development Machine"]
+        Tunnel["Cloudflare Tunnel<br/><code>cloudflared</code><br/><i>(Free Public Ingress)</i>"]
+        Relay["Simple Relay (:8080)<br/><b>Local Traffic Inspector</b><br/><i>(SQLite WAL & Replay Engine)</i>"]
+        App["Local Backend (:3000)<br/><i>(Express, Next.js, FastAPI, Go)</i>"]
+        UI["Embedded Web UI (:8080/ui)<br/><i>(Live Inspector & 1-Click Replay)</i>"]
+    end
+
+    Sender -->|"Public HTTPS"| Tunnel
+    Tunnel -->|"HTTP Forward"| Relay
+    Relay -->|"Async Delivery & Retries"| App
+    Relay -.->|"Inspect & Replay"| UI
+```
+
+### How the Pipeline Works:
+1. **Public Ingress:** Cloudflare Tunnel forwards public webhook requests to Simple Relay on port `8080`.
+2. **Durable Ingestion:** Simple Relay commits the unmodified payload and headers to local SQLite WAL storage and immediately returns HTTP `200 OK` to Cloudflare Tunnel.
+3. **Background Delivery:** Simple Relay dispatches the payload to your local backend server on port `3000`.
+4. **Inspection & Replay:** You inspect headers and payloads at `http://localhost:8080/ui` and replay requests on demand with one click.
+
+---
+
+## 3. Step-by-Step Setup Guide
+
+### Step 1: Start Simple Relay Locally
+
+Simple Relay ships as a single static binary with no external infrastructure requirements:
+
+```bash
+# Run the binary locally
+relay
+
+# Or run with Docker (GHCR)
+docker run -d --name relay -p 8080:8080 ghcr.io/simple-relay/simple-relay:latest
+```
+
+> [!TIP] Alternative Installation Methods
+> For other installation options including standalone binary releases, `go install`, and Docker Compose setups with persistent storage, see the [Getting Started / Quickstart Guide](/docs/quickstart).
+
+Open `http://localhost:8080/ui` in your browser. The embedded dashboard loads instantly with zero build steps or frontend servers.
+
+### Step 2: Configure a Local Inbound Route
+
+In the Web UI, navigate to the **Routes** tab, click **New Route**, and configure an asynchronous webhook route pointing to your local app:
+
+| Parameter | Recommended Value | Explanation |
+| :--- | :--- | :--- |
+| **Route Name** | `local-webhooks` | Route slug used in the tunnel URL. |
+| **Type** | `inbound` | Ingests webhooks and persists payloads before delivery. |
+| **Delivery Mode** | `async` | Instantly acknowledges receipt, delivers in the background. |
+| **Inbound Path** | `/api/v1/webhook/local-webhooks` | The path exposed to Cloudflare Tunnel. |
+| **Destination URL** | `http://127.0.0.1:3000/api/webhooks` | Your local backend port and endpoint path. |
+| **Max Attempts** | `5` | Buffers and retries deliveries if your local server restarts. |
+
+*(Optional)* You can also provision the route directly via the REST API or CLI:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/routes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "local-webhooks",
+    "type": "inbound",
+    "mode": "async",
+    "path": "/api/v1/webhook/local-webhooks",
+    "destination_url": "http://127.0.0.1:3000/api/webhooks",
+    "max_attempts": 5,
+    "timeout_ms": 5000
+  }'
+```
+
+### Step 3: Start Cloudflare Tunnel
+
+Run `cloudflared` pointing to Simple Relay's port (`8080`):
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:8080
+```
+
+Cloudflare will provide a public URL (e.g., `https://example-tunnel.trycloudflare.com`).
+
+### Step 4: Configure Your Webhook Provider
+
+In your webhook provider's dashboard (e.g., Stripe Dashboard → Developers → Webhooks), register your public endpoint:
+
+```text
+https://example-tunnel.trycloudflare.com/api/v1/webhook/local-webhooks
+```
+
+---
+
+## 4. Webhook Traffic Inspection Workflow
+
+Whenever a webhook triggers, open `http://localhost:8080/ui` and navigate to the **Requests** tab:
+
+1. **Chronological Delivery Audit:** View real-time request entries with method, route name, status (`success`, `pending`, `processing`, `failed`, `dlq`), attempt counts, and timestamp.
+2. **Deep Slide-Over Inspection Drawer:** Click any row or the **Inspect →** button to inspect:
+   - **Cryptographic Headers:** Verify headers such as `Stripe-Signature`, `X-Hub-Signature-256`, or custom authentication tokens.
+   - **Raw Body Payload:** Inspect unmodified JSON or binary payload bytes formatted with syntax highlighting.
+   - **One-Click cURL Export:** Click **Copy as cURL** to copy the exact incoming request—with all original headers and body bytes preserved—for testing in terminal or Postman.
+   - **Attempt Audit Log:** Review downstream response status codes, execution duration in milliseconds, and error messages returned by your local backend.
+
+---
+
+## 5. Replaying Webhooks: The Instant Debugging Loop
+
+Traditional webhook debugging is tedious: every time you fix a bug in your handler, you have to trigger another event in the SaaS provider's dashboard.
+
+Simple Relay allows you to replay **any historical request**, including requests that previously completed with `success` (`200 OK`).
+
+### One-Click Replay in the Web UI
+- **From the Requests Table:** Click the **Replay** button on any table row.
+- **From the Inspection Drawer:** Click the **Replay** button in the header drawer while viewing payload details.
+
+The request immediately transitions back to `pending`, attempts reset to 0, and Simple Relay's dispatcher wakes up instantly to re-fire the webhook to your local app.
+
+### Terminal Replay via CLI
+If you prefer staying in your terminal or want to script replays, use the embedded CLI:
+
+```bash
+# Replay any request by ID
+relay request replay 01j9y9success001
+
+# Replay using JSON output for shell pipelines
+relay request replay 01j9y9success001 -o json
+```
+
+---
+
+## 6. Zero-Loss Server Restarts
+
+When developing locally with hot-reloading tools (`nodemon`, `cargo watch`, `air`, `go run`), your local application restarts every time you save a file.
+
+If a webhook arrives during those few seconds of downtime:
+- **Without Simple Relay:** Cloudflare Tunnel tries to connect to `127.0.0.1:3000`, receives `ECONNREFUSED`, and returns `502 Bad Gateway` to Stripe or GitHub. The provider registers a delivery failure.
+- **With Simple Relay:** Cloudflare Tunnel delivers to Simple Relay on `127.0.0.1:8080`. Simple Relay writes the raw payload to SQLite WAL and returns `200 OK` to the provider. Simple Relay's worker pool attempts delivery, detects that the local app is rebooting, and schedules an automatic backoff retry. As soon as your server is back online, the webhook is delivered without a single dropped packet.
+
+----------------------------------------
+
+
+================================================================================
+# SECTION: REFERENCE
+================================================================================
+
 ## REST API Reference
 Source: https://simplerelay.dev/docs/api-reference
 
@@ -989,6 +1212,7 @@ Authenticate to protected endpoints via either mechanism:
 | `DELETE` | `/api/v1/routes/:id` | Protected | Delete route configuration by ID |
 | `GET` | `/api/v1/requests` | Protected | List requests with pagination and filters |
 | `GET` | `/api/v1/requests/:id` | Protected | Inspect delivery record, payload, and attempts |
+| `POST` | `/api/v1/requests/:id/replay` | Protected | Requeue any historical request (success, failed, dlq) for redelivery |
 | `GET` | `/api/v1/jobs/:job_id` | Protected | Inspect asynchronous job status and attempts |
 | `GET` | `/api/v1/queue/stats` | Protected | Real-time queue metrics and backlog telemetry |
 | `GET` | `/api/v1/dlq` | Protected | List dead-lettered requests |
@@ -1260,6 +1484,22 @@ Fetch single delivery record including headers, raw payload body, and historical
   }
   ```
 
+### `POST /api/v1/requests/:id/replay`
+Requeue any persisted request—regardless of whether its status is `success`, `failed`, or `dlq`—resetting its attempts count to 0, status to `pending`, and waking the background dispatcher for immediate delivery.
+
+> [!NOTE] State Conflicts
+> If the request is currently in-flight (`processing`) or waiting in queue (`pending`), the API returns HTTP `409 Conflict`. Replay is supported exclusively for terminal states (`success`, `failed`, `dlq`).
+
+- **Response Format:**
+  ```json
+  {
+    "id": "01j9x0m1p00000000000000001",
+    "status": "pending",
+    "replayed": true,
+    "replayed_at": "2026-10-21T03:00:00Z"
+  }
+  ```
+
 ### `GET /api/v1/jobs/:job_id`
 Inspect status, retry scheduling, and execution history for an asynchronous background job.
 
@@ -1478,8 +1718,9 @@ When upstream services fail, inspect:
 - Exact backoff delay calculated with full jitter.
 - Error messages (e.g. connection refused, TLS handshake timeout, 502 Bad Gateway).
 
-### 4. One-Click Dead Letter Queue (DLQ) Replay
-Any delivery in the `FAILED` state features an interactive **Replay** button. Click to requeue the message instantly without re-sending from the external webhook provider.
+### 4. One-Click Request Replay & DLQ Triage
+- **Replay Any Request:** Click the **Replay** button on any row in the Requests Explorer or inside the inspection drawer to requeue deliveries immediately. This allows re-running previously successful webhooks (`200 OK`) against your backend after making code adjustments—see the **[Local Webhook Inspection Recipe](/docs/local-webhook-inspection)**.
+- **Dead Letter Queue (DLQ):** Deliveries that exhausted all retry policies are isolated in the DLQ view with individual and bulk replay buttons.
 
 ### 5. Authentication & Route Secret Masking
 - **Loopback Dev Mode vs. Protected Mode:** When running locally on loopback (`127.0.0.1` / `localhost`) with `RELAY_ADMIN_PASSWORD` unset, the dashboard opens directly without a login prompt. When `RELAY_ADMIN_PASSWORD` is configured, the dashboard presents a rate-limited session login screen (`relay_session` HTTP-only cookie).
@@ -1505,6 +1746,12 @@ Rather than opening or locking the SQLite database directly, CLI subcommands int
 ## 1. Installation & Build
 
 Simple Relay is distributed as a single static binary with CGO disabled:
+
+### One-Line Install (Linux & macOS — Recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/simple-relay/simple-relay/main/install.sh | sh
+```
 
 ### Compile from Source
 
@@ -1681,6 +1928,39 @@ In CI/CD, cron jobs, or headless deployment scripts, pass `--yes` (`-y`) to bypa
 ```bash
 relay dlq replay-all -y
 ```
+
+---
+
+### 3.4 Request Replay for Local Debugging & Triage (`request replay`)
+
+While `relay dlq replay` is intentionally restricted to exhausted messages in the Dead Letter Queue, `relay request replay` allows operators and developers to requeue **any historical request** regardless of its lifecycle status (`success`, `failed`, or `dlq`):
+
+```bash
+relay request replay <request_id>
+# Or alias
+relay requests replay <request_id>
+```
+
+#### Example Usage:
+```bash
+relay request replay 01j9y9success001
+# Output:
+# Successfully requeued request 01j9y9success001 for delivery.
+```
+
+#### Scripting with JSON Output:
+```bash
+relay request replay 01j9y9success001 -o json
+```
+```json
+{
+  "request_id": "01j9y9success001",
+  "status": "requeued"
+}
+```
+
+> [!TIP] Local Webhook Debugging
+> Replaying `success` requests is particularly useful during local webhook development alongside Cloudflare Tunnel. When testing code modifications in your backend, you can re-run a previous webhook delivery with one CLI command without re-triggering new events from external SaaS dashboards. See the **[Cloudflare Tunnel Inspection Recipe](/docs/local-webhook-inspection)** for complete setup instructions.
 
 ---
 

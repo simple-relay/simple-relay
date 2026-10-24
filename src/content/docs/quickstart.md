@@ -9,7 +9,25 @@ Get Simple Relay running and test your first reliable HTTP delivery in under 60 
 
 ## 1. Run Simple Relay
 
-### Option A: Using Docker (Recommended)
+### Option A: One-Line Install (Linux & macOS — Recommended)
+
+Install the precompiled standalone static binary directly without Docker or Go toolchains:
+
+```bash
+# Download and install latest release to /usr/local/bin (or ~/.local/bin)
+curl -fsSL https://raw.githubusercontent.com/simple-relay/simple-relay/main/install.sh | sh
+
+# Start relay (development mode, zero config)
+relay
+
+# Or run with an admin password (production mode)
+RELAY_ADMIN_PASSWORD="your-secure-password" relay
+```
+
+> [!NOTE] Windows Support
+> `install.sh` supports Linux and macOS (`amd64`, `arm64`). For Windows, download precompiled binaries directly from **[GitHub Releases](https://github.com/simple-relay/simple-relay/releases)** or run with Docker.
+
+### Option B: Using Docker
 
 Run the container in daemon mode, mounting a local folder for persistence:
 
@@ -23,21 +41,26 @@ docker run -d \
   ghcr.io/simple-relay/simple-relay:latest
 ```
 
-### Option B: Standalone Binary
+### Option C: Precompiled Binaries (Manual / Windows)
 
-Download the compiled static binary from GitHub Releases or install via Go:
+Download the archive for your operating system and architecture from **[GitHub Releases](https://github.com/simple-relay/simple-relay/releases)**:
+- **Linux:** `simple-relay_<version>_linux_<amd64|arm64>.tar.gz`
+- **macOS:** `simple-relay_<version>_darwin_<amd64|arm64>.tar.gz`
+- **Windows:** `simple-relay_<version>_windows_amd64.zip`
+
+Extract the binary and execute:
 
 ```bash
-# Using Go 1.22+
-go install github.com/simple-relay/simple-relay/cmd/relay@latest
+# Linux / macOS
+./simple-relay
 
-# Run the relay
-relay --port 8080 --db ./relay.db
+# Windows (Command Prompt / PowerShell)
+.\simple-relay.exe
 ```
 
-### Option C: Build from Source (Git Clone)
+### Option D: Build from Source (Git Clone or Go Install)
 
-Clone the repository and compile the binary with standard Go:
+Clone the repository and compile the static binary with pure Go (no CGO required):
 
 ```bash
 git clone https://github.com/simple-relay/simple-relay.git
@@ -47,7 +70,13 @@ cd simple-relay
 CGO_ENABLED=0 go build -o relay ./cmd/relay
 
 # Run the compiled binary
-./relay --port 8080 --db ./relay.db
+./relay
+```
+
+Or install via Go toolchain (Go 1.22+):
+
+```bash
+go install github.com/simple-relay/simple-relay/cmd/relay@latest
 ```
 
 Verify that the relay is healthy:
