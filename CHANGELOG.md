@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/simple-relay/simple-relay/compare/v0.10.0...v0.11.0) (2026-10-24)
+
+
+### Features
+
+* **install:** add standalone one-line installation script ([#97](https://github.com/simple-relay/simple-relay/issues/97)) ([fb680b0](https://github.com/simple-relay/simple-relay/commit/fb680b07f923f89e244a62172928b22314faa838))
+
 ## [0.10.0](https://github.com/simple-relay/simple-relay/compare/v0.9.0...v0.10.0) (2026-10-22)
 
 
