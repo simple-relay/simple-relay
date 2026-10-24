@@ -101,7 +101,22 @@ flowchart LR
 
 ## Quickstart in 60 Seconds
 
-### Option 1: Run with Docker
+### Option 1: One-Line Install (Recommended)
+
+Install the precompiled standalone binary directly to `/usr/local/bin` (or `~/.local/bin`):
+
+```bash
+# Install latest release
+curl -fsSL https://raw.githubusercontent.com/simple-relay/simple-relay/main/install.sh | sh
+
+# Start the relay server (development mode, zero config)
+relay
+
+# Or run with an admin password (production mode)
+RELAY_ADMIN_PASSWORD="your-secure-password" relay
+```
+
+### Option 2: Run with Docker
 
 ```bash
 docker run -d \
@@ -112,7 +127,7 @@ docker run -d \
   ghcr.io/simple-relay/simple-relay:latest
 ```
 
-### Option 2: Run Standalone Binary (Pure Go, Zero CGO)
+### Option 3: Build from Source (Pure Go, Zero CGO)
 
 ```bash
 # Clone repository

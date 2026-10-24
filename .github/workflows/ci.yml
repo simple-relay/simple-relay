@@ -51,3 +51,6 @@ jobs:
       - name: Verify static compilation (no CGO)
         run: |
           CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /dev/null ./cmd/relay
+
+      - name: Verify install.sh script with local mock release
+        run: go test -v -race -run TestInstallScript ./cmd/relay
