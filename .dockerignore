@@ -1,0 +1,25 @@
+# Git & CI
+.git
+.github
+
+# Documentation & Website (keep binary & docker image lean)
+docs/
+node_modules/
+dist/
+.astro/
+
+# Go artifacts
+bin/
+relay
+*.test
+coverage.out
+coverage.html
+*.prof
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

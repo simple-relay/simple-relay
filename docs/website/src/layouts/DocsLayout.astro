@@ -1,0 +1,482 @@
+---
+import Layout from './Layout.astro';
+
+interface SectionDoc {
+  slug: string;
+  title: string;
+  section: string;
+  order: number;
+}
+
+interface Props {
+  title: string;
+  description: string;
+  currentSlug: string;
+  allDocs: SectionDoc[];
+  headings?: { depth: number; slug: string; text: string }[];
+}
+
+const { title, description, currentSlug, allDocs, headings = [] } = Astro.props;
+
+// Group docs by section
+const sections = [
+  { name: 'Getting Started', docs: allDocs.filter(d => d.section === 'Getting Started').sort((a, b) => a.order - b.order) },
+  { name: 'Core Concepts', docs: allDocs.filter(d => d.section === 'Core Concepts').sort((a, b) => a.order - b.order) },
+  { name: 'Recipes & Guides', docs: allDocs.filter(d => d.section === 'Recipes & Guides').sort((a, b) => a.order - b.order) },
+  { name: 'Reference', docs: allDocs.filter(d => d.section === 'Reference').sort((a, b) => a.order - b.order) },
+];
+
+// Current doc and adjacent navigation
+const sortedAll = [...allDocs].sort((a, b) => a.order - b.order);
+const currentIndex = sortedAll.findIndex(d => d.slug === currentSlug);
+const prevDoc = currentIndex > 0 ? sortedAll[currentIndex - 1] : null;
+const nextDoc = currentIndex < sortedAll.length - 1 ? sortedAll[currentIndex + 1] : null;
+const currentDoc = sortedAll[currentIndex];
+
+const pageTitle = `${title} — Simple Relay Docs`;
+const GITHUB_REPO = "https://github.com/simple-relay/simple-relay";
+---
+
+<Layout title={pageTitle} description={description}>
+  <!-- Top Navigation Bar -->
+  <header class="sticky top-0 z-40 w-full bg-[#111112] border-b border-white/10" style="height:64px;">
+    <div class="max-w-[1440px] mx-auto px-4 sm:px-6 h-full flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <!-- Mobile Menu Toggle Button -->
+        <button
+          type="button"
+          id="mobile-menu-btn"
+          aria-label="Toggle Navigation Menu"
+          class="md:hidden text-[#a1a1a6] hover:text-white p-1 rounded-md focus:outline-none"
+        >
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
+        <!-- Logo + Wordmark -->
+        <a href="/" class="flex items-center gap-2.5 group">
+          <img src="/logo-dark.svg" alt="Simple Relay" width="30" height="30" class="shrink-0" />
+          <span class="text-white font-semibold text-[15px] tracking-[-0.014em]">Simple Relay</span>
+        </a>
+
+        <!-- Docs Badge -->
+        <span class="hidden sm:inline-flex items-center text-xs font-mono px-2 py-0.5 rounded-full bg-white/10 text-[#d2d2d7] border border-white/10">
+          Docs
+        </span>
+      </div>
+
+      <!-- Right Header Actions -->
+      <div class="flex items-center gap-3 sm:gap-5 text-[13px]">
+        <a
+          href="/llms.txt"
+          target="_blank"
+          title="Machine-readable documentation for AI agents (Cursor, Windsurf, Claude Code)"
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-[#1d1d1f] text-[#2997ff] border border-white/10 hover:bg-[#272729] transition-colors"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          <span class="font-mono text-xs">llms.txt</span>
+        </a>
+
+        <a
+          href="/"
+          class="text-[#a1a1a6] hover:text-white transition-colors duration-150 hidden sm:inline-block"
+        >
+          Home
+        </a>
+
+        <a
+          href={GITHUB_REPO}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-1.5 text-[#a1a1a6] hover:text-white transition-colors duration-150"
+        >
+          <svg class="w-4 h-4 shrink-0 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943"/>
+          </svg>
+          <span class="hidden sm:inline">GitHub</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Docs Workspace Body -->
+  <div class="max-w-[1440px] mx-auto px-4 sm:px-6 flex min-h-[calc(100vh-64px)]">
+    <!-- Desktop Left Sidebar -->
+    <aside
+      id="docs-sidebar"
+      class="w-64 shrink-0 py-8 pr-6 border-r border-[#e8e8ed] hidden md:block sticky top-[64px] h-[calc(100vh-64px)] overflow-y-auto"
+    >
+      <!-- Quick Filter -->
+      <div class="mb-6">
+        <input
+          type="text"
+          id="doc-filter-input"
+          placeholder="Filter docs..."
+          class="w-full text-xs px-3 py-1.5 rounded-md border border-[#d2d2d7] bg-[#fbfbfd] text-ink focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all placeholder:text-[#86868b]"
+        />
+      </div>
+
+      <!-- Navigation Hierarchy -->
+      <nav class="space-y-6" id="docs-nav-tree">
+        {sections.map((sec, idx) => (
+          <div class="nav-section">
+            <h3 class="text-[11px] font-semibold uppercase tracking-wider text-[#86868b] mb-2 px-2.5">
+              0{idx + 1}. {sec.name}
+            </h3>
+            <ul class="space-y-1">
+              {sec.docs.map(doc => {
+                const isActive = doc.slug === currentSlug;
+                return (
+                  <li class="nav-item" data-title={doc.title.toLowerCase()}>
+                    <a
+                      href={`/docs/${doc.slug}`}
+                      class={`block text-[13px] px-2.5 py-1.5 rounded-md transition-colors ${
+                        isActive
+                          ? 'bg-[#0066cc]/10 text-primary font-semibold'
+                          : 'text-[#48484a] hover:text-ink hover:bg-black/[0.03]'
+                      }`}
+                    >
+                      {doc.title}
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </nav>
+
+      <!-- Sidebar Footer -->
+      <div class="mt-10 pt-6 border-t border-[#e8e8ed] text-[12px] text-[#86868b] space-y-2">
+        <div>
+          <a href="https://github.com/simple-relay/simple-relay/issues" target="_blank" class="hover:text-primary transition-colors flex items-center gap-1.5">
+            <span>💬</span> Report Documentation Issue
+          </a>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Mobile Drawer Overlay -->
+    <div id="mobile-drawer" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden md:hidden">
+      <div class="fixed inset-y-0 left-0 w-72 bg-white p-6 shadow-xl overflow-y-auto">
+        <div class="flex items-center justify-between pb-4 border-b border-[#e8e8ed] mb-6">
+          <span class="text-sm font-semibold text-ink">Documentation</span>
+          <button id="close-drawer-btn" class="text-[#86868b] hover:text-ink p-1">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <nav class="space-y-6">
+          {sections.map((sec, idx) => (
+            <div>
+              <h3 class="text-[11px] font-semibold uppercase tracking-wider text-[#86868b] mb-2 px-2">
+                0{idx + 1}. {sec.name}
+              </h3>
+              <ul class="space-y-1">
+                {sec.docs.map(doc => {
+                  const isActive = doc.slug === currentSlug;
+                  return (
+                    <li>
+                      <a
+                        href={`/docs/${doc.slug}`}
+                        class={`block text-[14px] px-2.5 py-1.5 rounded-md ${
+                          isActive
+                            ? 'bg-[#0066cc]/10 text-primary font-semibold'
+                            : 'text-[#48484a] hover:text-ink'
+                        }`}
+                      >
+                        {doc.title}
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </nav>
+      </div>
+    </div>
+
+    <!-- Center Main Content -->
+    <main class="flex-1 min-w-0 py-8 px-0 sm:px-6 lg:px-10 max-w-4xl">
+      <!-- Breadcrumb -->
+      <nav class="flex items-center gap-2 text-xs text-[#86868b] mb-4" aria-label="Breadcrumb">
+        <a href="/docs/overview" class="hover:text-primary transition-colors">Docs</a>
+        <span>/</span>
+        <span>{currentDoc?.section}</span>
+        <span>/</span>
+        <span class="text-ink font-medium">{title}</span>
+      </nav>
+
+      <!-- Document Header -->
+      <header class="mb-8 pb-6 border-b border-[#e8e8ed]">
+        <h1 class="text-3xl sm:text-4xl font-semibold tracking-[-0.025em] text-ink mb-3">
+          {title}
+        </h1>
+        {description && (
+          <p class="text-[17px] text-[#6e6e73] leading-relaxed">
+            {description}
+          </p>
+        )}
+      </header>
+
+      <!-- Main Prose Body -->
+      <article class="prose prose-slate max-w-none prose-headings:font-semibold prose-headings:tracking-[-0.015em] prose-headings:text-ink prose-p:text-[#333336] prose-p:leading-[1.65] prose-p:text-[16px] prose-a:text-primary hover:prose-a:underline prose-code:before:content-none prose-code:after:content-none">
+        <slot />
+      </article>
+
+      <!-- Adjacent Page Navigation -->
+      <footer class="mt-16 pt-8 border-t border-[#e8e8ed] flex flex-col sm:flex-row items-center justify-between gap-4">
+        {prevDoc ? (
+          <a
+            href={`/docs/${prevDoc.slug}`}
+            class="w-full sm:w-auto p-4 rounded-xl border border-[#e8e8ed] hover:border-primary/40 bg-white transition-all text-left group"
+          >
+            <span class="block text-[11px] uppercase tracking-wider text-[#86868b] mb-1">Previous</span>
+            <span class="text-[14px] font-semibold text-ink group-hover:text-primary transition-colors">
+              ← {prevDoc.title}
+            </span>
+          </a>
+        ) : <div />}
+
+        {nextDoc ? (
+          <a
+            href={`/docs/${nextDoc.slug}`}
+            class="w-full sm:w-auto p-4 rounded-xl border border-[#e8e8ed] hover:border-primary/40 bg-white transition-all text-right group ml-auto"
+          >
+            <span class="block text-[11px] uppercase tracking-wider text-[#86868b] mb-1">Next</span>
+            <span class="text-[14px] font-semibold text-ink group-hover:text-primary transition-colors">
+              {nextDoc.title} →
+            </span>
+          </a>
+        ) : <div />}
+      </footer>
+    </main>
+
+    <!-- Right Side: On This Page (ToC) -->
+    <aside class="w-56 shrink-0 py-8 pl-6 hidden xl:block sticky top-[64px] h-[calc(100vh-64px)] overflow-y-auto">
+      {headings.length > 0 && (
+        <div class="mb-8">
+          <h4 class="text-xs font-semibold uppercase tracking-wider text-[#86868b] mb-3">
+            On this page
+          </h4>
+          <ul class="space-y-2 text-[13px]">
+            {headings.filter(h => h.depth === 2 || h.depth === 3).map(h => (
+              <li class={h.depth === 3 ? "pl-3 text-xs" : ""}>
+                <a
+                  href={`#${h.slug}`}
+                  class="text-[#6e6e73] hover:text-primary transition-colors block line-clamp-1"
+                >
+                  {h.text}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <!-- Fast AI Agent Context Box -->
+      <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-[#e8e8ed]">
+        <div class="flex items-center gap-1.5 mb-1.5 text-xs font-semibold text-ink">
+          <span>⚡</span>
+          <span>AI Coding Agent?</span>
+        </div>
+        <p class="text-[11px] text-[#6e6e73] leading-relaxed mb-2.5">
+          Pass this URL directly to Cursor, Claude Code, or Windsurf for clean context:
+        </p>
+        <a
+          href="/llms.txt"
+          target="_blank"
+          title="https://simplerelay.dev/llms.txt"
+          class="block text-center text-[10.5px] font-mono font-medium py-1.5 px-2 rounded-md bg-white border border-[#d2d2d7] text-primary hover:bg-[#fafafc] transition-colors truncate overflow-hidden"
+        >
+          simplerelay.dev/llms.txt
+        </a>
+
+        <!-- Download Full Context (LLMs) -->
+        <div class="mt-3 pt-3 border-t border-[#e8e8ed]">
+          <a
+            href="/llms-full.txt"
+            target="_blank"
+            class="text-[11px] text-[#6e6e73] hover:text-primary transition-colors flex items-center gap-1.5 font-medium"
+          >
+            <span>📄</span>
+            <span>Download Full Context</span>
+          </a>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <style is:global>
+    /* Remove Tailwind Typography default backtick pseudo-elements */
+    .prose :where(code):not(:where([class~="not-prose"] *))::before,
+    .prose :where(code):not(:where([class~="not-prose"] *))::after {
+      content: "" !important;
+    }
+
+    /* Style inline code cleanly */
+    .prose :not(pre) > code {
+      background-color: #f2f2f7 !important;
+      color: #1d1d1f !important;
+      padding: 0.16rem 0.36rem !important;
+      border-radius: 0.375rem !important;
+      font-size: 0.84em !important;
+      font-family: 'JetBrains Mono', monospace !important;
+      font-weight: 500 !important;
+      border: 1px solid #e5e5ea !important;
+    }
+
+    /* Pre block styling without text background */
+    .prose pre {
+      background-color: #1a1a1c !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      border-radius: 0.75rem !important;
+      padding: 1rem 1.25rem !important;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18) !important;
+    }
+
+    .prose pre code,
+    .prose pre code span {
+      background-color: transparent !important;
+      border: none !important;
+      padding: 0 !important;
+      font-family: 'JetBrains Mono', monospace !important;
+      font-size: 13px !important;
+      line-height: 1.6 !important;
+    }
+
+    /* Mermaid flowchart container */
+    .mermaid-chart {
+      background-color: #1a1a1c;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 0.875rem;
+      padding: 1.5rem;
+      margin: 1.75rem 0;
+      display: flex;
+      justify-content: center;
+      overflow-x: auto;
+    }
+
+    .mermaid-chart svg {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+
+  <!-- Client-side Interactive Scripts -->
+  <script is:inline>
+    // Mobile Drawer Toggle
+    const mobileBtn = document.getElementById('mobile-menu-btn');
+    const mobileDrawer = document.getElementById('mobile-drawer');
+    const closeDrawerBtn = document.getElementById('close-drawer-btn');
+
+    if (mobileBtn && mobileDrawer) {
+      mobileBtn.addEventListener('click', () => {
+        mobileDrawer.classList.toggle('hidden');
+      });
+    }
+
+    if (closeDrawerBtn && mobileDrawer) {
+      closeDrawerBtn.addEventListener('click', () => {
+        mobileDrawer.classList.add('hidden');
+      });
+    }
+
+    // Client-side quick filter
+    const filterInput = document.getElementById('doc-filter-input');
+    const navItems = document.querySelectorAll('.nav-item');
+
+    if (filterInput) {
+      filterInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        navItems.forEach(item => {
+          const title = item.getAttribute('data-title') || '';
+          if (!query || title.includes(query)) {
+            item.style.display = 'block';
+          } else {
+            item.style.display = 'none';
+          }
+        });
+      });
+    }
+
+    // Code block copy buttons (skip mermaid blocks)
+    document.querySelectorAll('pre:not([data-language="mermaid"])').forEach((pre) => {
+      pre.classList.add('relative', 'group');
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'absolute top-2.5 right-2.5 px-2 py-1 text-xs font-mono text-slate-400 bg-white/10 hover:bg-white/20 rounded transition-all opacity-0 group-hover:opacity-100';
+      copyBtn.innerText = 'Copy';
+      
+      copyBtn.addEventListener('click', async () => {
+        const code = pre.querySelector('code')?.innerText || pre.innerText;
+        await navigator.clipboard.writeText(code);
+        copyBtn.innerText = 'Copied!';
+        copyBtn.classList.add('text-emerald-400');
+        setTimeout(() => {
+          copyBtn.innerText = 'Copy';
+          copyBtn.classList.remove('text-emerald-400');
+        }, 2000);
+      });
+
+      pre.appendChild(copyBtn);
+    });
+  </script>
+
+  <!-- Mermaid Dynamic Flowchart Renderer -->
+  <script is:inline type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      themeVariables: {
+        darkMode: true,
+        background: 'transparent',
+        mainBkg: '#242426',
+        nodeBorder: '#3f3f46',
+        textColor: '#f4f4f5',
+        lineColor: '#60a5fa',
+        arrowheadColor: '#60a5fa',
+        primaryColor: '#242426',
+        primaryTextColor: '#ffffff',
+        primaryBorderColor: '#3b82f6',
+        secondaryColor: '#1c1c1e',
+        tertiaryColor: '#18181b',
+        edgeLabelBackground: '#1a1a1c',
+        clusterBkg: '#1c1c1e',
+        clusterBorder: '#27272a',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: '13px'
+      }
+    });
+
+    async function renderMermaidCharts() {
+      const pres = document.querySelectorAll('pre[data-language="mermaid"]');
+      for (let i = 0; i < pres.length; i++) {
+        const pre = pres[i];
+        const code = pre.querySelector('code')?.innerText || pre.innerText;
+        const container = document.createElement('div');
+        container.className = 'mermaid-chart';
+        pre.replaceWith(container);
+        try {
+          const id = 'mermaid-svg-' + i;
+          const { svg } = await mermaid.render(id, code.trim());
+          container.innerHTML = svg;
+        } catch (err) {
+          console.error('Mermaid render error:', err);
+          container.appendChild(pre);
+        }
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', renderMermaidCharts);
+    } else {
+      renderMermaidCharts();
+    }
+  </script>
+</Layout>

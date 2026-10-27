@@ -1,0 +1,123 @@
+---
+const GITHUB_URL = "https://github.com/simple-relay/simple-relay";
+const DOCS_URL = "/docs";
+---
+
+  <footer class="w-full bg-parchment border-t border-divider" aria-label="Site footer">
+    <div class="max-w-[980px] mx-auto px-5 py-16">
+      <!-- Link columns grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-12">
+
+        <!-- Alternatives (SEO anchor text) -->
+        <nav aria-labelledby="footer-alternatives">
+          <h3 id="footer-alternatives" class="text-ink text-[14px] font-semibold tracking-[-0.014em] mb-4">Alternatives</h3>
+          <ul class="space-y-2.5" role="list">
+            {[
+              { label: "Simple Relay vs Hookdeck", href: "/alternatives/hookdeck/" },
+              { label: "Simple Relay vs Svix", href: "/alternatives/svix/" },
+              { label: "Simple Relay vs Convoy", href: "/alternatives/convoy/" },
+              { label: "Simple Relay vs Temporal", href: "/alternatives/temporal/" },
+            ].map((link) => (
+              <li>
+                <a
+                  href={link.href}
+                  id={link.href.startsWith("#") ? link.href.slice(1) : undefined}
+                  class="text-[#6e6e73] text-[14px] leading-[2] hover:text-primary transition-colors"
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <!-- Guides (SEO anchor text) -->
+        <nav aria-labelledby="footer-guides">
+          <h3 id="footer-guides" class="text-ink text-[14px] font-semibold tracking-[-0.014em] mb-4">Guides</h3>
+          <ul class="space-y-2.5" role="list">
+            {[
+              { label: "How to retry Stripe Webhooks", href: "/docs/retries-and-dlq/" },
+              { label: "Shopify webhook delivery guarantee", href: "/docs/inbound-webhooks/" },
+              { label: "GitHub webhook reliability", href: "/docs/stripe-github/" },
+              { label: "Self-hosting with Docker", href: "/docs/production-deploy/" },
+            ].map((link) => (
+              <li>
+                <a
+                  href={link.href}
+                  class="text-[#6e6e73] text-[14px] leading-[2] hover:text-primary transition-colors"
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <!-- Resources -->
+        <nav aria-labelledby="footer-resources">
+          <h3 id="footer-resources" class="text-ink text-[14px] font-semibold tracking-[-0.014em] mb-4">Resources</h3>
+          <ul class="space-y-2.5" role="list">
+            {[
+              { label: "Documentation", href: DOCS_URL },
+              { label: "Changelog", href: GITHUB_URL + "/blob/main/CHANGELOG.md" },
+              { label: "Privacy", href: "/privacy" },
+            ].map((link) => (
+              <li>
+                <a
+                  href={link.href}
+                  target={link.href.startsWith("http") ? "_blank" : undefined}
+                  rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
+                  class="text-[#6e6e73] text-[14px] leading-[2] hover:text-primary transition-colors"
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <!-- AI Coding Agent Box -->
+        <div class="col-span-2 sm:col-span-1">
+          <div class="p-3.5 rounded-xl bg-white border border-[#e8e8ed]">
+            <div class="flex items-center gap-1.5 mb-1.5 text-xs font-semibold text-ink">
+              <span>⚡</span>
+              <span>AI Coding Agent?</span>
+            </div>
+            <p class="text-[11px] text-[#6e6e73] leading-relaxed mb-2.5">
+              Pass this URL directly to Cursor, Claude Code, or Windsurf for clean context:
+            </p>
+            <a
+              href="/llms.txt"
+              target="_blank"
+              title="https://simplerelay.dev/llms.txt"
+              class="block text-center text-[10.5px] font-mono font-medium py-1.5 px-2 rounded-md bg-[#f5f5f7] border border-[#d2d2d7] text-primary hover:bg-[#fafafc] transition-colors truncate overflow-hidden"
+            >
+              simplerelay.dev/llms.txt
+            </a>
+
+            <!-- Download Full Context (LLMs) -->
+            <div class="mt-3 pt-3 border-t border-[#e8e8ed]">
+              <a
+                href="/llms-full.txt"
+                target="_blank"
+                class="text-[11px] text-[#6e6e73] hover:text-primary transition-colors flex items-center gap-1.5 font-medium"
+              >
+                <span>📄</span>
+                <span>Download Full Context</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="border-t border-divider pt-8">
+        <div class="flex items-center gap-3">
+          <img src="/logo-dark.svg" alt="Simple Relay logo" width="28" height="28" class="shrink-0" />
+          <span class="text-[#6e6e73] text-[12px]">
+            © {new Date().getFullYear()} Simple Relay. Open source project.
+          </span>
+        </div>
+      </div>
+    </div>
+  </footer>

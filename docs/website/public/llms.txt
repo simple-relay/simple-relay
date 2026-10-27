@@ -1,0 +1,26 @@
+# Simple Relay Documentation
+
+> One binary. No infrastructure. Reliable HTTP delivery.
+
+Simple Relay is a lightweight, self-hosted reliability layer for HTTP traffic. It provides durable webhook ingestion (persist-before-ACK), smart outbound retries with full jitter, dead letter queue (DLQ) replay, and an embedded administrative UI. It ships as a single zero-dependency binary.
+
+## Documentation Index
+
+- [Overview & Philosophy](https://simplerelay.dev/docs/overview): Core principles, zero-infra self-contained binary, inbound persist-before-ACK, client-abort cancellation.
+- [Quickstart](https://simplerelay.dev/docs/quickstart): Single Docker command, binary run, first curl test, embedded UI access.
+- [Inbound Webhooks](https://simplerelay.dev/docs/inbound-webhooks): Durable persist-before-ACK pipeline, raw HMAC signature verification, zero byte mutation.
+- [Outbound Proxy](https://simplerelay.dev/docs/outbound-proxy): Synchronous proxying with automatic 429/5xx retries, client-disconnect abort, asynchronous background execution.
+- [Retries & Dead Letter Queue](https://simplerelay.dev/docs/retries-and-dlq): Exponential backoff with full uniform jitter, thundering herd prevention, DLQ inspection and replay.
+- [Recipe: Stripe & GitHub Webhooks](https://simplerelay.dev/docs/stripe-github): HMAC-SHA256 signature verification recipes and route definitions.
+- [Recipe: 429 & Rate Limits](https://simplerelay.dev/docs/rate-limits-429): Surviving API rate limits, parsing Retry-After header (seconds & HTTP dates).
+- [Recipe: Production Deployment](https://simplerelay.dev/docs/production-deploy): Docker Compose, Systemd unit, Litestream S3 streaming replication.
+- [Recipe: Cloudflare Tunnel & Local Webhook Inspection](https://simplerelay.dev/docs/local-webhook-inspection): Local webhook inspection, crash-resilient server restarts, and one-click request replay.
+- [Configuration Reference](https://simplerelay.dev/docs/configuration): CLI flags, environment variables matrix, and route configuration specs.
+- [REST API Reference](https://simplerelay.dev/docs/api-reference): Webhook ingest, proxy endpoints, DLQ inspection, replay API, health check.
+- [Embedded Web UI](https://simplerelay.dev/docs/embedded-ui): Real-time delivery logs, payload inspection, attempt history, DLQ replay.
+- [CLI Reference](https://simplerelay.dev/docs/cli-reference): Embedded CLI subcommands (relay health, queue, dlq), health probes, queue depth monitoring, and headless DLQ replay.
+- [Benchmarks & Performance](https://simplerelay.dev/docs/benchmarks): Measured throughput (10,000 req/s), latency percentiles, and memory footprint (26 MB).
+
+## Full Context for LLMs
+For the entire documentation concatenated into a single plain text markdown file, fetch:
+https://simplerelay.dev/llms-full.txt

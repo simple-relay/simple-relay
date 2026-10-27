@@ -54,3 +54,25 @@ jobs:
 
       - name: Verify install.sh script with local mock release
         run: go test -v -race -run TestInstallScript ./cmd/relay
+
+  website-gate:
+    name: Website Quality Gate (Astro Build)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: 'docs/website/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: docs/website
+        run: npm ci
+
+      - name: Build site with Astro
+        working-directory: docs/website
+        run: npm run build

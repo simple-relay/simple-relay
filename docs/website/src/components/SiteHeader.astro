@@ -1,0 +1,51 @@
+---
+interface Props {
+  isHome?: boolean;
+}
+
+const { isHome = false } = Astro.props;
+const GITHUB_URL = "https://github.com/simple-relay/simple-relay";
+const DOCS_URL = "/docs";
+const sectionHref = (anchor: string) => isHome ? anchor : `/${anchor}`;
+---
+
+  <header class="sticky top-0 z-50 w-full bg-black border-b border-white/10" style="height:64px;">
+    <div class="max-w-[980px] mx-auto px-6 h-full flex items-center justify-between">
+      <!-- Logo file + "Simple Relay" wordmark -->
+      <a href="/" class="flex items-center gap-2.5 group" aria-label="Simple Relay Home">
+        <img src="/logo-dark.svg" alt="Simple Relay logo" width="36" height="36" class="shrink-0" />
+        <span class="text-white font-semibold text-[16px] tracking-[-0.014em] leading-none">
+          Simple Relay
+        </span>
+      </a>
+
+      <!-- Nav links -->
+      <nav class="hidden md:flex items-center gap-7" aria-label="Main navigation">
+        <a href={sectionHref("#features")} class="text-[#a1a1a6] hover:text-white transition-colors duration-150 text-[13px] tracking-[-0.012em]">Features</a>
+        <a href={sectionHref("#use-cases")} class="text-[#a1a1a6] hover:text-white transition-colors duration-150 text-[13px] tracking-[-0.012em]">Use Cases</a>
+        <a href="/alternatives/hookdeck/" class="text-[#a1a1a6] hover:text-white transition-colors duration-150 text-[13px] tracking-[-0.012em]">Alternatives</a>
+      </nav>
+
+      <!-- CTAs -->
+      <div class="flex items-center gap-4">
+        <a
+          href={DOCS_URL}
+          class="text-[#a1a1a6] hover:text-white transition-colors duration-150 text-[13px] tracking-[-0.012em]"
+        >
+          Docs
+        </a>
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-2 bg-[#1d1d1f] text-white text-[13px] px-4 py-2 rounded-[8px] hover:bg-[#2d2d2f] transition-colors duration-150"
+        >
+          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943"/>
+          </svg>
+          GitHub
+          <i data-lucide="star" class="w-3 h-3 text-[#6e6e73] fill-current"></i>
+        </a>
+      </div>
+    </div>
+  </header>

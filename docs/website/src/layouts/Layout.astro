@@ -1,0 +1,113 @@
+---
+interface Props {
+  title?: string;
+  description?: string;
+  canonicalUrl?: string;
+  includeSoftwareSchema?: boolean;
+}
+
+const {
+  title = "Simple Relay — One binary. No infrastructure. Reliable HTTP delivery.",
+  description = "Simple Relay is a lightweight, self-hosted HTTP relay. Persist before ACK, smart retries with exponential backoff, dead letter queue, and an embedded web UI — all in one binary with zero external dependencies.",
+  canonicalUrl,
+  includeSoftwareSchema = false,
+} = Astro.props;
+
+const resolvedCanonicalUrl = canonicalUrl ?? new URL(Astro.url.pathname, Astro.site ?? "https://simplerelay.dev").href;
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Simple Relay",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Linux, macOS, Windows, Docker",
+  "description": "A lightweight, self-hosted HTTP relay. Receive HTTP, forward HTTP, make delivery reliable. One self-contained binary with durable embedded persistence — no external brokers or databases required.",
+  "url": "https://simplerelay.dev",
+  "codeRepository": "https://github.com/simple-relay/simple-relay",
+  "license": "https://github.com/simple-relay/simple-relay/blob/main/LICENSE",
+  "programmingLanguage": "Go",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "featureList": [
+    "Durable persistence before webhook ACK",
+    "Exponential backoff with randomized full jitter",
+    "Dead Letter Queue with manual and bulk replay API",
+    "Embedded Web UI — zero separate frontend processes",
+    "Zero external infrastructure dependencies",
+    "HMAC cryptographic signature verification for Stripe, GitHub, and custom webhooks"
+  ],
+  "keywords": "HTTP relay, webhook reliability, self-hosted, durable persistence, zero data loss, retry, dead letter queue, open source"
+};
+---
+
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{title}</title>
+  <meta name="description" content={description} />
+
+  <!-- Google tag (gtag.js) -->
+  <script is:inline async src="https://www.googletagmanager.com/gtag/js?id=G-JXWY393XNY"></script>
+  <script is:inline>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-JXWY393XNY');
+  </script>
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content={resolvedCanonicalUrl} />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:site_name" content="Simple Relay" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={title} />
+  <meta name="twitter:description" content={description} />
+
+  <!-- Canonical -->
+  <link rel="canonical" href={resolvedCanonicalUrl} />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+
+  <!-- Inter font (closest open-source equivalent to SF Pro) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- Lucide Icons CDN -->
+  <script is:inline src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <!-- JSON-LD Structured Data -->
+  {includeSoftwareSchema && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
+
+  <style is:global>
+    .lucide {
+      display: inline-block;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body class="font-sans text-ink bg-canvas antialiased">
+  <slot />
+
+  <script is:inline>
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  </script>
+</body>
+</html>
