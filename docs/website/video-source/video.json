@@ -1,0 +1,20 @@
+{
+  "title": "Simple Relay: Reliable HTTP delivery",
+  "theme": "midnight",
+  "size": "16:9",
+  "voice": "af_heart",
+  "music": {
+    "style": "tech",
+    "volume": 0.12
+  },
+  "captions": false,
+  "watermark": false,
+  "camera": "still",
+  "brand": {
+    "accent": "#22d3ee",
+    "background": "#0b1020",
+    "ink": "#e8eef8",
+    "font": "Space Grotesk",
+    "logo": "assets/logo-dark.svg"
+  }
+}

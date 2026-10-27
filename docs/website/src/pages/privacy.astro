@@ -1,0 +1,64 @@
+---
+import Layout from '../layouts/Layout.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+---
+
+<Layout
+  title="Privacy Policy — Simple Relay"
+  description="Simple Relay privacy policy. Zero telemetry in the app, your data is yours, and aggregate analytics on the documentation site."
+  canonicalUrl="https://simplerelay.dev/privacy"
+>
+  <SiteHeader />
+
+  <main class="w-full bg-canvas">
+    <section class="max-w-[680px] mx-auto px-6 py-16 sm:py-24">
+      <h1 class="text-[36px] sm:text-[44px] font-semibold text-ink tracking-tight leading-[1.15] mb-4">
+        Privacy Policy
+      </h1>
+      <p class="text-[17px] text-[#6e6e73] leading-relaxed mb-12">
+        This is literally our entire privacy policy. That's it.
+      </p>
+
+      <div class="space-y-12">
+        <!-- 1. The Relay Application -->
+        <section class="space-y-4">
+          <h2 class="text-[20px] font-semibold text-ink tracking-[-0.015em] border-b border-divider pb-2">
+            1. The Relay Application
+          </h2>
+          <ul class="space-y-3 text-[15px] text-[#424245] leading-relaxed list-disc pl-5">
+            <li>
+              <strong class="text-ink">Zero telemetry.</strong> We don't track you. There are no analytics pings, no metrics, no crash dump uploaders, and no phone-home beacons baked into the binary.
+            </li>
+            <li>
+              <strong class="text-ink">Your data is yours.</strong> Everything stays on your machine, disk, or container. Your HTTP payloads, headers, tokens, retries, and local SQLite database never leave your infrastructure.
+            </li>
+            <li>
+              <strong class="text-ink">We collect nothing.</strong> Zero. We don't see your traffic, we don't store your payloads, and we have zero access to your servers.
+            </li>
+          </ul>
+        </section>
+
+        <!-- 2. The Website & Documentation -->
+        <section class="space-y-4">
+          <h2 class="text-[20px] font-semibold text-ink tracking-[-0.015em] border-b border-divider pb-2">
+            2. The Website & Documentation
+          </h2>
+          <ul class="space-y-3 text-[15px] text-[#424245] leading-relaxed list-disc pl-5">
+            <li>
+              <strong class="text-ink">Google Analytics is installed.</strong> Yes, we put GA on this documentation site. The only reason: to see where engineers interested in this project come from and what pages they visit.
+            </li>
+            <li>
+              <strong class="text-ink">No ads, no data broker bullshit.</strong> We don't sell your data, run ad networks, or track you across the web.
+            </li>
+            <li>
+              <strong class="text-ink">Block it if you want.</strong> Hate GA? Block it with uBlock Origin, Brave, or disable JavaScript. The site still works completely fine, and we won't throw annoying anti-adblock popups in your face.
+            </li>
+          </ul>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <SiteFooter />
+</Layout>

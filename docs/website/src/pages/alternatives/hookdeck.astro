@@ -1,0 +1,115 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+
+const title = 'Hookdeck Alternatives: Simple Relay vs Hookdeck | HTTP Relay';
+const description = 'Compare Simple Relay and Hookdeck for webhook delivery. See how self-hosted deployment, low-latency ACK, retries, and event gateway features fit different needs.';
+const canonicalUrl = 'https://simplerelay.dev/alternatives/hookdeck/';
+---
+
+<Layout title={title} description={description} canonicalUrl={canonicalUrl}>
+  <SiteHeader />
+
+  <main>
+    <section class="bg-canvas px-5 py-20 sm:py-24">
+      <div class="max-w-[760px] mx-auto">
+        <p class="text-sm font-medium text-primary mb-4">HTTP relay comparison</p>
+        <h1 class="text-[clamp(38px,7vw,58px)] font-semibold leading-[1.08] tracking-[-0.03em] text-ink mb-6">
+          Simple Relay vs Hookdeck
+        </h1>
+        <p class="text-xl sm:text-2xl font-light leading-relaxed text-[#515154] mb-8">
+          Looking for a Hookdeck alternative? Simple Relay is an open-source, self-hosted HTTP relay for teams who want durable webhook delivery in one small service.
+        </p>
+        <p class="text-[17px] leading-relaxed text-[#515154] mb-9">
+          The right fit depends on what you need to operate. Hookdeck’s Event Gateway offers a managed event platform with routing, transformations, filtering, delivery controls, and observability. Simple Relay focuses on a compact self-hosted deployment, low-latency ACK after persistence, retries, and a built-in dead letter queue.
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <a href="/docs/quickstart" class="inline-flex items-center rounded-full bg-primary px-5 py-3 text-white font-medium hover:opacity-90">Try Simple Relay</a>
+          <a href="/docs/benchmarks" class="inline-flex items-center rounded-full border border-[#d2d2d7] px-5 py-3 text-ink font-medium hover:bg-[#f5f5f7]">Review benchmarks</a>
+        </div>
+        <p class="text-sm text-[#6e6e73] mt-8 pt-6 border-t border-[#e8e8ed]">
+          Other comparisons: <a href="/alternatives/svix/" class="text-primary hover:underline">Simple Relay vs Svix</a> · <a href="/alternatives/convoy/" class="text-primary hover:underline">Simple Relay vs Convoy</a> · <a href="/alternatives/temporal/" class="text-primary hover:underline">Simple Relay vs Temporal</a>
+        </p>
+      </div>
+    </section>
+
+    <section class="bg-[#f5f5f7] px-5 py-16 sm:py-20">
+      <div class="max-w-[980px] mx-auto">
+        <h2 class="text-3xl font-semibold tracking-tight text-ink mb-3">At a glance</h2>
+        <p class="text-[#6e6e73] mb-8 max-w-2xl">A practical comparison of the products’ primary focus. Hookdeck capabilities can vary by product and plan; see its documentation for current details.</p>
+        <p class="text-xs text-[#6e6e73] mb-3 sm:hidden">Swipe horizontally to compare all columns.</p>
+        <div class="overflow-x-auto rounded-xl border border-[#e0e0e0] bg-white" role="region" aria-label="Product comparison table" tabindex="0">
+          <table class="w-full min-w-[680px] text-left text-sm">
+            <thead class="bg-[#fafafc] text-ink">
+              <tr>
+                <th scope="col" class="px-5 py-4 font-semibold">What matters</th>
+                <th scope="col" class="px-5 py-4 font-semibold">Simple Relay</th>
+                <th scope="col" class="px-5 py-4 font-semibold">Hookdeck</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[#e8e8ed] text-[#515154]">
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Primary fit</th><td class="px-5 py-4">Self-hosted HTTP relay and webhook delivery</td><td class="px-5 py-4">Managed Event Gateway for webhook and event flows</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Deployment</th><td class="px-5 py-4">One binary or container; run on your infrastructure</td><td class="px-5 py-4">Cloud Event Gateway; Hookdeck also offers Outpost for self-hosted outbound webhooks</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Webhook acknowledgement</th><td class="px-5 py-4">Low-latency ACK after the incoming payload is durably persisted</td><td class="px-5 py-4">Event Gateway receives and queues events; compare ACK and persistence behavior for the source and connection setup you plan to use</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Delivery recovery</th><td class="px-5 py-4">Automatic retries, DLQ inspection, and replay</td><td class="px-5 py-4">Automatic and manual retries, event replay, and delivery history</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Routing controls</th><td class="px-5 py-4">Route-based HTTP relay configuration</td><td class="px-5 py-4">Connections, filters, transformations, deduplication, and delivery groups</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Operations</th><td class="px-5 py-4">Embedded UI and API in the relay service</td><td class="px-5 py-4">Hosted dashboard, metrics, issue tracking, and team features</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-xs leading-relaxed text-[#6e6e73] mt-4">Product details reviewed October 15, 2026. Product details checked against the <a class="text-primary hover:underline" href="https://hookdeck.com/docs" target="_blank" rel="noopener noreferrer">Hookdeck Event Gateway documentation</a> and <a class="text-primary hover:underline" href="https://hookdeck.com/docs/outpost/overview" target="_blank" rel="noopener noreferrer">Outpost documentation</a>. Review their current docs and <a class="text-primary hover:underline" href="https://hookdeck.com/pricing" target="_blank" rel="noopener noreferrer">pricing</a> for plan-specific details.</p>
+      </div>
+    </section>
+
+    <section class="bg-white px-5 py-16 sm:py-20">
+      <div class="max-w-[760px] mx-auto text-[17px] leading-[1.75] text-[#333336] [&_p]:mt-0 [&_p]:mb-6 [&_h2]:mt-14 [&_h2]:mb-5 [&_h2]:text-3xl [&_h2]:font-semibold [&_h2]:leading-tight [&_h2]:tracking-tight [&_h2]:text-ink [&_h2:first-child]:mt-0 [&_h3]:mt-10 [&_h3]:mb-3 [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:leading-snug [&_h3]:text-ink [&_ol]:my-6 [&_ol]:list-decimal [&_ol]:space-y-3 [&_ol]:pl-6 [&_ul]:my-6 [&_ul]:list-disc [&_ul]:space-y-3 [&_ul]:pl-6 [&_li]:pl-1 [&_strong]:font-semibold [&_strong]:text-ink [&_a]:font-medium [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2">
+        <h2>Low-latency ACK for message webhooks</h2>
+        <p>Message platforms such as Facebook Messenger and WhatsApp send events to your application through webhooks. A <strong>low-latency ACK</strong> lets your endpoint confirm receipt promptly, while the actual message processing continues in your application.</p>
+        <p>Simple Relay works as a <strong>self-hosted HTTP relay</strong> between the provider and your backend. It persists each incoming request before acknowledging it, then delivers the webhook asynchronously:</p>
+        <ol>
+          <li><strong>Receive</strong> the incoming message webhook.</li>
+          <li><strong>Persist</strong> the request before returning the acknowledgement.</li>
+          <li><strong>Forward and retry</strong> delivery to your application in the background.</li>
+        </ol>
+        <p>This pattern separates webhook receipt from downstream processing without acknowledging an event before it has been stored. Provider-specific verification and response requirements still apply, so validate them for your integration.</p>
+        <p>ACK latency varies with deployment and workload. Review the <a href="/docs/benchmarks">Simple Relay benchmark results and reproduction steps</a>. This is a Simple Relay benchmark, not a Hookdeck head-to-head test; compare equivalent request paths in your own environment.</p>
+
+        <h2>Example: acknowledge a message webhook before processing it</h2>
+        <p>For a Facebook Messenger or WhatsApp integration, the provider sends an event to Simple Relay. The relay persists the request and returns its ACK; your application then handles the message asynchronously, with delivery retries available if the backend is temporarily unavailable. This focuses the comparison on inbound HTTP intake. Hookdeck Event Gateway also supports inbound event flows with routing and queueing, while Outpost is designed for outbound events from your product to customer destinations.</p>
+
+        <h2>When Simple Relay is a good Hookdeck alternative</h2>
+        <p>Simple Relay may be a good fit if you are looking for a <strong>Hookdeck alternative</strong> focused on self-hosted webhook delivery and a lightweight operational footprint:</p>
+        <ul>
+          <li>Run the HTTP relay as one binary or container on infrastructure you control.</li>
+          <li>Persist inbound webhooks before ACK, then deliver asynchronously with retries.</li>
+          <li>Inspect failed deliveries and replay them through the embedded UI, API, or CLI.</li>
+          <li>Operate the relay without separately deploying a broker or database.</li>
+        </ul>
+        <p>See the <a href="/docs/quickstart">quickstart</a>, <a href="/docs/inbound-webhooks">inbound webhook guide</a>, <a href="/docs/retries-and-dlq">retry and DLQ guide</a>, and <a href="/docs/production-deploy">production deployment guide</a>.</p>
+
+        <h2>When Hookdeck may be a better fit</h2>
+        <p>Hookdeck may suit teams that want a managed event gateway with broader hosted controls such as filtering, transformations, routing, delivery groups, issue tracking, and metrics. Hookdeck also documents Outpost, a separate self-hosted product focused on outbound webhooks. Compare the product and deployment model that match your workflow.</p>
+
+        <h2>Frequently asked questions</h2>
+        <h3>Is Simple Relay an open-source Hookdeck alternative?</h3>
+        <p>Yes. Simple Relay is an open-source, self-hosted HTTP relay for teams whose main needs are durable webhook ingestion, asynchronous delivery, retries, and replay. Hookdeck offers a broader managed event gateway, so compare the features your workflow depends on.</p>
+        <h3>Does Simple Relay support low-latency webhook ACK?</h3>
+        <p>Simple Relay acknowledges inbound webhooks after persisting the request, while downstream delivery runs asynchronously. See the <a href="/docs/benchmarks">benchmarks</a> for published measurements; results depend on deployment conditions.</p>
+        <h3>Can I use Simple Relay for Facebook Messenger or WhatsApp webhooks?</h3>
+        <p>Simple Relay receives HTTP webhooks and forwards them to a configured destination, so it can be evaluated as a relay for these integrations. Check the provider’s verification, payload, and response requirements for your setup.</p>
+        <h3>Does Simple Relay replace every Hookdeck feature?</h3>
+        <p>No. Simple Relay focuses on self-hosted HTTP relay and reliable delivery. Teams that rely on managed routing rules, transformations, team workflows, or hosted observability should compare those requirements with Hookdeck’s current feature set.</p>
+
+        <h2>Try Simple Relay</h2>
+        <p>Run the relay, send a test webhook, and see whether this <strong>HTTP relay</strong> fits your stack.</p>
+        <p><a href="/docs/quickstart">Start the quickstart</a> · <a href="https://github.com/simple-relay/simple-relay" target="_blank" rel="noopener noreferrer">View the source on GitHub</a></p>
+
+        <h2>Other comparisons</h2>
+        <p>Explore other webhook infrastructure comparisons: <a href="/alternatives/svix/">Simple Relay vs Svix</a> · <a href="/alternatives/convoy/">Simple Relay vs Convoy</a> · <a href="/alternatives/temporal/">Simple Relay vs Temporal</a>.</p>
+      </div>
+    </section>
+  </main>
+
+  <SiteFooter />
+</Layout>

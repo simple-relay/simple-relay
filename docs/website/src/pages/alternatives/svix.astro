@@ -1,0 +1,107 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+
+const title = 'Svix Alternative: Simple Relay vs Svix for Webhooks';
+const description = 'Compare Simple Relay and Svix for webhook delivery. Understand inbound webhook relay, Svix Ingest, self-hosting, low-latency ACK, and customer-facing webhook infrastructure.';
+const canonicalUrl = 'https://simplerelay.dev/alternatives/svix/';
+const articleClass = 'max-w-[760px] mx-auto text-[17px] leading-[1.75] text-[#333336] [&_p]:mt-0 [&_p]:mb-6 [&_h2]:mt-14 [&_h2]:mb-5 [&_h2]:text-3xl [&_h2]:font-semibold [&_h2]:leading-tight [&_h2]:tracking-tight [&_h2]:text-ink [&_h2:first-child]:mt-0 [&_h3]:mt-10 [&_h3]:mb-3 [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:leading-snug [&_h3]:text-ink [&_ol]:my-6 [&_ol]:list-decimal [&_ol]:space-y-3 [&_ol]:pl-6 [&_ul]:my-6 [&_ul]:list-disc [&_ul]:space-y-3 [&_ul]:pl-6 [&_li]:pl-1 [&_strong]:font-semibold [&_strong]:text-ink [&_a]:font-medium [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2';
+---
+
+<Layout title={title} description={description} canonicalUrl={canonicalUrl}>
+  <SiteHeader />
+
+  <main>
+    <section class="bg-canvas px-5 py-20 sm:py-24">
+      <div class="max-w-[760px] mx-auto">
+        <p class="text-sm font-medium text-primary mb-4">Webhook infrastructure comparison</p>
+        <h1 class="text-[clamp(38px,7vw,58px)] font-semibold leading-[1.08] tracking-[-0.03em] text-ink mb-6">Simple Relay vs Svix</h1>
+        <p class="text-xl sm:text-2xl font-light leading-relaxed text-[#515154] mb-8">Looking for a <strong class="font-semibold text-ink">Svix alternative</strong>? First consider which direction your webhooks travel.</p>
+        <p class="text-[17px] leading-relaxed text-[#515154] mb-9">Svix is best known for helping platforms send webhooks to their own customers, with message fanout, signatures, retries, and a consumer portal. Simple Relay is a self-hosted <strong class="font-semibold text-ink">HTTP relay</strong> focused on receiving requests, persisting them before ACK, and forwarding them reliably. Svix also offers Ingest for receiving third-party webhooks, so teams evaluating inbound delivery should compare that product directly too.</p>
+        <div class="flex flex-wrap gap-3">
+          <a href="/docs/quickstart" class="inline-flex items-center rounded-full bg-primary px-5 py-3 text-white font-medium hover:opacity-90">Try Simple Relay</a>
+          <a href="/docs/benchmarks" class="inline-flex items-center rounded-full border border-[#d2d2d7] px-5 py-3 text-ink font-medium hover:bg-[#f5f5f7]">Review benchmarks</a>
+        </div>
+        <p class="text-sm text-[#6e6e73] mt-8 pt-6 border-t border-[#e8e8ed]">
+          Other comparisons: <a href="/alternatives/hookdeck/" class="text-primary hover:underline">Simple Relay vs Hookdeck</a> · <a href="/alternatives/convoy/" class="text-primary hover:underline">Simple Relay vs Convoy</a> · <a href="/alternatives/temporal/" class="text-primary hover:underline">Simple Relay vs Temporal</a>
+        </p>
+      </div>
+    </section>
+
+    <section class="bg-[#f5f5f7] px-5 py-16 sm:py-20">
+      <div class="max-w-[980px] mx-auto">
+        <h2 class="text-3xl font-semibold tracking-tight text-ink mb-3">Simple Relay and Svix at a glance</h2>
+        <p class="text-[#6e6e73] mb-8 max-w-2xl">Both products support reliable webhook delivery, but they address different operating needs and webhook flows.</p>
+        <p class="text-xs text-[#6e6e73] mb-3 sm:hidden">Swipe horizontally to compare all columns.</p>
+        <div class="overflow-x-auto rounded-xl border border-[#e0e0e0] bg-white" role="region" aria-label="Product comparison table" tabindex="0">
+          <table class="w-full min-w-[720px] text-left text-sm">
+            <thead class="bg-[#fafafc] text-ink">
+              <tr>
+                <th scope="col" class="px-5 py-4 font-semibold">What matters</th>
+                <th scope="col" class="px-5 py-4 font-semibold">Simple Relay</th>
+                <th scope="col" class="px-5 py-4 font-semibold">Svix</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[#e8e8ed] text-[#515154]">
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Primary use</th><td class="px-5 py-4">Self-hosted HTTP relay for inbound webhooks and reliable request forwarding</td><td class="px-5 py-4">Webhook delivery service for platforms sending events to their customers; also offers Svix Ingest</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Deployment</th><td class="px-5 py-4">One binary or container on infrastructure you control</td><td class="px-5 py-4">Svix offers a hosted service and an open-source server for self-hosting; verify deployment options for the specific product, especially Ingest</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Inbound provider webhooks</th><td class="px-5 py-4">Receive, persist, ACK, and forward HTTP requests</td><td class="px-5 py-4">Svix Ingest receives third-party events and can verify, retry, transform, and fan them out</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Customer-facing webhook product</th><td class="px-5 py-4">General HTTP delivery; no built-in tenant event catalog or customer portal</td><td class="px-5 py-4">Applications, endpoints, event types, message fanout, and consumer portal</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">ACK and persistence</th><td class="px-5 py-4">Low-latency ACK after incoming payload is durably persisted</td><td class="px-5 py-4">Webhook receiving guidance recommends returning a 2xx promptly; see Svix docs for its receiving products</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Delivery operations</th><td class="px-5 py-4">Embedded UI, API, CLI, retries, and DLQ replay</td><td class="px-5 py-4">Delivery retries, logs, observability, and replay tools for webhook messages</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-xs leading-relaxed text-[#6e6e73] mt-4">Product details reviewed October 15, 2026. For current Svix product details, see its <a class="text-primary hover:underline" href="https://docs.svix.com/introduction" target="_blank" rel="noopener noreferrer">product introduction</a>, <a class="text-primary hover:underline" href="https://docs.svix.com/ingest/receiving-with-ingest" target="_blank" rel="noopener noreferrer">Ingest guide</a>, <a class="text-primary hover:underline" href="https://docs.svix.com/app-portal" target="_blank" rel="noopener noreferrer">App Portal docs</a>, and <a class="text-primary hover:underline" href="https://www.svix.com/open-source-webhook-service/" target="_blank" rel="noopener noreferrer">open-source server page</a>.</p>
+      </div>
+    </section>
+
+    <section class="bg-white px-5 py-16 sm:py-20">
+      <div class={articleClass}>
+        <h2>Choosing between an HTTP relay and a webhook platform</h2>
+        <p>The key question is whether you need to <strong>receive webhooks from other services</strong> or <strong>send webhooks to your own customers</strong>.</p>
+        <p>Svix’s core product is designed for platforms building customer-facing webhooks. It provides endpoint management, event types, message fanout, signing, retries, and a consumer portal. Svix describes Ingest separately for receiving webhooks from third-party providers such as Stripe, GitHub, and Shopify.</p>
+        <p>Simple Relay focuses on the receiving and forwarding path: accept an HTTP request, persist it before acknowledging receipt, and deliver it to your configured backend asynchronously. That makes it a focused <strong>self-hosted webhook relay</strong> to consider when you want the receiving layer on your own infrastructure.</p>
+
+        <h2>Example: inbound provider webhooks versus customer notifications</h2>
+        <p>If your app receives Stripe or GitHub webhooks and needs to forward them to an internal service, compare Simple Relay with Svix Ingest. If your SaaS product publishes events such as <code>invoice.paid</code> to customer endpoints, Svix’s sending product and customer portal address a different need. Defining this direction first makes the alternatives comparison more useful.</p>
+
+        <h2>When Simple Relay may be a good Svix alternative</h2>
+        <p>Simple Relay may fit your needs when your goal is reliable inbound HTTP delivery with a small, self-managed runtime:</p>
+        <ul>
+          <li>You want to run the relay as a single binary or container.</li>
+          <li>You want to keep webhook payloads and delivery records on infrastructure you operate.</li>
+          <li>You need a <strong>low-latency ACK</strong> after durable persistence, followed by background delivery.</li>
+          <li>You need retry handling, a dead letter queue, and replay for failed deliveries.</li>
+          <li>You do not need a customer-facing webhook portal or tenant event catalog.</li>
+        </ul>
+        <p>For message webhooks, including integrations such as Facebook Messenger or WhatsApp, review the <a href="/docs/benchmarks">Simple Relay benchmark results</a>. They are not a head-to-head Svix comparison; validate behavior and compare equivalent request paths in your own environment.</p>
+        <p>Get started with the <a href="/docs/quickstart">quickstart</a>, then read about <a href="/docs/inbound-webhooks">inbound webhook handling</a>, <a href="/docs/retries-and-dlq">retries and DLQ replay</a>, and <a href="/docs/production-deploy">production deployment</a>.</p>
+
+        <h2>When Svix may be a better fit</h2>
+        <p>Svix may be the better fit when webhooks are a feature of your product and you need to deliver events to multiple customers. Its APIs and portal are built around applications, customer endpoints, event subscriptions, message delivery, and delivery observability. Svix also offers an open-source server for teams that want to self-host its webhook service.</p>
+        <p>If your use case is inbound webhook intake, compare Simple Relay with <a href="https://docs.svix.com/ingest/receiving-with-ingest" target="_blank" rel="noopener noreferrer">Svix Ingest</a> specifically. It supports receiving third-party events and routing them through Svix’s delivery system.</p>
+
+        <h2>Frequently asked questions</h2>
+        <h3>Is Simple Relay a replacement for Svix?</h3>
+        <p>It depends on the direction and features of your webhook workflow. Simple Relay can be an alternative for inbound webhook relay and reliable forwarding. Svix is purpose-built for sending webhooks to customers, and also offers Ingest for receiving third-party webhooks.</p>
+        <h3>Can Svix receive inbound webhooks?</h3>
+        <p>Yes. Svix Ingest is designed to receive events from external systems and route them onward. Compare its current capabilities with your requirements for persistence, ACK behavior, transformations, and deployment.</p>
+        <h3>Can Simple Relay send webhooks to my SaaS customers?</h3>
+        <p>Simple Relay can forward HTTP requests to configured destinations, but it does not provide Svix’s customer-oriented features such as tenant endpoint management, event subscriptions, and an embeddable consumer portal.</p>
+        <h3>How can I compare ACK latency?</h3>
+        <p>Review the <a href="/docs/benchmarks">Simple Relay benchmarks</a> and reproduce them in an environment similar to yours. Results depend on hardware, storage, network, and workload.</p>
+
+        <h2>Try Simple Relay</h2>
+        <p>If you need a self-hosted <strong>HTTP relay</strong> for inbound events, run Simple Relay and test it against your webhook workflow.</p>
+        <p><a href="/docs/quickstart">Start the quickstart</a> · <a href="https://github.com/simple-relay/simple-relay" target="_blank" rel="noopener noreferrer">View the source on GitHub</a></p>
+
+        <h2>Other comparisons</h2>
+        <p>Explore other webhook infrastructure comparisons: <a href="/alternatives/hookdeck/">Simple Relay vs Hookdeck</a> · <a href="/alternatives/convoy/">Simple Relay vs Convoy</a> · <a href="/alternatives/temporal/">Simple Relay vs Temporal</a>.</p>
+      </div>
+    </section>
+  </main>
+
+  <SiteFooter />
+</Layout>

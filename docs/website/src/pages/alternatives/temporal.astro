@@ -1,0 +1,106 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+
+const title = 'Temporal Alternative for Webhook Ingress: Simple Relay vs Temporal';
+const description = 'Compare Simple Relay and Temporal for webhook workflows. Learn when to choose a lightweight HTTP relay for durable ingress or a durable execution platform for long-running processes.';
+const canonicalUrl = 'https://simplerelay.dev/alternatives/temporal/';
+const articleClass = 'max-w-[760px] mx-auto text-[17px] leading-[1.75] text-[#333336] [&_p]:mt-0 [&_p]:mb-6 [&_h2]:mt-14 [&_h2]:mb-5 [&_h2]:text-3xl [&_h2]:font-semibold [&_h2]:leading-tight [&_h2]:tracking-tight [&_h2]:text-ink [&_h2:first-child]:mt-0 [&_h3]:mt-10 [&_h3]:mb-3 [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:leading-snug [&_h3]:text-ink [&_ol]:my-6 [&_ol]:list-decimal [&_ol]:space-y-3 [&_ol]:pl-6 [&_ul]:my-6 [&_ul]:list-disc [&_ul]:space-y-3 [&_ul]:pl-6 [&_li]:pl-1 [&_strong]:font-semibold [&_strong]:text-ink [&_a]:font-medium [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2';
+---
+
+<Layout title={title} description={description} canonicalUrl={canonicalUrl}>
+  <SiteHeader />
+
+  <main>
+    <section class="bg-canvas px-5 py-20 sm:py-24">
+      <div class="max-w-[760px] mx-auto">
+        <p class="text-sm font-medium text-primary mb-4">Webhook infrastructure comparison</p>
+        <h1 class="text-[clamp(38px,7vw,58px)] font-semibold leading-[1.08] tracking-[-0.03em] text-ink mb-6">Simple Relay vs Temporal</h1>
+        <p class="text-xl sm:text-2xl font-light leading-relaxed text-[#515154] mb-8">Looking for a <strong class="font-semibold text-ink">Temporal alternative</strong> for webhook reliability? First decide whether you need HTTP delivery infrastructure or durable orchestration for application workflows.</p>
+        <p class="text-[17px] leading-relaxed text-[#515154] mb-9">Simple Relay is a self-hosted <strong class="font-semibold text-ink">HTTP relay</strong> that receives, persists, and forwards requests with retries. Temporal is a durable execution platform for writing workflows in code and resuming them after failures. They can complement each other: a webhook relay can handle reliable ingress, while Temporal can orchestrate the work triggered by an event.</p>
+        <div class="flex flex-wrap gap-3">
+          <a href="/docs/quickstart" class="inline-flex items-center rounded-full bg-primary px-5 py-3 text-white font-medium hover:opacity-90">Try Simple Relay</a>
+          <a href="/docs/benchmarks" class="inline-flex items-center rounded-full border border-[#d2d2d7] px-5 py-3 text-ink font-medium hover:bg-[#f5f5f7]">Review benchmarks</a>
+        </div>
+        <p class="text-sm text-[#6e6e73] mt-8 pt-6 border-t border-[#e8e8ed]">
+          Other comparisons: <a href="/alternatives/hookdeck/" class="text-primary hover:underline">Simple Relay vs Hookdeck</a> · <a href="/alternatives/svix/" class="text-primary hover:underline">Simple Relay vs Svix</a> · <a href="/alternatives/convoy/" class="text-primary hover:underline">Simple Relay vs Convoy</a>
+        </p>
+      </div>
+    </section>
+
+    <section class="bg-[#f5f5f7] px-5 py-16 sm:py-20">
+      <div class="max-w-[980px] mx-auto">
+        <h2 class="text-3xl font-semibold tracking-tight text-ink mb-3">Simple Relay and Temporal at a glance</h2>
+        <p class="text-[#6e6e73] mb-8 max-w-2xl">These tools address different layers of an event-driven system.</p>
+        <p class="text-xs text-[#6e6e73] mb-3 sm:hidden">Swipe horizontally to compare all columns.</p>
+        <div class="overflow-x-auto rounded-xl border border-[#e0e0e0] bg-white" role="region" aria-label="Product comparison table" tabindex="0">
+          <table class="w-full min-w-[720px] text-left text-sm">
+            <thead class="bg-[#fafafc] text-ink">
+              <tr>
+                <th scope="col" class="px-5 py-4 font-semibold">What matters</th>
+                <th scope="col" class="px-5 py-4 font-semibold">Simple Relay</th>
+                <th scope="col" class="px-5 py-4 font-semibold">Temporal</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[#e8e8ed] text-[#515154]">
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Primary purpose</th><td class="px-5 py-4">Reliable HTTP ingestion, proxying, and forwarding</td><td class="px-5 py-4">Durable execution and orchestration of application workflows</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Webhook ingress</th><td class="px-5 py-4">Dedicated HTTP endpoints to receive and persist webhook requests</td><td class="px-5 py-4">Your application receives the HTTP request and starts or signals a Workflow</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">ACK and persistence</th><td class="px-5 py-4">Low-latency ACK after the inbound request is durably persisted</td><td class="px-5 py-4">Workflow state and event history are persisted by the Temporal Service</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Retry model</th><td class="px-5 py-4">HTTP delivery retries with failed requests available in the DLQ</td><td class="px-5 py-4">Workflow and Activity retry policies for application steps</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Work duration</th><td class="px-5 py-4">Request delivery and outbound HTTP proxy operations</td><td class="px-5 py-4">Multi-step, long-running workflows that may wait, resume, or coordinate work over time</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Production deployment</th><td class="px-5 py-4">One self-contained binary or container; no external services required by default</td><td class="px-5 py-4">Temporal Cloud or a self-hosted Temporal Service, plus application Workers</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Best suited for</th><td class="px-5 py-4">Teams that want a focused self-hosted HTTP reliability layer</td><td class="px-5 py-4">Teams building durable business processes with multiple steps and side effects</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-xs leading-relaxed text-[#6e6e73] mt-4">Product details reviewed October 15, 2026. Temporal details are based on its official <a class="text-primary hover:underline" href="https://docs.temporal.io/workflows" target="_blank" rel="noopener noreferrer">Workflow documentation</a>, <a class="text-primary hover:underline" href="https://docs.temporal.io/tasks" target="_blank" rel="noopener noreferrer">Tasks guide</a>, and <a class="text-primary hover:underline" href="https://docs.temporal.io/production-deployment" target="_blank" rel="noopener noreferrer">production deployment guide</a>.</p>
+      </div>
+    </section>
+
+    <section class="bg-white px-5 py-16 sm:py-20">
+      <div class={articleClass}>
+        <h2>HTTP relay vs durable workflow orchestration</h2>
+        <p>Simple Relay and Temporal solve related reliability problems at different points in the request lifecycle.</p>
+        <p>A webhook provider sends an HTTP request to your public endpoint. Simple Relay is designed to accept that request, persist it before ACK, and forward it to your application with retry and replay support. This makes it a focused <strong>webhook relay</strong> and <strong>HTTP delivery layer</strong>.</p>
+        <p>Temporal helps you model what happens after an event reaches your application. You define a Workflow in code; Temporal records its event history and coordinates Activities, timers, retries, and resumption. This is useful when processing involves multiple dependent steps, long waits, or side effects that must recover after a crash.</p>
+
+        <h2>Example: receive an event, then start a durable workflow</h2>
+        <p>A payment event can first reach Simple Relay, which persists the HTTP request and forwards it to an application endpoint. That endpoint can start a Temporal Workflow when the next work includes coordinated steps such as updating an order, issuing a receipt, and waiting for later confirmation. The relay handles the webhook edge; Temporal manages the long-running business process.</p>
+
+        <h2>When Simple Relay may be a good Temporal alternative</h2>
+        <p>Simple Relay may fit when the main requirement is receiving and forwarding HTTP reliably, without introducing a workflow orchestration platform:</p>
+        <ul>
+          <li>You need a stable inbound webhook endpoint with a <strong>low-latency ACK</strong> after durable persistence.</li>
+          <li>You want asynchronous HTTP forwarding, delivery retries, and DLQ replay.</li>
+          <li>You prefer a self-hosted single binary or container with an embedded UI.</li>
+          <li>Your event processing is handled by your application and does not require a durable multi-step workflow engine.</li>
+        </ul>
+        <p>Review the <a href="/docs/benchmarks">Simple Relay benchmarks</a> and compare results using your own deployment and workload. Get started with the <a href="/docs/quickstart">quickstart</a>, then see <a href="/docs/inbound-webhooks">inbound webhook handling</a>, <a href="/docs/retries-and-dlq">retries and DLQ replay</a>, and <a href="/docs/production-deploy">production deployment</a>.</p>
+
+        <h2>When Temporal may be a better fit</h2>
+        <p>Temporal may be the better fit when an incoming event starts a business process that spans multiple steps, services, or time periods. Workflows can coordinate Activities, wait for signals or timers, and resume from persisted history after failures. A Temporal deployment includes the Temporal Service and your application Workers, whether you use Temporal Cloud or self-host the service.</p>
+        <p>In this architecture, Simple Relay and Temporal can work together: the relay handles the HTTP edge and durable intake, while a backend Worker starts a Temporal Workflow to process the event. Whether both are useful depends on your reliability needs and how much operational complexity you want to manage.</p>
+
+        <h2>Frequently asked questions</h2>
+        <h3>Is Simple Relay a replacement for Temporal?</h3>
+        <p>Not for durable workflow orchestration. Simple Relay is a narrower alternative when the need is a self-hosted HTTP relay for persistent webhook intake, forwarding, and retries. Temporal provides a framework and service for durable application workflows.</p>
+        <h3>Can Temporal receive webhooks?</h3>
+        <p>Your application can receive an HTTP webhook and use it to start or signal a Temporal Workflow. Temporal then coordinates the workflow execution; it is not itself a drop-in public webhook relay endpoint.</p>
+        <h3>Can Simple Relay run long-running business workflows?</h3>
+        <p>Simple Relay handles HTTP delivery and retries. For business processes that need durable multi-step orchestration, timers, signals, or workflow history, use a workflow engine such as Temporal.</p>
+        <h3>How do I compare webhook ACK latency?</h3>
+        <p>Review the <a href="/docs/benchmarks">Simple Relay benchmark page</a>; it is not a head-to-head Temporal test. Reproduce the measurements under conditions similar to your own. Because the two products operate at different layers, compare equivalent request paths.</p>
+
+        <h2>Try Simple Relay</h2>
+        <p>If you need a lightweight <strong>HTTP relay</strong> for durable webhook intake and forwarding, start Simple Relay and test it with your event flow.</p>
+        <p><a href="/docs/quickstart">Start the quickstart</a> · <a href="https://github.com/simple-relay/simple-relay" target="_blank" rel="noopener noreferrer">View the source on GitHub</a></p>
+
+        <h2>Other comparisons</h2>
+        <p>Explore other webhook infrastructure comparisons: <a href="/alternatives/hookdeck/">Simple Relay vs Hookdeck</a> · <a href="/alternatives/svix/">Simple Relay vs Svix</a> · <a href="/alternatives/convoy/">Simple Relay vs Convoy</a>.</p>
+      </div>
+    </section>
+  </main>
+
+  <SiteFooter />
+</Layout>

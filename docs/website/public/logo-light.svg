@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+    <!-- Nền: Parchment (#f5f5f7) -->
+    <rect width="200" height="200" rx="45" fill="#f5f5f7" />
+
+    <!-- Bức tường SQLite: Near-Black Ink (#1d1d1f) -->
+    <line x1="70" y1="60" x2="70" y2="140" stroke="#1d1d1f" stroke-width="22" stroke-linecap="round" />
+
+    <!-- Mũi tên Deliver: Action Blue (#0066cc) -->
+    <path d="M 105 60 L 145 100 L 105 140" fill="none" stroke="#0066cc" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

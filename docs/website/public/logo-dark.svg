@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+    <!-- Nền: Near-Black Tile 1 (#272729) -->
+    <rect width="200" height="200" rx="45" fill="#272729" />
+
+    <!-- Bức tường SQLite: Pure White (#ffffff) -->
+    <line x1="70" y1="60" x2="70" y2="140" stroke="#ffffff" stroke-width="22" stroke-linecap="round" />
+
+    <!-- Mũi tên Deliver: Sky Link Blue (#2997ff) -->
+    <path d="M 105 60 L 145 100 L 105 140" fill="none" stroke="#2997ff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

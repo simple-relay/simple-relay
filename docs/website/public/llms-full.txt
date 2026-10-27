@@ -1,0 +1,2084 @@
+# Simple Relay Documentation (Full Context)
+# Tagline: One binary. No infrastructure. Reliable HTTP delivery.
+# URL: https://simplerelay.dev
+# Generated for AI Agents and LLMs.
+
+
+================================================================================
+# SECTION: GETTING STARTED
+================================================================================
+
+## Overview & Philosophy
+Source: https://simplerelay.dev/docs/overview
+
+## What is Simple Relay?
+
+**Simple Relay** is a lightweight, self-hosted reliability layer for HTTP traffic. It acts as an autonomous buffer and proxy between external services and your internal backend.
+
+Building reliable webhook ingestion and outbound API retries usually forces engineering teams to assemble heavy distributed infrastructure: message brokers, external caching tiers, worker processes, and separate databases.
+
+Simple Relay eliminates that operational tax: **one single binary, zero infrastructure friction, reliable HTTP delivery.**
+
+```mermaid
+flowchart LR
+    A["External Senders<br/>(Stripe, GitHub, etc.)"] -->|"HTTP POST<br/>(ACK < 2ms)"| B["Simple Relay<br/>(Persist & Retry)"]
+    B -->|"Reliable Forward<br/>(At-Least-Once)"| C["Your Application<br/>(Internal APIs)"]
+```
+
+---
+
+## The Core Pillars of Simple Relay
+
+Simple Relay is engineered around three mission-critical guarantees:
+
+### 1. Zero Data Loss (Persist Before ACK)
+In-memory queues and background threads inside your application runtime disappear whenever processes restart, deploy, or crash. External webhook providers (such as Stripe, Shopify, or GitHub) may back off for hours or drop deliveries entirely if your server blips.
+
+Simple Relay strictly enforces **Persist-Before-ACK**: raw incoming byte payloads and headers are flushed to durable, crash-resilient local storage *before* returning HTTP `200 OK` to the sender. Once acknowledged, delivery to your backend is guaranteed.
+
+### 2. Ultra-Fast Inbound ACK Response Time (< 2ms)
+External webhook providers impose aggressive response timeouts—often between 2 and 5 seconds. If your application attempts to execute database transactions, trigger analytics, or send emails synchronously inside the webhook handler, sudden load spikes will cause upstream timeouts. When timeouts occur, external providers flag your endpoint as failing and will automatically disable your webhooks.
+
+Simple Relay decouples **ingestion acknowledgement** from **downstream execution**:
+- Ingests the payload, validates cryptographic HMAC signatures, commits to durable storage, and answers the sender with `200 OK` in **under 2 milliseconds**.
+- External senders immediately see a 100% healthy, lightning-fast endpoint.
+- Simple Relay's background workers then forward payloads to your application at a safe, controlled pace.
+
+### 3. Dead-Simple Deployment (One Self-Contained Binary)
+Reliability shouldn't require managing an entire operations cluster. Simple Relay has zero external service dependencies—no separate databases to provision, no message brokers to monitor, and no complex queue workers to scale. 
+
+Run it as a single binary on a Linux virtual machine or as a lightweight Docker container. It manages its own durable persistence, background worker pools, retry schedulers, and embedded management UI out of the box.
+
+### 4. Client-Abort Aware Outbound Proxy
+Standard reverse proxies continue blasting requests to external APIs even after the caller has disconnected. Simple Relay's synchronous proxy listens to incoming client connection state. If a client terminates the connection or times out, in-flight upstream requests and subsequent retry loops abort immediately to prevent wasted compute and upstream API rate limit exhaustion.
+
+---
+
+## High-Level Capabilities
+
+| Capability | The Challenge | How Simple Relay Solves It |
+| :--- | :--- | :--- |
+| **Zero Data Loss** | Application restarts and deploy cycles drop in-flight requests. | Commits raw bytes to durable storage before returning `200 OK`. |
+| **Ultra-Fast Inbound ACK** | Downstream processing causes timeouts from Stripe, Shopify, GitHub. | Decouples ingestion from execution; responds in `< 2ms`. |
+| **Dead-Simple Deployment** | Message queues and worker clusters create heavy maintenance overhead. | Single self-contained binary with zero external services required. |
+| **Smart Outbound Retries** | API rate limits (`429`) and server errors (`5xx`) disrupt operations. | Automatic retries with exponential backoff and randomized full jitter. |
+| **Client Disconnect Awareness** | Dropped client requests waste third-party API quotas. | Aborts in-flight upstream requests immediately when callers drop. |
+| **Dead Letter Queue (DLQ)** | Exhausted retries vanish into server error logs. | Failed deliveries are safely preserved in the DLQ for one-click replay. |
+| **Embedded Web UI** | Monitoring queue state requires setting up third-party dashboards. | Built-in browser UI with zero Node.js build pipeline or server processes. |
+
+---
+
+## Next Steps
+
+- Jump straight into the **[Quickstart](/docs/quickstart)** to launch your first relay.
+- Learn about the **[Inbound Webhook Pipeline](/docs/inbound-webhooks)** and HMAC verification.
+- Explore **[Outbound Proxying & Retries](/docs/outbound-proxy)**.
+
+----------------------------------------
+
+## Quickstart
+Source: https://simplerelay.dev/docs/quickstart
+
+Get Simple Relay running and test your first reliable HTTP delivery in under 60 seconds.
+
+## 1. Run Simple Relay
+
+### Option A: One-Line Install (Linux & macOS — Recommended)
+
+Install the precompiled standalone static binary directly without Docker or Go toolchains:
+
+```bash
+# Download and install latest release to /usr/local/bin (or ~/.local/bin)
+curl -fsSL https://raw.githubusercontent.com/simple-relay/simple-relay/main/install.sh | sh
+
+# Start relay (development mode, zero config)
+relay
+
+# Or run with an admin password (production mode)
+RELAY_ADMIN_PASSWORD="your-secure-password" relay
+```
+
+> [!NOTE] Windows Support
+> `install.sh` supports Linux and macOS (`amd64`, `arm64`). For Windows, download precompiled binaries directly from **[GitHub Releases](https://github.com/simple-relay/simple-relay/releases)** or run with Docker.
+
+### Option B: Using Docker
+
+Run the container in daemon mode, mounting a local folder for persistence:
+
+```bash
+docker run -d \
+  --name simple-relay \
+  -p 8080:8080 \
+  -v relay-data:/data \
+  -e RELAY_DB_PATH=/data/relay.db \
+  -e RELAY_ADMIN_PASSWORD=admin \
+  ghcr.io/simple-relay/simple-relay:latest
+```
+
+### Option C: Precompiled Binaries (Manual / Windows)
+
+Download the archive for your operating system and architecture from **[GitHub Releases](https://github.com/simple-relay/simple-relay/releases)**:
+- **Linux:** `simple-relay_<version>_linux_<amd64|arm64>.tar.gz`
+- **macOS:** `simple-relay_<version>_darwin_<amd64|arm64>.tar.gz`
+- **Windows:** `simple-relay_<version>_windows_amd64.zip`
+
+Extract the binary and execute:
+
+```bash
+# Linux / macOS
+./simple-relay
+
+# Windows (Command Prompt / PowerShell)
+.\simple-relay.exe
+```
+
+### Option D: Build from Source (Git Clone or Go Install)
+
+Clone the repository and compile the static binary with pure Go (no CGO required):
+
+```bash
+git clone https://github.com/simple-relay/simple-relay.git
+cd simple-relay
+
+# Pure Go static build (no CGO required)
+CGO_ENABLED=0 go build -o relay ./cmd/relay
+
+# Run the compiled binary
+./relay
+```
+
+Or install via Go toolchain (Go 1.22+):
+
+```bash
+go install github.com/simple-relay/simple-relay/cmd/relay@latest
+```
+
+Verify that the relay is healthy:
+
+```bash
+curl http://localhost:8080/healthz
+# {"status":"ok","version":"1.0.0"}
+```
+
+---
+
+## 2. Ingest an Inbound Webhook
+
+Simple Relay provides dedicated route endpoints under `/api/v1/webhook/:route`. Send a test payload:
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/webhook/orders \
+  -H "Content-Type: application/json" \
+  -d '{"order_id": "ord_99812", "amount": 4200, "currency": "usd"}'
+```
+
+Response:
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"status":"queued","request_id":"01j9x0m1p00000000000000000"}
+```
+
+The raw bytes are durably persisted to storage before the `200 OK` response was sent. The delivery dispatcher is now forwarding this payload to your destination endpoint in the background.
+
+---
+
+## 3. Test Outbound Proxy with Smart Retries
+
+Route an outgoing request to an upstream service through Simple Relay's synchronous retry proxy (`mode: "sync"`).
+
+Register an outbound route pointing to httpbin:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/routes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "httpbin-test",
+    "type": "outbound",
+    "mode": "sync",
+    "path": "/api/v1/relay/httpbin",
+    "destination_url": "https://httpbin.org/status/200",
+    "max_attempts": 3,
+    "timeout_ms": 5000
+  }'
+```
+
+Now dispatch an outgoing call through the proxy:
+
+```bash
+curl -i "http://localhost:8080/api/v1/relay/httpbin"
+```
+
+If the upstream server returns a `502 Bad Gateway` or `429 Too Many Requests`, Simple Relay automatically catches the failure and retries using exponential backoff with full jitter (`100ms` base, `10s` max default) until the request succeeds or max attempts are reached. Non-idempotent methods (`POST`, `PATCH`) are safeguarded against unintended duplicate side effects unless an `Idempotency-Key` is supplied or `retry_non_idempotent: true` is enabled on the route.
+
+---
+
+## 4. Open the Embedded Dashboard
+
+Open your browser and navigate to:
+
+```text
+http://localhost:8080/ui/
+```
+
+You can view:
+- Inbound and outbound delivery logs.
+- Attempt durations and latency graphs.
+- Raw request and response payloads.
+- Dead Letter Queue (DLQ) entries with one-click re-delivery.
+
+---
+
+## What's Next?
+
+- Configure **[HMAC Signatures](/docs/stripe-github)** for Stripe or GitHub.
+- Set up **[Local Webhook Inspection with Cloudflare Tunnel](/docs/local-webhook-inspection)** for crash-resilient restarts and one-click replay during local development.
+- Understand the **[Retries and Dead Letter Queue](/docs/retries-and-dlq)** mechanism.
+- Inspect daemon health, queue backlog, and DLQ from your terminal using the **[CLI Reference](/docs/cli-reference)**.
+- Check out the complete **[REST API Reference](/docs/api-reference)**.
+
+----------------------------------------
+
+
+================================================================================
+# SECTION: CORE CONCEPTS
+================================================================================
+
+## Inbound Webhooks
+Source: https://simplerelay.dev/docs/inbound-webhooks
+
+Inbound webhooks are asynchronous push notifications from external third-party services (e.g., Stripe, Shopify, GitHub, Twilio). 
+
+Because external services will often drop notifications or apply severe backoff penalties if your application is restarting, deploying, or undergoing heavy traffic spikes, handling webhooks directly inside application handlers creates significant risk of lost revenue and data inconsistencies.
+
+## The Inbound Webhook Pipeline
+
+Simple Relay operates as an autonomous edge buffer:
+
+```mermaid
+flowchart TD
+    Sender["External Sender<br/>(Stripe, GitHub, etc.)"] -->|"HTTP POST (raw bytes)"| Ingest["Simple Relay Inbound"]
+    
+    subgraph Pipeline["Simple Relay Edge Engine"]
+        Ingest --> Verify["1. Verify HMAC Signature"]
+        Verify --> Commit["2. Commit Raw Bytes to Disk"]
+        Commit --> Ack["3. Return HTTP 200 OK"]
+        Commit --> Dispatcher["4. Background Worker Pool"]
+    end
+    
+    Dispatcher -->|"Forward Payload"| Internal["Internal Application Destination"]
+    Dispatcher -.->|"On Retry Exhaustion"| DLQ["Dead Letter Queue (DLQ)"]
+```
+
+---
+
+## 1. The Durability Golden Rule: Persist Before ACK
+
+> **Rule:** Never return HTTP `200 OK` or `202 Accepted` to the sender until the raw, unmodified byte payload is durably committed to storage.
+
+When a webhook arrives at `/api/v1/webhook/:route_name`:
+1. The raw payload stream is read into memory buffer.
+2. If cryptographic verification is enabled, HMAC signature headers are validated against the raw byte buffer.
+3. The raw byte sequence and headers are committed to disk.
+4. Only upon successful flush does Simple Relay return `200 OK` with the tracking `request_id`.
+
+If your internal application crashes, restarts, or runs out of database connections 5 seconds later, the webhook is completely safe on disk and will be delivered as soon as your service recovers.
+
+---
+
+## 2. Zero Byte Mutation & Signature Integrity
+
+Many intermediate proxies or API gateways parse incoming JSON payloads into internal object representations and re-serialize them upon forwarding. 
+
+Re-serialization alters whitespace, field order, and unicode escapes, which permanently breaks cryptographic HMAC signatures when downstream applications attempt secondary signature checks.
+
+Simple Relay treats all inbound request bodies as immutable raw byte sequences (`[]byte`). Headers and body bytes forwarded downstream are bit-for-bit identical to what the external sender transmitted.
+
+---
+
+## 3. Configuring Inbound Routes
+
+Inbound routes are registered dynamically via the REST API (`POST /api/v1/routes`) or configured in the embedded Web UI:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/routes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "stripe-inbound",
+    "type": "inbound",
+    "mode": "async",
+    "path": "/api/v1/webhook/stripe",
+    "destination_url": "http://localhost:3000/api/webhooks/stripe",
+    "signature_provider": "stripe",
+    "signature_secret": "whsec_...",
+    "max_attempts": 10,
+    "timeout_ms": 10000,
+    "retry_backoff_strategy": "exp",
+    "base_backoff_ms": 5000,
+    "max_backoff_ms": 900000
+  }'
+```
+
+When webhooks arrive, Simple Relay verifies the `Stripe-Signature` header, writes to disk, answers Stripe with `200 OK`, and forwards the verified payload to `http://localhost:3000/api/webhooks/stripe`.
+
+---
+
+## 4. Idempotency & Downstream Headers
+
+Simple Relay guarantees **at-least-once delivery**. Transient network dropouts or backend timeouts can cause a delivery to be retried, which means your downstream application must handle duplicate requests safely.
+
+To make idempotency effortless, Simple Relay automatically injects tracking headers into every request forwarded to your backend:
+
+| Header | Example Value | Purpose |
+| :--- | :--- | :--- |
+| `X-Relay-Request-ID` | `01j9x0m1p00000000000000000` | Monotonic lowercase ULID uniquely identifying the persisted payload. Use this as your primary deduplication key. |
+| `X-Relay-Attempt` | `1`, `2`, `3` | Incremental attempt counter. Indicates whether this is the first delivery or a subsequent retry. |
+| `Idempotency-Key` | `idem_987123` | Preserved and forwarded downstream if sent by the caller or external webhook provider. |
+
+### Backend Deduplication Pattern
+
+In your downstream handler, simply store `X-Relay-Request-ID` in your database or cache (e.g. Redis `SET NX` or SQL unique constraint):
+
+```javascript
+// Express.js / Node.js
+app.post('/api/webhooks/stripe', async (req, res) => {
+  const relayId = req.headers['x-relay-request-id'];
+  const attempt = req.headers['x-relay-attempt'];
+
+  // Check if this delivery was already processed
+  const alreadyProcessed = await db.processedWebhooks.findUnique({ where: { id: relayId } });
+  if (alreadyProcessed) {
+    return res.status(200).json({ status: 'already_processed' });
+  }
+
+  await processPayment(req.body);
+  await db.processedWebhooks.create({ data: { id: relayId } });
+
+  res.status(200).json({ status: 'success' });
+});
+```
+
+---
+
+## Next Steps
+
+- Follow the **[Stripe & GitHub Recipe](/docs/stripe-github)** for copy-paste HMAC examples.
+- Set up **[Local Webhook Inspection with Cloudflare Tunnel](/docs/local-webhook-inspection)** for local payload debugging and one-click replay.
+- Learn about **[Retries and the Dead Letter Queue](/docs/retries-and-dlq)**.
+
+----------------------------------------
+
+## Outbound Proxy
+Source: https://simplerelay.dev/docs/outbound-proxy
+
+Simple Relay provides two operational modes for handling outgoing HTTP requests to external third-party APIs and downstream services:
+
+1. **Synchronous Transparent Proxy (`/api/v1/relay/:route_name`)**
+2. **Asynchronous Background Jobs (`/api/v1/jobs/:route_name`)**
+
+> [!NOTE] Outbound Endpoint Authentication & Credential Stripping
+> Both `/api/v1/relay/:route_name` and `/api/v1/jobs/:route_name` are **protected endpoints**. Callers must authenticate with a valid API key (`X-API-Key: sr_live_...` or `Authorization: Bearer sr_live_...`), unless connecting from a local loopback socket (`127.0.0.1` / `::1`) in Dev Mode (`RELAY_ADMIN_PASSWORD=""`). Simple Relay automatically strips its own authentication credentials (`X-API-Key`, `Authorization: Bearer sr_live_*`, and `relay_session` cookie) before persisting request logs or forwarding headers to your upstream destination, while preserving any upstream `Authorization` header (such as `Authorization: Bearer $OPENAI_API_KEY`).
+
+---
+
+## 1. Synchronous Transparent Proxy
+
+Use the synchronous proxy when your application makes an outbound request to an external service and needs the response immediately to complete the current HTTP lifecycle, but wants resilience against transient network blips and rate limits.
+
+### Request Flow
+
+```mermaid
+flowchart LR
+    App["Your Backend"] -->|"HTTP Request"| Relay["Simple Relay Proxy"]
+    Relay -->|"Call Upstream"| Upstream["Upstream API<br/>(OpenAI, Stripe, etc.)"]
+    Upstream -->|"Response (2xx / non-retryable)"| Relay
+    Relay -->|"Stream Back"| App
+    
+    Relay -.->|"Retries on 429 / 5xx"| Upstream
+    App -.->|"Context Cancel on Disconnect"| Relay
+```
+
+### Usage Example
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/relay/stripe-charges" \
+  -H "X-API-Key: sr_live_..." \
+  -H "Idempotency-Key: order_12345" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 2000, "customer": "cus_123"}'
+```
+
+### Automatic 429 & 5xx Retries with `Retry-After` & Idempotency Guardrails
+
+When upstream responds with:
+- `429 Too Many Requests`
+- `500 Internal Server Error`, `502 Bad Gateway`, `503 Service Unavailable`, `504 Gateway Timeout`
+
+Simple Relay intercepts the status code, inspects `Retry-After` headers (both integer seconds and RFC1123 HTTP dates), applies uniform full jitter (`100ms` base, `10s` max by default, or route `base_backoff_ms` / `max_backoff_ms`), and retries the upstream request. Once upstream responds with `2xx` or non-retryable `4xx`, Simple Relay streams the response directly back to the caller.
+
+> [!IMPORTANT] Safe-by-Default Non-Idempotent Sync Retries
+> To prevent duplicate charges or unintended side effects when an upstream times out after committing a transaction:
+> - **Idempotent HTTP methods** (`GET`, `HEAD`, `PUT`, `DELETE`, `OPTIONS`, `TRACE`) are always retried up to `max_attempts`.
+> - **Non-idempotent HTTP methods** (`POST`, `PATCH`) are only retried on `/api/v1/relay/:route_name` if the caller supplies an `Idempotency-Key` (or `X-Relay-Idempotency-Key`) header, **OR** the route explicitly enables `"retry_non_idempotent": true`. Otherwise, Simple Relay executes a single attempt (`maxAttempts = 1`) and returns the upstream result immediately.
+
+### Client Disconnect Cancellation (Zero Wasted Compute)
+
+> **Critical Safety Mechanism:** If your calling client closes its TCP connection, times out, or navigates away before Simple Relay finishes proxying, Simple Relay immediately triggers a Go context cancellation (`r.Context()`).
+
+In-flight upstream requests are aborted instantaneously, and any scheduled retries are canceled. This prevents:
+- Burning external API quotas when users have already left the page.
+- Accumulating orphan worker goroutines during traffic spikes.
+
+---
+
+## 2. Asynchronous Background Jobs
+
+Use the asynchronous mode for fire-and-forget requests (sending emails, audit logs, analytics events, telemetry).
+
+### Request Flow
+
+```mermaid
+flowchart TD
+    App["Your Backend"] -->|"POST /api/v1/jobs/:route_name"| Ingest["Simple Relay Ingest"]
+    Ingest -->|"Commit to Storage"| Storage[("Durable Storage")]
+    Storage -->|"Immediate ACK (< 2ms)"| ReturnAck["Return 202 Accepted"]
+    ReturnAck --> App
+    
+    Storage --> Worker["Background Worker"]
+    Worker -->|"Retries with Jitter"| Upstream["Upstream Service"]
+```
+
+### Usage Example
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/jobs/resend-emails" \
+  -H "X-API-Key: sr_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{"from": "noreply@app.com", "to": "user@gmail.com", "subject": "Welcome!"}'
+```
+
+Response:
+```http
+HTTP/1.1 202 Accepted
+Content-Type: application/json
+
+{"job_id":"01j9x0z87q00000000000000000","status":"queued"}
+```
+
+The request returns in under 2 milliseconds. The payload is guaranteed to be delivered at-least-once according to your configured retry and backoff policy.
+
+---
+
+## Next Steps
+
+- Explore how **[Retries and the Dead Letter Queue](/docs/retries-and-dlq)** handle persistent upstream outages.
+- Read the **[Rate Limits and 429 Recipe](/docs/rate-limits-429)**.
+
+----------------------------------------
+
+## Retries & Dead Letter Queue
+Source: https://simplerelay.dev/docs/retries-and-dlq
+
+When external networks or downstream microservices fail, naive retry strategies (such as immediate looping or fixed intervals) frequently trigger **Thundering Herd** disasters that overwhelm recovering services.
+
+Simple Relay incorporates battle-tested exponential backoff, randomized full jitter, and a built-in Dead Letter Queue (DLQ).
+
+---
+
+## 1. Exponential Backoff with Full Jitter
+
+Simple Relay implements the standard Full Jitter algorithm recommended by distributed systems engineering:
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│ Full Jitter Exponential Backoff                                  │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   cap   = min( max_interval, initial_interval * 2^attempt )     │
+│   sleep = random_between( 0, cap )                               │
+│                                                                  │
+│   Example (initial = 1s, max = 60s):                             │
+│   • Attempt 1: random(0s .. 2s)   [avg: ~1.0s]                  │
+│   • Attempt 2: random(0s .. 4s)   [avg: ~2.0s]                  │
+│   • Attempt 3: random(0s .. 8s)   [avg: ~4.0s]                  │
+│   • Attempt 4: random(0s .. 16s)  [avg: ~8.0s]                  │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Why Full Jitter?
+
+Without jitter, if an upstream API experiences a 10-second blip and 500 requests fail simultaneously, all 500 clients retry at exactly the same timestamps (2s, 4s, 8s), creating periodic traffic spikes that knock the recovering server offline again.
+
+Full jitter scatters retry execution evenly across time, converting synchronized shockwaves into a smooth, manageable background trickle.
+
+---
+
+## 2. Retry Exhaustion and the Dead Letter Queue (DLQ)
+
+Simple Relay uses separate default backoff windows for synchronous proxying versus asynchronous background delivery, and supports optional per-route overrides:
+- **Synchronous Proxy (`mode: "sync"`):** `100ms` base backoff, `10s` max backoff (`30s` max `Retry-After`) so open client HTTP connections remain responsive.
+- **Asynchronous Delivery (`mode: "async"`):** `5s` base backoff, `15m` (`900000ms`) max backoff (`15m` max `Retry-After`) so transient downstream container restarts or database failovers do not exhaust all attempts within seconds.
+
+Every route enforces bounded execution:
+- `max_attempts` (default: `5`, configurable up to any positive integer)
+- `base_backoff_ms` (default: `0` = use engine profile default: `100ms` sync / `5000ms` async)
+- `max_backoff_ms` (default: `0` = use engine profile default: `10000ms` sync / `900000ms` async)
+- `retry_non_idempotent` (default: `false`; on sync routes, controls whether `POST`/`PATCH` calls without an `Idempotency-Key` header are retried)
+- `timeout_ms` (per-attempt HTTP timeout, default: `10000` ms)
+
+When all retry attempts are exhausted without receiving a successful response code (`2xx`), Simple Relay marks the delivery as `dlq` and places it in the **Dead Letter Queue (DLQ)**.
+
+---
+
+## 3. Replaying Deliveries from the DLQ
+
+Simple Relay never discards failed payloads. You can inspect failures and trigger replays via the Web UI or REST API.
+
+### Replay via Web UI
+
+Navigate to `http://localhost:8080/ui/`, filter by status `FAILED` or navigate to the DLQ tab, select any delivery, inspect the error message and status code history, and click **Replay Delivery**.
+
+### Replay a Single Delivery via REST API
+
+```bash
+curl -X POST http://localhost:8080/api/v1/requests/01j9x0m1p00000000000000000/replay
+```
+
+Response:
+```json
+{
+  "status": "requeued",
+  "request_id": "01j9x0m1p00000000000000000",
+  "attempt_count": 0
+}
+```
+
+### Bulk Replay All Failed Deliveries
+
+Once downstream services have recovered from an outage:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/dlq/replay \
+  -H "Content-Type: application/json" \
+  -d '{"route": "stripe-inbound", "limit": 100}'
+```
+
+### Replay via `relay` CLI
+
+For terminal workflows, scripts, or automated remediation:
+
+```bash
+# Replay a specific dead-lettered message
+relay dlq replay 01j9x0m1p00000000000000000
+
+# Bulk replay all failed DLQ messages without confirmation prompt
+relay dlq replay-all -y
+```
+
+---
+
+## Next Steps
+
+- Check out **[Handling 429 Rate Limits](/docs/rate-limits-429)**.
+- Learn how to inspect and replay any request (including 200 OK) during local development in **[Local Webhook Inspection](/docs/local-webhook-inspection)**.
+- Manage and triage DLQ via the terminal with the **[CLI Reference](/docs/cli-reference)**.
+- Review **[REST API Specifications](/docs/api-reference)** for all DLQ endpoints.
+
+----------------------------------------
+
+
+================================================================================
+# SECTION: RECIPES & GUIDES
+================================================================================
+
+## Recipe: Stripe & GitHub Webhook HMAC
+Source: https://simplerelay.dev/docs/stripe-github
+
+Simple Relay features native signature adapters for major webhook providers. It verifies incoming cryptographic signatures before saving the payload or sending acknowledgments, shielding your application from invalid or malicious requests.
+
+---
+
+## 1. Stripe Webhook Verification
+
+Stripe secures webhooks using HMAC-SHA256 signatures passed in the `Stripe-Signature` header, which includes a UNIX timestamp `t` and signature `v1`.
+
+### Route Configuration
+
+Register the Stripe inbound route via `POST /api/v1/routes`:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/routes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "stripe-payments",
+    "type": "inbound",
+    "mode": "async",
+    "path": "/api/v1/webhook/stripe",
+    "destination_url": "http://app-backend:8000/webhooks/stripe",
+    "signature_provider": "stripe",
+    "signature_secret": "whsec_your_stripe_webhook_secret"
+  }'
+```
+
+### How Simple Relay Verifies Stripe
+1. Extracts `t` (timestamp) and `v1` (signature) from `Stripe-Signature`.
+2. Validates that `|current_time - t| <= tolerance_seconds` (default 300s) to defeat replay attacks.
+3. Computes `HMAC-SHA256(secret, t + "." + raw_body)`.
+4. Executes constant-time equality check (`subtle.ConstantTimeCompare`) against `v1`.
+5. If invalid, rejects with `401 Unauthorized` without touching your database or internal application.
+
+---
+
+## 2. GitHub Webhook Verification
+
+GitHub transmits webhook signatures via the `X-Hub-Signature-256` header formatted as `sha256=<hex_digest>`.
+
+### Route Configuration
+
+Register the GitHub inbound route via `POST /api/v1/routes`:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/routes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "github-events",
+    "type": "inbound",
+    "mode": "async",
+    "path": "/api/v1/webhook/github",
+    "destination_url": "http://app-backend:8000/webhooks/github",
+    "signature_provider": "github",
+    "signature_secret": "your_github_webhook_secret"
+  }'
+```
+
+### Verification Logic
+Simple Relay calculates `HMAC-SHA256(secret, raw_body)` and matches it using constant-time comparison against the hex digest in `X-Hub-Signature-256`.
+
+---
+
+## 3. Generic HMAC-SHA256 Webhooks
+
+For custom webhooks (e.g., Shopify, internal microservices), register a route using `hmac_sha256`:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/routes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "custom-events",
+    "type": "inbound",
+    "mode": "async",
+    "path": "/api/v1/webhook/custom",
+    "destination_url": "http://app-backend:8000/webhooks/custom",
+    "signature_provider": "hmac_sha256",
+    "signature_secret": "your_custom_secret"
+  }'
+```
+
+---
+
+## Testing Verification with `curl`
+
+Generate a test HMAC-SHA256 signature and test your endpoint locally:
+
+```bash
+SECRET="whsec_test_secret_123"
+BODY='{"event":"payment_intent.succeeded"}'
+SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.* //')
+
+curl -i -X POST http://localhost:8080/api/v1/webhook/custom \
+  -H "X-Signature-SHA256: $SIGNATURE" \
+  -H "Content-Type: application/json" \
+  -d "$BODY"
+```
+
+----------------------------------------
+
+## Recipe: Handling 429 & Rate Limits
+Source: https://simplerelay.dev/docs/rate-limits-429
+
+Modern SaaS APIs (e.g., OpenAI, Anthropic, Shopify, Twitter, Slack) strictly enforce rate limits. When your application exceeds quota, upstream returns:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 12
+```
+
+Failing to respect rate limits or immediately retrying in a tight loop can lead to temporary account suspension or permanent IP throttling.
+
+---
+
+## How Simple Relay Handles 429 Responses
+
+When routing outbound traffic through `/api/v1/relay/:route_name` (synchronous proxy) or `/api/v1/jobs/:route_name` (asynchronous background delivery):
+
+1. **Automatic Status Detection:** Responses with status code `429` are flagged as transient retryable conditions.
+2. **`Retry-After` Header Parsing:**
+   - **Integer Seconds:** e.g., `Retry-After: 30` -> Simple Relay sleeps for 30 seconds (plus subtle uniform random jitter to avoid synchronicity). Capped at `30s` by default for sync proxy and `15m` for async delivery (or extended by route `max_backoff_ms`).
+   - **HTTP-Date:** e.g., `Retry-After: Wed, 21 Oct 2026 07:28:00 GMT` -> Simple Relay calculates the exact duration delta between current clock time and target timestamp.
+3. **Fallback to Exponential Backoff:** If the upstream server returns `429` without a `Retry-After` header, Simple Relay automatically falls back to standard exponential backoff with full jitter (`100ms`–`10s` default for sync, `5s`–`15m` default for async, or per-route `base_backoff_ms` / `max_backoff_ms`).
+4. **Idempotency Guardrail on Sync Retries:** For non-idempotent HTTP methods (`POST`, `PATCH`), retries on `/api/v1/relay/:route_name` require an `Idempotency-Key` / `X-Relay-Idempotency-Key` header or `"retry_non_idempotent": true` on the route.
+5. **Context Respect:** If the synchronous caller terminates connection or hits its total timeout, Simple Relay cancels the upstream wait immediately.
+
+---
+
+## Route Configuration Example
+
+When registering a route with sync retry proxying via `POST /api/v1/routes`:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/routes \
+  -H "X-API-Key: sr_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "openai-proxy",
+    "type": "outbound",
+    "mode": "sync",
+    "path": "/api/v1/relay/openai",
+    "destination_url": "https://api.openai.com/v1/chat/completions",
+    "max_attempts": 8,
+    "timeout_ms": 60000,
+    "retry_backoff_strategy": "exp",
+    "base_backoff_ms": 200,
+    "max_backoff_ms": 15000,
+    "retry_non_idempotent": true
+  }'
+```
+
+---
+
+## Practical Example: Calling OpenAI Through Simple Relay
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/relay/openai" \
+  -H "X-API-Key: sr_live_..." \
+  -H "Idempotency-Key: chat_req_12345" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Explain HTTP idempotency in one sentence."}]
+  }'
+```
+
+If OpenAI returns a `429` due to organization TPM/RPM limits, Simple Relay holds the connection, sleeps for the duration requested by OpenAI's `Retry-After` header, and retries seamlessly. Your backend application receives a clean `200 OK` as if the rate limit never happened.
+
+----------------------------------------
+
+## Recipe: Production Deployment
+Source: https://simplerelay.dev/docs/production-deploy
+
+Because Simple Relay is packaged as a single self-contained binary, production deployment is straightforward and requires no complex orchestrators.
+
+---
+
+## 1. Docker Compose Setup
+
+A standard production `docker-compose.yml` file:
+
+```yaml
+version: "3.8"
+
+services:
+  relay:
+    image: ghcr.io/simple-relay/simple-relay:latest
+    container_name: simple-relay
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - RELAY_HOST=0.0.0.0
+      - RELAY_PORT=8080
+      - RELAY_DB_PATH=/data/relay.db
+      - RELAY_SQLITE_SYNC=NORMAL
+      - RELAY_WORKER_CONCURRENCY=20
+      - RELAY_ADMIN_PASSWORD=change-me-in-production
+      - RELAY_TRUST_PROXY=true
+      - RELAY_LOG_LEVEL=info
+    volumes:
+      - ./data:/data
+    healthcheck:
+      # Use relay for zero-dependency health checks (no curl required)
+      test: ["CMD", "/usr/local/bin/relay", "health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+```
+
+> [!IMPORTANT] Authentication, Reverse Proxy Headers & Power-Loss Durability
+> - Always set `RELAY_ADMIN_PASSWORD` in production (or authenticate with an `X-API-Key`). When `RELAY_ADMIN_PASSWORD` is unset, unauthenticated access is restricted strictly to loopback (`127.0.0.1` / `::1`)—meaning even local browser traffic crossing a Docker bridge network will require an API key or admin password.
+> - Enable `RELAY_TRUST_PROXY=true` (or `--trust-proxy`) **only** when Simple Relay runs behind a trusted reverse proxy (Nginx, Caddy, Traefik, Cloudflare) that overwrites `X-Forwarded-For` / `X-Real-IP`.
+> - On single-node bare-metal servers without UPS or continuous Litestream replication, set `RELAY_SQLITE_SYNC=FULL` (or `--sqlite-sync FULL`) to enforce strict `fsync` on every SQLite WAL transaction commit against sudden host power loss.
+
+> [!TIP] Zero-Dependency Probes
+> In minimal container environments where `curl` or `wget` are absent, use `relay health` or `relay queue` to perform health checks and queue depth monitoring. See the **[CLI Reference](/docs/cli-reference)** for Docker and Kubernetes probe configurations.
+
+Start the service:
+
+```bash
+docker compose up -d
+```
+
+---
+
+## 2. Linux Systemd Service
+
+For bare-metal servers or cloud virtual machines (EC2, Hetzner, DigitalOcean):
+
+1. Place the compiled binary in `/usr/local/bin/relay`.
+2. Create dedicated data directory:
+   ```bash
+   sudo mkdir -p /var/lib/simple-relay
+   sudo useradd -r -s /bin/false simplerelay
+   sudo chown -R simplerelay:simplerelay /var/lib/simple-relay
+   ```
+3. Create systemd unit at `/etc/systemd/system/simple-relay.service`:
+
+```ini
+[Unit]
+Description=Simple Relay - Reliable HTTP Delivery Layer
+After=network.target
+
+[Service]
+Type=simple
+User=simplerelay
+Group=simplerelay
+WorkingDirectory=/var/lib/simple-relay
+ExecStart=/usr/local/bin/relay --listen :8080 --db-path /var/lib/simple-relay/relay.db
+Restart=always
+RestartSec=5s
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now simple-relay
+sudo systemctl status simple-relay
+```
+
+---
+
+## 3. Continuous Streaming Backups with Litestream
+
+For disaster recovery, pair Simple Relay with [Litestream](https://litestream.io/) to continuously stream point-in-time snapshots to AWS S3, Cloudflare R2, or any S3-compatible storage:
+
+```yaml
+# /etc/litestream.yml
+dbs:
+  - path: /var/lib/simple-relay/relay.db
+    replicas:
+      - url: s3://my-backup-bucket/simple-relay
+        sync-interval: 1s
+```
+
+Run Litestream alongside Simple Relay:
+
+```bash
+litestream replicate -exec "/usr/local/bin/relay --listen :8080 --db-path /var/lib/simple-relay/relay.db"
+```
+
+If the host suffers catastrophic hardware failure, your entire database state can be restored instantly from S3 with zero data loss.
+
+----------------------------------------
+
+
+================================================================================
+# SECTION: REFERENCE
+================================================================================
+
+## Configuration Reference
+Source: https://simplerelay.dev/docs/configuration
+
+Simple Relay adheres to the 12-factor application methodology. Configuration options are supplied via command-line flags and environment variables. Command-line flags take precedence over environment variables, which override default values.
+
+---
+
+## Server Daemon Settings Matrix
+
+When running Simple Relay as a background daemon (`relay` or `relay serve`), the following flags and environment variables are supported. Both standard POSIX flags (`--host`) and single-dash flags (`-host`) are accepted:
+
+| CLI Flag | Environment Variable | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--host`, `-host` | `RELAY_HOST` | `0.0.0.0` | Server host address. |
+| `--port`, `-port` | `RELAY_PORT` (or `PORT`) | `8080` | Server HTTP port. |
+| `--db`, `-db` | `RELAY_DB_PATH` | `relay.db` | Path to persistent SQLite database file. |
+| `--log-level`, `-log-level` | `RELAY_LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error`. |
+| `--workers`, `-workers` | `RELAY_WORKER_CONCURRENCY` | `20` | Outbound worker pool concurrency. |
+| `--dispatcher-buffer`, `-dispatcher-buffer` | `RELAY_DISPATCHER_BUFFER` | `0` (dynamic: `2 * workers`) | Dispatcher jobs channel buffer capacity. |
+| `--dispatcher-poll-ms`, `-dispatcher-poll-ms` | `RELAY_DISPATCHER_POLL_MS` | `500` | Dispatcher polling interval in milliseconds. |
+| `--cleaner-interval`, `-cleaner-interval` | `RELAY_CLEANER_INTERVAL` | `1h` | Storage retention cleaner execution interval. |
+| `--drain-timeout`, `-drain-timeout` | `RELAY_DRAIN_TIMEOUT` | `30s` | Graceful shutdown drain timeout. |
+| `--trust-proxy`, `-trust-proxy` | `RELAY_TRUST_PROXY` | `false` | Trust `X-Forwarded-For` and `X-Real-IP` headers from reverse proxy for client IP extraction and login rate limiting. |
+| `--sqlite-sync`, `-sqlite-sync` | `RELAY_SQLITE_SYNC` | `NORMAL` | SQLite WAL `PRAGMA synchronous` durability mode (`NORMAL` or `FULL`). Set to `FULL` on single-node bare-metal hosts without UPS or Litestream replication. |
+| `--max-body-size-mb`, `-max-body-size-mb` | `RELAY_MAX_BODY_SIZE_MB` | `10` | Maximum allowable HTTP request body size in megabytes. |
+| — | `RELAY_RETENTION_SUCCESS_DAYS` | `7` | Retention period in days for successfully delivered records. |
+| — | `RELAY_RETENTION_FAILED_DAYS` | `30` | Retention period in days for failed/dead-lettered records. |
+| — | `RELAY_ADMIN_PASSWORD` | `""` | Admin authentication password. When empty (`""`), unauthenticated access is restricted to loopback (`127.0.0.1` / `::1`); remote callers must provide `X-API-Key`. |
+| — | `RELAY_BATCH_SIZE` | `50` | Maximum requests grouped per SQLite WAL write transaction. |
+| — | `RELAY_BATCH_TIMEOUT_MS` | `10` | Maximum batch linger duration before flushing to SQLite. |
+
+---
+
+## CLI Subcommands Settings Matrix
+
+When executing operator subcommands (`relay health`, `relay queue`, `relay dlq`), the following global persistent flags and environment variables configure remote daemon connectivity and output formatting:
+
+| CLI Flag | Environment Variable | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `-s, --server` | `RELAY_SERVER_URL` | `http://127.0.0.1:8080` | Target Simple Relay daemon HTTP/HTTPS address. |
+| `-k, --api-key` | `RELAY_API_KEY` | `""` | Admin API key for protected management endpoints. |
+| `-o, --output` | `RELAY_OUTPUT` | `table` | Output format: `table` (human-readable) or `json` (scripting). |
+| `--timeout` | `RELAY_TIMEOUT` | `10s` | HTTP client request timeout duration. |
+
+> [!TIP] Detailed Subcommand Documentation
+> For subcommand recipes, interactive confirmation overrides, and orchestration probe configurations, see the **[CLI Reference](/docs/cli-reference)**.
+
+---
+
+## Dynamic Route Configuration
+
+Routes in Simple Relay are managed dynamically at runtime via the REST API (`/api/v1/routes`) or the embedded Web UI, avoiding static configuration files and service restarts. Routes are persisted in SQLite and hot-reloaded into memory.
+
+### Route Creation Example (`POST /api/v1/routes`)
+
+```bash
+curl -X POST http://localhost:8080/api/v1/routes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "stripe-inbound",
+    "type": "inbound",
+    "mode": "async",
+    "path": "/api/v1/webhook/stripe",
+    "destination_url": "http://internal-backend:8000/webhooks/stripe",
+    "signature_provider": "stripe",
+    "signature_secret": "whsec_...",
+    "max_attempts": 10,
+    "timeout_ms": 15000,
+    "retry_backoff_strategy": "exp",
+    "base_backoff_ms": 5000,
+    "max_backoff_ms": 900000,
+    "retry_non_idempotent": false
+  }'
+```
+
+----------------------------------------
+
+
+================================================================================
+# SECTION: RECIPES & GUIDES
+================================================================================
+
+## Recipe: Local Webhook Inspection with Cloudflare Tunnel
+Source: https://simplerelay.dev/docs/local-webhook-inspection
+
+When developing webhook integrations locally, engineers are increasingly migrating from ngrok to **Cloudflare Tunnel (`cloudflared`)**. Cloudflare Tunnel offers a generous, production-grade free tier with stable custom domains, zero bandwidth throttling, and no disruptive interstitial warning pages.
+
+However, once developers make the switch, they immediately encounter a frustrating limitation: **`cloudflared` does not have an interactive request inspector or replay UI** (unlike ngrok's well-known `http://localhost:4040`).
+
+By positioning **Simple Relay** between Cloudflare Tunnel and your local development server (`cloudflared` → Simple Relay → Local App), you unlock a local traffic inspector, crash-resilient webhook ingestion, and one-click request replay—bringing back the best parts of the ngrok developer experience while keeping the speed and freedom of Cloudflare Tunnels.
+
+---
+
+## 1. The Dilemma: Why Developers Miss ngrok's `localhost:4040`
+
+Cloudflare Tunnel is engineered purely as a fast, secure network tunnel between the edge and your machine. It pipes raw TCP/HTTP streams directly to your local application port and intentionally maintains zero local state or request logs.
+
+During active webhook development, this creates three major developer pain points:
+
+1. **No Visual Traffic Inspector:** You cannot inspect incoming HTTP headers, cryptographic HMAC signatures (`Stripe-Signature`, `X-Hub-Signature-256`), or payload JSON without polluting application code with debug middleware or temporary `console.log` statements.
+2. **No One-Click Replay:** When testing a bug fix or edge case in your local webhook handler, you are forced to re-trigger test events manually inside external vendor dashboards (such as re-running a dummy checkout session in Stripe or pushing commits to GitHub).
+3. **Dropped Webhooks During Server Restarts:** When your local server hot-reloads (e.g., via `nodemon`, `cargo watch`, or `go run`), any incoming webhook delivered by the tunnel is immediately rejected with `connection refused`. The external vendor flags your endpoint as failing and applies exponential backoff penalties.
+
+### Feature Comparison Matrix
+
+| Capability | Cloudflare Tunnel Alone | ngrok (Free Tier) | Cloudflare Tunnel + Simple Relay |
+| :--- | :---: | :---: | :---: |
+| **Stable Custom URLs** | Free | Paid ($8+/mo) | **Free** (via Cloudflare) |
+| **Zero Interstitial Warning Pages** | Yes | No (Free tier warning) | **Yes** |
+| **Visual Webhook Inspector UI** | No | Yes (`localhost:4040`) | **Yes (`localhost:8080/ui`)** |
+| **One-Click Request Replay** | No | Yes | **Yes (UI & CLI)** |
+| **Replay Any Historical Request (including 200 OK)** | No | No (DLQ/failures only) | **Yes (success, failed, dlq)** |
+| **Zero-Loss During Server Restarts** | No (Connection refused) | No (Connection refused) | **Yes (SQLite WAL buffering)** |
+| **Preserves Cryptographic Signatures** | Yes | Yes | **Yes (Zero-byte mutation)** |
+| **Cost** | 100% Free | Freemium / Paid | **100% Free & Open Source** |
+
+---
+
+## 2. Traffic Architecture
+
+```mermaid
+flowchart LR
+    subgraph External["External Services"]
+        Sender["Webhook Providers<br/><b>(Stripe, GitHub, Shopify)</b>"]
+    end
+
+    subgraph Host["Local Development Machine"]
+        Tunnel["Cloudflare Tunnel<br/><code>cloudflared</code><br/><i>(Free Public Ingress)</i>"]
+        Relay["Simple Relay (:8080)<br/><b>Local Traffic Inspector</b><br/><i>(SQLite WAL & Replay Engine)</i>"]
+        App["Local Backend (:3000)<br/><i>(Express, Next.js, FastAPI, Go)</i>"]
+        UI["Embedded Web UI (:8080/ui)<br/><i>(Live Inspector & 1-Click Replay)</i>"]
+    end
+
+    Sender -->|"Public HTTPS"| Tunnel
+    Tunnel -->|"HTTP Forward"| Relay
+    Relay -->|"Async Delivery & Retries"| App
+    Relay -.->|"Inspect & Replay"| UI
+```
+
+### How the Pipeline Works:
+1. **Public Ingress:** Cloudflare Tunnel forwards public webhook requests to Simple Relay on port `8080`.
+2. **Durable Ingestion:** Simple Relay commits the unmodified payload and headers to local SQLite WAL storage and immediately returns HTTP `200 OK` to Cloudflare Tunnel.
+3. **Background Delivery:** Simple Relay dispatches the payload to your local backend server on port `3000`.
+4. **Inspection & Replay:** You inspect headers and payloads at `http://localhost:8080/ui` and replay requests on demand with one click.
+
+---
+
+## 3. Step-by-Step Setup Guide
+
+### Step 1: Start Simple Relay Locally
+
+Simple Relay ships as a single static binary with no external infrastructure requirements:
+
+```bash
+# Run the binary locally
+relay
+
+# Or run with Docker (GHCR)
+docker run -d --name relay -p 8080:8080 ghcr.io/simple-relay/simple-relay:latest
+```
+
+> [!TIP] Alternative Installation Methods
+> For other installation options including standalone binary releases, `go install`, and Docker Compose setups with persistent storage, see the [Getting Started / Quickstart Guide](/docs/quickstart).
+
+Open `http://localhost:8080/ui` in your browser. The embedded dashboard loads instantly with zero build steps or frontend servers.
+
+### Step 2: Configure a Local Inbound Route
+
+In the Web UI, navigate to the **Routes** tab, click **New Route**, and configure an asynchronous webhook route pointing to your local app:
+
+| Parameter | Recommended Value | Explanation |
+| :--- | :--- | :--- |
+| **Route Name** | `local-webhooks` | Route slug used in the tunnel URL. |
+| **Type** | `inbound` | Ingests webhooks and persists payloads before delivery. |
+| **Delivery Mode** | `async` | Instantly acknowledges receipt, delivers in the background. |
+| **Inbound Path** | `/api/v1/webhook/local-webhooks` | The path exposed to Cloudflare Tunnel. |
+| **Destination URL** | `http://127.0.0.1:3000/api/webhooks` | Your local backend port and endpoint path. |
+| **Max Attempts** | `5` | Buffers and retries deliveries if your local server restarts. |
+
+*(Optional)* You can also provision the route directly via the REST API or CLI:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/routes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "local-webhooks",
+    "type": "inbound",
+    "mode": "async",
+    "path": "/api/v1/webhook/local-webhooks",
+    "destination_url": "http://127.0.0.1:3000/api/webhooks",
+    "max_attempts": 5,
+    "timeout_ms": 5000
+  }'
+```
+
+### Step 3: Start Cloudflare Tunnel
+
+Run `cloudflared` pointing to Simple Relay's port (`8080`):
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:8080
+```
+
+Cloudflare will provide a public URL (e.g., `https://example-tunnel.trycloudflare.com`).
+
+### Step 4: Configure Your Webhook Provider
+
+In your webhook provider's dashboard (e.g., Stripe Dashboard → Developers → Webhooks), register your public endpoint:
+
+```text
+https://example-tunnel.trycloudflare.com/api/v1/webhook/local-webhooks
+```
+
+---
+
+## 4. Webhook Traffic Inspection Workflow
+
+Whenever a webhook triggers, open `http://localhost:8080/ui` and navigate to the **Requests** tab:
+
+1. **Chronological Delivery Audit:** View real-time request entries with method, route name, status (`success`, `pending`, `processing`, `failed`, `dlq`), attempt counts, and timestamp.
+2. **Deep Slide-Over Inspection Drawer:** Click any row or the **Inspect →** button to inspect:
+   - **Cryptographic Headers:** Verify headers such as `Stripe-Signature`, `X-Hub-Signature-256`, or custom authentication tokens.
+   - **Raw Body Payload:** Inspect unmodified JSON or binary payload bytes formatted with syntax highlighting.
+   - **One-Click cURL Export:** Click **Copy as cURL** to copy the exact incoming request—with all original headers and body bytes preserved—for testing in terminal or Postman.
+   - **Attempt Audit Log:** Review downstream response status codes, execution duration in milliseconds, and error messages returned by your local backend.
+
+---
+
+## 5. Replaying Webhooks: The Instant Debugging Loop
+
+Traditional webhook debugging is tedious: every time you fix a bug in your handler, you have to trigger another event in the SaaS provider's dashboard.
+
+Simple Relay allows you to replay **any historical request**, including requests that previously completed with `success` (`200 OK`).
+
+### One-Click Replay in the Web UI
+- **From the Requests Table:** Click the **Replay** button on any table row.
+- **From the Inspection Drawer:** Click the **Replay** button in the header drawer while viewing payload details.
+
+The request immediately transitions back to `pending`, attempts reset to 0, and Simple Relay's dispatcher wakes up instantly to re-fire the webhook to your local app.
+
+### Terminal Replay via CLI
+If you prefer staying in your terminal or want to script replays, use the embedded CLI:
+
+```bash
+# Replay any request by ID
+relay request replay 01j9y9success001
+
+# Replay using JSON output for shell pipelines
+relay request replay 01j9y9success001 -o json
+```
+
+---
+
+## 6. Zero-Loss Server Restarts
+
+When developing locally with hot-reloading tools (`nodemon`, `cargo watch`, `air`, `go run`), your local application restarts every time you save a file.
+
+If a webhook arrives during those few seconds of downtime:
+- **Without Simple Relay:** Cloudflare Tunnel tries to connect to `127.0.0.1:3000`, receives `ECONNREFUSED`, and returns `502 Bad Gateway` to Stripe or GitHub. The provider registers a delivery failure.
+- **With Simple Relay:** Cloudflare Tunnel delivers to Simple Relay on `127.0.0.1:8080`. Simple Relay writes the raw payload to SQLite WAL and returns `200 OK` to the provider. Simple Relay's worker pool attempts delivery, detects that the local app is rebooting, and schedules an automatic backoff retry. As soon as your server is back online, the webhook is delivered without a single dropped packet.
+
+----------------------------------------
+
+
+================================================================================
+# SECTION: REFERENCE
+================================================================================
+
+## REST API Reference
+Source: https://simplerelay.dev/docs/api-reference
+
+Simple Relay exposes a lightweight, high-performance REST API for ingesting webhooks, routing proxies, inspecting deliveries, replaying dead-lettered requests, and managing administrative credentials.
+
+---
+
+## 1. Authentication & Security Model
+
+Simple Relay implements a dual authentication architecture supporting both programmatic service-to-service automation and interactive browser-based Web UI sessions.
+
+### Operational Modes
+
+- **Dev Mode (`RELAY_ADMIN_PASSWORD=""`):**
+  When `RELAY_ADMIN_PASSWORD` is empty or unset (default), unauthenticated access to protected endpoints is strictly restricted to **loopback socket connections** (`127.0.0.1`, `::1`, `localhost`). Remote (non-loopback) callers must authenticate using a valid API key (`X-API-Key` or `Authorization: Bearer`). When binding to a non-loopback address (`0.0.0.0` or `::`) without an admin password, Simple Relay logs a startup warning and auto-seeds an initial API key on cold boot.
+- **Protected Mode (`RELAY_ADMIN_PASSWORD="<secret>"`):**
+  When `RELAY_ADMIN_PASSWORD` is set, all management, telemetry, inspection, and outbound delivery endpoints require authentication from all callers (including loopback). Only public webhook ingestion (`/api/v1/webhook/:route_name`), health probes (`/healthz`), and session auth endpoints remain unauthenticated.
+
+### Dual Authentication Credentials
+
+Authenticate to protected endpoints via either mechanism:
+
+1. **API Key (Service-to-Service — works in both Dev Mode and Protected Mode):**
+   Provide a valid API key in incoming HTTP headers:
+   ```http
+   X-API-Key: sr_live_a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90
+   ```
+   Or via standard Bearer authorization:
+   ```http
+   Authorization: Bearer sr_live_a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90
+   ```
+2. **Admin Session Cookie (Web UI — Protected Mode):**
+   Obtained by authenticating via `POST /api/v1/auth/login`. Sets an HTTP-only `relay_session` cookie valid for 24 hours.
+
+### Endpoint Access Matrix
+
+| Method | Endpoint | Authentication | Purpose |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/webhook/:route_name` | Public (Provider Signature) | Durable webhook ingestion into SQLite WAL |
+| `POST` | `/api/v1/jobs/:route_name` | Protected | Asynchronous delivery job enqueue |
+| `ANY` | `/api/v1/relay/:route_name` | Protected | Synchronous proxy with automatic retries |
+| `GET` | `/healthz` | Public | System health check and liveness probe |
+| `GET` | `/api/v1/auth/status` | Public | Check auth requirement and active session |
+| `POST` | `/api/v1/auth/login` | Public (Rate-limited) | Authenticate admin password and obtain session |
+| `POST` | `/api/v1/auth/logout` | Public | Invalidate admin session and clear cookie |
+| `GET` | `/api/v1/routes` | Protected | List all configured routes (secrets masked) |
+| `POST` | `/api/v1/routes` | Protected | Create and hot-reload a new route |
+| `GET` | `/api/v1/routes/:id` | Protected | Retrieve route configuration by ID (secret masked) |
+| `PUT` | `/api/v1/routes/:id` | Protected | Update route configuration by ID |
+| `DELETE` | `/api/v1/routes/:id` | Protected | Delete route configuration by ID |
+| `GET` | `/api/v1/requests` | Protected | List requests with pagination and filters |
+| `GET` | `/api/v1/requests/:id` | Protected | Inspect delivery record, payload, and attempts |
+| `POST` | `/api/v1/requests/:id/replay` | Protected | Requeue any historical request (success, failed, dlq) for redelivery |
+| `GET` | `/api/v1/jobs/:job_id` | Protected | Inspect asynchronous job status and attempts |
+| `GET` | `/api/v1/queue/stats` | Protected | Real-time queue metrics and backlog telemetry |
+| `GET` | `/api/v1/dlq` | Protected | List dead-lettered requests |
+| `POST` | `/api/v1/dlq/:request_id/replay` | Protected | Requeue an individual dead-lettered request |
+| `POST` | `/api/v1/dlq/replay-all` | Protected | Bulk requeue dead-lettered requests |
+| `POST` | `/api/v1/api-keys` | Protected | Generate a new API key |
+| `GET` | `/api/v1/api-keys` | Protected | List existing API keys (masked) |
+| `DELETE` | `/api/v1/api-keys/:id` | Protected | Revoke an API key |
+
+---
+
+## 2. Ingress & Outbound Delivery Endpoints
+
+### `POST /api/v1/webhook/:route_name` *(Public — Provider Signature)*
+Ingests an inbound webhook, verifies cryptographic signatures (if configured on the route), durably commits raw payload bytes to SQLite WAL storage, and enqueues background delivery. Also supports `PUT` and `PATCH`.
+
+- **Headers:**
+  - Provider signature headers (e.g. `Stripe-Signature`, `X-Hub-Signature-256`, etc.).
+  - `X-Relay-Request-ID` *(optional)*: Custom tracking ULID/UUID. Simple Relay generates a monotonic ULID if omitted.
+- **Status Codes:**
+  - `200 OK`: Payload durably persisted in SQLite storage.
+  - `400 Bad Request`: Route not configured for inbound mode or invalid JSON body.
+  - `401 Unauthorized`: Provider signature verification or header rule failed.
+  - `404 Not Found`: Route name not found.
+  - `413 Payload Too Large`: Payload exceeds body limit (`RELAY_MAX_BODY_SIZE_MB`, default: `10` MB).
+  - `500 Internal Server Error`: SQLite WAL write failure.
+- **Response Format:**
+  ```json
+  {
+    "relay_id": "01j9x0m1p00000000000000000",
+    "status": "persisted"
+  }
+  ```
+
+### `POST /api/v1/jobs/:route_name` *(Protected)*
+Fire-and-forget asynchronous job ingestion. Requires a valid API key, admin session cookie, or loopback connection in Dev Mode. Persists the request to SQLite WAL storage and schedules immediate delivery by background dispatcher workers.
+
+- **Credential Stripping:** Simple Relay automatically strips its own authentication credentials (`X-API-Key`, `Authorization: Bearer sr_live_*`, and `relay_session` cookie) before persisting `requests.headers` to SQLite or forwarding the job to the destination URL. Any upstream `Authorization` header (e.g., `Bearer sk_live_...`) is preserved intact.
+- **Status Codes:**
+  - `202 Accepted`: Job durably queued in SQLite WAL storage.
+  - `401 Unauthorized`: Missing or invalid API key / session credentials.
+  - `413 Payload Too Large`: Payload exceeds body limit (`RELAY_MAX_BODY_SIZE_MB`, default: `10` MB).
+- **Response Format:**
+  ```json
+  {
+    "job_id": "01j9x0z87q00000000000000000",
+    "status": "queued"
+  }
+  ```
+
+### `ANY /api/v1/relay/:route_name` *(Protected)*
+Synchronous outbound proxy for routes configured with `mode: "sync"`. Requires a valid API key, admin session cookie, or loopback connection in Dev Mode. Transparently forwards HTTP method, headers, and request body to the configured destination URL.
+
+- **Credential Stripping:** Strips internal Simple Relay authentication headers (`X-API-Key`, `Authorization: Bearer sr_live_*`, and `relay_session` cookie) prior to SQLite audit logging and upstream forwarding, while preserving upstream `Authorization` tokens (e.g., `Bearer $OPENAI_API_KEY`).
+- **Automatic Retries & Non-Idempotent Guardrails:** Automatically retries transient upstream failures (`429 Too Many Requests`, `500`, `502`, `503`, `504`) with exponential backoff and randomized full jitter (`100ms` base, `10s` max default). Idempotent methods (`GET`, `HEAD`, `PUT`, `DELETE`, `OPTIONS`, `TRACE`) always retry up to `max_attempts`; non-idempotent methods (`POST`, `PATCH`) only retry when an `Idempotency-Key` / `X-Relay-Idempotency-Key` header is provided or `retry_non_idempotent: true` is configured on the route.
+- **Client Disconnect Cancellation:** Cancels in-flight upstream execution immediately if the calling client closes the connection (`r.Context()`), eliminating wasted compute and downstream quota consumption.
+- **Returns:** Transparent upstream status code, response headers, and body (`401 Unauthorized` if caller is unauthenticated; `413 Payload Too Large` if payload exceeds `RELAY_MAX_BODY_SIZE_MB`, default `10` MB).
+
+---
+
+## 3. Authentication & Sessions (Public)
+
+### `GET /api/v1/auth/status`
+Checks whether server authentication is required for the current caller (`true` when `RELAY_ADMIN_PASSWORD` is configured or when calling from a non-loopback IP in Dev Mode) and whether the caller is currently authenticated.
+
+- **Response Format:**
+  ```json
+  {
+    "auth_required": true,
+    "authenticated": false
+  }
+  ```
+
+### `POST /api/v1/auth/login`
+Authenticates an administrator with the configured `RELAY_ADMIN_PASSWORD` and issues an HTTP-only session cookie.
+
+- **Rate Limiting & Proxy IP Trust:** Enforces brute-force lockout (max 5 failed attempts within 5 minutes per client IP). Returns `429 Too Many Requests` with a `Retry-After` header when locked. By default, client IP is extracted directly from the TCP socket (`r.RemoteAddr`) to prevent `X-Forwarded-For` header spoofing; proxy headers (`X-Forwarded-For`, `X-Real-IP`) are only trusted when `--trust-proxy` (`RELAY_TRUST_PROXY=true`) is explicitly enabled.
+- **Dev Mode Behavior:** When `RELAY_ADMIN_PASSWORD` is empty, loopback callers receive `200 OK` immediately, while non-loopback callers receive `401 Unauthorized` (must authenticate with an API key instead).
+- **Request Body:**
+  ```json
+  {
+    "password": "your-admin-password"
+  }
+  ```
+- **Response Format (`200 OK`):**
+  - Sets `relay_session` cookie (valid 24 hours, `HttpOnly`, `SameSite=Lax`, `Secure` when HTTPS).
+  ```json
+  {
+    "status": "authenticated"
+  }
+  ```
+
+### `POST /api/v1/auth/logout`
+Invalidates the current session token in memory and clears the `relay_session` cookie.
+
+- **Response Format:**
+  ```json
+  {
+    "status": "logged_out"
+  }
+  ```
+
+---
+
+## 4. Route Management (Protected)
+
+Routes configure forwarding destinations, retry backoff strategies, timeouts, and cryptographic signature verification. Modifications hot-reload into memory immediately without service restarts.
+
+> [!NOTE] Route Secret Masking
+> To prevent credential leakage, `signature_secret` is **always masked** in HTTP JSON responses across `GET`, `POST`, and `PUT /api/v1/routes*` (formatted as `first4*****last4`, e.g., `"whse*****9a1b"`, or `"********"` for secrets `<= 8` characters). The unmasked secret remains intact in SQLite and the in-memory `RouteRegistry` for cryptographic signature verification.
+
+### `GET /api/v1/routes`
+Lists all configured routes with `signature_secret` values masked.
+
+- **Response Format:**
+  ```json
+  [
+    {
+      "id": "01j9x0r7000000000000000000",
+      "name": "stripe-inbound",
+      "type": "inbound",
+      "mode": "async",
+      "path": "/api/v1/webhook/stripe",
+      "destination_url": "https://api.internal.com/webhooks/stripe",
+      "signature_provider": "stripe",
+      "signature_secret": "whse*****9a1b",
+      "max_attempts": 5,
+      "timeout_ms": 10000,
+      "retry_backoff_strategy": "exp",
+      "base_backoff_ms": 5000,
+      "max_backoff_ms": 900000,
+      "retry_non_idempotent": false,
+      "created_at": "2026-10-15T01:00:00Z",
+      "updated_at": "2026-10-15T01:00:00Z"
+    }
+  ]
+  ```
+
+### `POST /api/v1/routes`
+Creates and registers a new routing configuration. The returned JSON payload masks `signature_secret`.
+
+- **Fields & Parameters:**
+  - `name` *(string, required)*: Unique slug identifier for the route.
+  - `type` *(string, required)*: `"inbound"` (external webhook ingestion) or `"outbound"` (internal to external delivery).
+  - `mode` *(string, required)*: `"async"` (durable background queue) or `"sync"` (synchronous transparent proxy).
+  - `path` *(string, required)*: Path pattern matching incoming requests (e.g., `/api/v1/webhook/:slug`, `/api/v1/relay/:slug`, `/api/v1/jobs/:slug`).
+  - `destination_url` *(string, required)*: Upstream destination target URL (`http://` or `https://`).
+  - `max_attempts` *(integer, default: `5`)*: Maximum delivery attempts before routing to the DLQ.
+  - `timeout_ms` *(integer, default: `10000`)*: Per-attempt HTTP timeout in milliseconds.
+  - `retry_backoff_strategy` *(string, default: `"exp"`)*: Retry backoff curve: `"exp"` (exponential) or `"linear"`.
+  - `base_backoff_ms` *(integer, default: `0`)*: Minimum retry backoff delay in milliseconds. When `0`, inherits engine defaults (`100ms` for sync proxy, `5000ms` for async background delivery).
+  - `max_backoff_ms` *(integer, default: `0`)*: Maximum retry backoff delay in milliseconds. When `0`, inherits engine defaults (`10000ms` for sync proxy, `900000ms` for async background delivery).
+  - `retry_non_idempotent` *(boolean, default: `false`)*: For sync outbound proxying (`mode: "sync"`), enables automatic retries on non-idempotent HTTP methods (`POST`, `PATCH`) without requiring an `Idempotency-Key` header.
+  - `signature_provider` *(string, optional, default: `"none"`)*: Inbound HMAC provider (`"stripe"`, `"github"`, `"hmac_sha256"`, or `"none"`).
+  - `signature_secret` *(string, optional)*: Cryptographic signing secret.
+- **Request Body:**
+  ```json
+  {
+    "name": "github-webhook",
+    "type": "inbound",
+    "mode": "async",
+    "path": "/api/v1/webhook/github",
+    "destination_url": "https://api.internal.com/webhooks/github",
+    "signature_provider": "github",
+    "signature_secret": "secret123",
+    "max_attempts": 5,
+    "timeout_ms": 10000,
+    "retry_backoff_strategy": "exp",
+    "base_backoff_ms": 5000,
+    "max_backoff_ms": 900000,
+    "retry_non_idempotent": false
+  }
+  ```
+- **Status Code:** `201 Created`
+
+### `GET /api/v1/routes/:id`
+Retrieves a single route configuration by ULID (with `signature_secret` masked).
+
+### `PUT /api/v1/routes/:id`
+Updates an existing route configuration by ULID and hot-reloads the internal registry.
+
+- **Safe Secret Preservation:** When updating an inbound route with an active `signature_provider`, if `signature_secret` is omitted (`""`) or matches the currently masked value (e.g., `"whse*****9a1b"` when saving changes from the Web UI), Simple Relay preserves the existing raw secret in storage. Supplying a new plaintext secret rotates it immediately.
+
+### `DELETE /api/v1/routes/:id`
+Deletes a route configuration by ULID.
+
+- **Response Format:**
+  ```json
+  {
+    "status": "deleted"
+  }
+  ```
+
+---
+
+## 5. Delivery & Request Inspection (Protected)
+
+### `GET /api/v1/requests`
+List recorded delivery requests with pagination and status filters.
+
+- **Query Parameters:**
+  - `status`: Filter by status (`pending`, `delivering`, `delivered`, `failed`).
+  - `route_id`: Filter by route ULID.
+  - `search`: Filter by text contained in destination URL.
+  - `limit`: Number of records (default: `50`, max: `100`).
+  - `offset`: Pagination offset (default: `0`).
+- **Response Format:**
+  ```json
+  {
+    "items": [
+      {
+        "id": "01j9x0m1p00000000000000001",
+        "route_id": "01j9x0r7000000000000000000",
+        "method": "POST",
+        "url": "https://api.internal.com/webhooks/stripe",
+        "status": "delivered",
+        "attempts_count": 2,
+        "last_error": null,
+        "created_at": "2026-10-15T01:10:00Z",
+        "updated_at": "2026-10-15T01:10:03Z"
+      }
+    ],
+    "total": 1,
+    "limit": 50,
+    "offset": 0
+  }
+  ```
+
+### `GET /api/v1/requests/:id`
+Fetch single delivery record including headers, raw payload body, and historical attempt logs.
+
+- **Response Format:**
+  ```json
+  {
+    "id": "01j9x0m1p00000000000000001",
+    "route_id": "01j9x0r7000000000000000000",
+    "method": "POST",
+    "url": "https://api.internal.com/webhooks/stripe",
+    "headers": {
+      "Content-Type": "application/json",
+      "Stripe-Signature": "t=1728950000,v1=..."
+    },
+    "body": "{\"id\":\"evt_123\",\"type\":\"payment_intent.succeeded\"}",
+    "status": "delivered",
+    "attempts_count": 2,
+    "last_error": null,
+    "created_at": "2026-10-15T01:10:00Z",
+    "updated_at": "2026-10-15T01:10:03Z",
+    "attempts": [
+      {
+        "id": "01j9x0m2000000000000000001",
+        "request_id": "01j9x0m1p00000000000000001",
+        "attempt_number": 1,
+        "status_code": 503,
+        "duration_ms": 42,
+        "error_message": "upstream service unavailable",
+        "attempted_at": "2026-10-15T01:10:01Z"
+      },
+      {
+        "id": "01j9x0m3000000000000000002",
+        "request_id": "01j9x0m1p00000000000000001",
+        "attempt_number": 2,
+        "status_code": 200,
+        "duration_ms": 18,
+        "error_message": null,
+        "attempted_at": "2026-10-15T01:10:03Z"
+      }
+    ]
+  }
+  ```
+
+### `POST /api/v1/requests/:id/replay`
+Requeue any persisted request—regardless of whether its status is `success`, `failed`, or `dlq`—resetting its attempts count to 0, status to `pending`, and waking the background dispatcher for immediate delivery.
+
+> [!NOTE] State Conflicts
+> If the request is currently in-flight (`processing`) or waiting in queue (`pending`), the API returns HTTP `409 Conflict`. Replay is supported exclusively for terminal states (`success`, `failed`, `dlq`).
+
+- **Response Format:**
+  ```json
+  {
+    "id": "01j9x0m1p00000000000000001",
+    "status": "pending",
+    "replayed": true,
+    "replayed_at": "2026-10-21T03:00:00Z"
+  }
+  ```
+
+### `GET /api/v1/jobs/:job_id`
+Inspect status, retry scheduling, and execution history for an asynchronous background job.
+
+- **Response Format:**
+  ```json
+  {
+    "id": "01j9x0z87q00000000000000000",
+    "route_id": "01j9x0r7000000000000000000",
+    "method": "POST",
+    "url": "https://api.internal.com/jobs/process",
+    "status": "pending",
+    "attempts_count": 0,
+    "next_attempt_at": "2026-10-15T01:15:00Z",
+    "last_error": null,
+    "created_at": "2026-10-15T01:15:00Z",
+    "updated_at": "2026-10-15T01:15:00Z",
+    "attempts": []
+  }
+  ```
+
+---
+
+## 6. Queue Telemetry (Protected)
+
+### `GET /api/v1/queue/stats`
+Returns real-time queue depth and active worker processing metrics.
+
+- **Response Format:**
+  ```json
+  {
+    "pending": 8,
+    "in_flight": 3,
+    "queue_depth": 11,
+    "status": "HEALTHY"
+  }
+  ```
+
+> [!NOTE] Backlog Threshold
+> When total `queue_depth` (`pending + in_flight`) reaches or exceeds **1,000**, the `status` field switches from `HEALTHY` to `BACKLOG`. This provides an immediate zero-parsing signal for autoscaling policies and system alerts.
+
+---
+
+## 7. Dead Letter Queue (DLQ) Management (Protected)
+
+When a delivery exhausts its maximum retry attempts without receiving a 2xx response, it is permanently marked as `failed` and preserved in the Dead Letter Queue (DLQ).
+
+### `GET /api/v1/dlq`
+Lists dead-lettered requests awaiting manual triage or automated replay.
+
+- **Query Parameters:**
+  - `route_name`: Optional filter by route name.
+  - `limit`: Number of records (default: `50`, max: `500`).
+  - `offset`: Pagination offset (default: `0`).
+- **Response Format:**
+  ```json
+  {
+    "items": [
+      {
+        "id": "01j9x0m1p00000000000000001",
+        "route_id": "01j9x0r7000000000000000000",
+        "method": "POST",
+        "url": "https://api.internal.com/webhooks/stripe",
+        "status": "dlq",
+        "attempts_count": 5,
+        "last_error": "connection refused",
+        "created_at": "2026-10-15T01:10:00Z",
+        "updated_at": "2026-10-15T01:12:30Z"
+      }
+    ],
+    "total": 1,
+    "limit": 50,
+    "offset": 0
+  }
+  ```
+
+### `POST /api/v1/dlq/:request_id/replay`
+Requeues an individual failed delivery for immediate retry and wakes the dispatcher worker pool immediately.
+
+- **Status Codes:** `200 OK` on replay; `404 Not Found` if ID does not exist; `409 Conflict` if request is not in DLQ status.
+- **Response Format:**
+  ```json
+  {
+    "id": "01j9x0m1p00000000000000001",
+    "status": "pending",
+    "replayed": true,
+    "replayed_at": "2026-10-15T01:20:00Z"
+  }
+  ```
+
+### `POST /api/v1/dlq/replay-all`
+Bulk requeues dead-lettered deliveries matching filter criteria and immediately triggers delivery workers.
+
+- **Request Body (Optional):**
+  ```json
+  {
+    "route_name": "stripe-inbound",
+    "limit": 100
+  }
+  ```
+  *(Default limit: `100`, max: `1000` to prevent downstream thundering herd shockwaves).*
+- **Response Format:**
+  ```json
+  {
+    "replayed_count": 14,
+    "request_ids": [
+      "01j9x0m1p00000000000000001",
+      "01j9x0m1p00000000000000002"
+    ]
+  }
+  ```
+
+---
+
+## 8. API Key Management (Protected)
+
+Administrative API keys allow secure service-to-service communication with Simple Relay management endpoints without managing browser session cookies.
+
+### `POST /api/v1/api-keys`
+Generates a new administrative API key. Returns the raw secret token once.
+
+- **Request Body:**
+  ```json
+  {
+    "name": "worker-ci"
+  }
+  ```
+- **Status Code:** `201 Created`
+- **Response Format:**
+  ```json
+  {
+    "id": "01j9x0k8000000000000000001",
+    "name": "worker-ci",
+    "key": "sr_live_a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    "masked_key": "sr_live_a1b*****8f90",
+    "created_at": "2026-10-15T01:30:00Z"
+  }
+  ```
+
+> [!WARNING] Raw Token Exposure
+> The unmasked `key` (`sr_live_...`) is returned **only once** upon generation. Simple Relay hashes the token with SHA-256 before persisting to SQLite and never stores the plaintext key. Store the raw key securely in your environment variables or secrets vault.
+
+### `GET /api/v1/api-keys`
+Lists all active and revoked API keys with metadata and masked keys.
+
+- **Response Format:**
+  ```json
+  [
+    {
+      "id": "01j9x0k8000000000000000001",
+      "name": "worker-ci",
+      "masked_key": "sr_live_a1b*****8f90",
+      "created_at": "2026-10-15T01:30:00Z",
+      "revoked_at": null
+    }
+  ]
+  ```
+
+### `DELETE /api/v1/api-keys/:id`
+Immediately revokes an active API key by ULID. Revoked keys cannot be used for authentication.
+
+- **Status Code:** `200 OK` on revocation; `404 Not Found` if already revoked or non-existent.
+- **Response Format:**
+  ```json
+  {
+    "id": "01j9x0k8000000000000000001",
+    "status": "revoked"
+  }
+  ```
+
+---
+
+## 9. System & Health (Public)
+
+### `GET /healthz`
+Standard operational liveness probe returning HTTP `200 OK` and system timestamp.
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-10-15T01:25:00Z"
+}
+```
+
+----------------------------------------
+
+## Embedded Web UI
+Source: https://simplerelay.dev/docs/embedded-ui
+
+Simple Relay packages an administrative Web UI directly inside the Go binary via `go:embed`. It requires zero external Node.js dependencies or separate frontend server processes.
+
+Access the dashboard at:
+
+```text
+http://localhost:8080/ui/
+```
+
+---
+
+## Key Features of the Dashboard
+
+### 1. Real-time Delivery Log
+Inspect all inbound webhooks and outbound proxy calls:
+- Chronologically sorted by monotonic ULID timestamp.
+- Filter by status (`QUEUED`, `DELIVERING`, `DELIVERED`, `FAILED`).
+- Visual latency badges showing duration per delivery attempt.
+
+### 2. Payload & Header Inspector
+Clicking any request opens an inspection modal showing:
+- Bit-for-bit raw incoming request headers and payload body.
+- Forwarded destination URL.
+- Upstream response headers and response body (truncated to safe size limits).
+
+### 3. Attempt History & Error Traces
+When upstream services fail, inspect:
+- Number of attempts made.
+- Exact backoff delay calculated with full jitter.
+- Error messages (e.g. connection refused, TLS handshake timeout, 502 Bad Gateway).
+
+### 4. One-Click Request Replay & DLQ Triage
+- **Replay Any Request:** Click the **Replay** button on any row in the Requests Explorer or inside the inspection drawer to requeue deliveries immediately. This allows re-running previously successful webhooks (`200 OK`) against your backend after making code adjustments—see the **[Local Webhook Inspection Recipe](/docs/local-webhook-inspection)**.
+- **Dead Letter Queue (DLQ):** Deliveries that exhausted all retry policies are isolated in the DLQ view with individual and bulk replay buttons.
+
+### 5. Authentication & Route Secret Masking
+- **Loopback Dev Mode vs. Protected Mode:** When running locally on loopback (`127.0.0.1` / `localhost`) with `RELAY_ADMIN_PASSWORD` unset, the dashboard opens directly without a login prompt. When `RELAY_ADMIN_PASSWORD` is configured, the dashboard presents a rate-limited session login screen (`relay_session` HTTP-only cookie).
+- **Masked Route Secrets:** Inbound route `signature_secret` values are automatically masked in API responses (`whse*****9a1b` or `********`). Editing a route in the UI safely preserves the existing secret unless you explicitly type a new secret to rotate it.
+
+### 6. Interactive Route Configuration & Backoff Tuning
+Create and modify routes dynamically:
+- Configure per-route `base_backoff_ms` and `max_backoff_ms` overrides with mode-aware pre-filling (`100ms`–`10s` for sync proxy, `5s`–`15m` for async background delivery).
+- Toggle `Retry Non-Idempotent Requests` on synchronous outbound routes to permit safe `POST`/`PATCH` retries.
+- View the active backoff policy (`100ms–10s` or `5s–15m`) directly in the Routes table Policy column.
+
+----------------------------------------
+
+## CLI Reference
+Source: https://simplerelay.dev/docs/cli-reference
+
+Operator inspection tooling is embedded directly into the primary `relay` binary. Running `relay` without subcommands (or `relay serve`) launches the reliability daemon; running subcommands (`health`, `status`, `queue`, `dlq`) executes operator inspection and triage tasks from the terminal without browser access.
+
+Rather than opening or locking the SQLite database directly, CLI subcommands interact exclusively with Simple Relay's REST API over HTTP/HTTPS. This architecture prevents SQLite lock contention (`SQLITE_BUSY`), eliminates shared memory overhead, and allows operators to inspect or manage remote daemons across networks or from lightweight container environments.
+
+---
+
+## 1. Installation & Build
+
+Simple Relay is distributed as a single static binary with CGO disabled:
+
+### One-Line Install (Linux & macOS — Recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/simple-relay/simple-relay/main/install.sh | sh
+```
+
+### Compile from Source
+
+```bash
+# Build the unified static binary
+CGO_ENABLED=0 go build -o relay ./cmd/relay
+```
+
+### Install via Go Toolchain
+
+```bash
+go install github.com/simple-relay/simple-relay/cmd/relay@latest
+```
+
+---
+
+## 2. Global Flags & Environment Variables
+
+All `relay` CLI subcommands accept global flags and support configuration through environment variables:
+
+| CLI Flag | Environment Variable | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `-s, --server` | `RELAY_SERVER_URL` | `http://127.0.0.1:8080` | Simple Relay daemon base URL. |
+| `-k, --api-key` | `RELAY_API_KEY` | `""` | Admin API key for authenticated endpoints. |
+| `-o, --output` | `RELAY_OUTPUT` | `table` | Output format: `table` (human-readable) or `json` (scripting). |
+| `--timeout` | `RELAY_TIMEOUT` | `10s` | HTTP request client timeout duration (e.g., `5s`, `30s`). |
+
+---
+
+## 3. Core Commands & Usage
+
+### 3.1 Daemon Health & Latency (`health` / `status`)
+
+Probes the `/healthz` endpoint, measures end-to-end round-trip network latency, and returns standardized POSIX exit codes suitable for orchestration probes:
+
+```bash
+relay health
+# Or alias
+relay status
+```
+
+#### Example Output (Table):
+```
+STATUS   LATENCY   SERVER TIME                   URL
+OK       0.45ms    2026-10-15T01:25:00.000000Z   http://127.0.0.1:8080
+```
+
+#### Example Output (JSON):
+```bash
+relay health -o json
+```
+```json
+{
+  "status": "ok",
+  "latency_ms": 0,
+  "timestamp": "2026-10-15T01:25:00.000000Z",
+  "url": "http://127.0.0.1:8080"
+}
+```
+
+#### Exit Codes:
+
+| Exit Code | Condition | Meaning |
+| :--- | :--- | :--- |
+| `0` | **Healthy** | Daemon returned HTTP 200 and operational status `ok`. |
+| `1` | **Unreachable** | Connection refused, DNS failure, or client timeout. |
+| `2` | **Degraded** | Daemon reachable but reported unhealthy or degraded state. |
+
+---
+
+### 3.2 Queue Depth & Backlog Monitoring (`queue`)
+
+Inspects the number of pending and active in-flight delivery jobs across background dispatcher workers:
+
+```bash
+relay queue
+```
+
+#### Example Output (Table):
+```
+QUEUE DEPTH   PENDING   IN-FLIGHT   STATUS
+14            10        4           HEALTHY
+```
+
+#### Example Output (JSON):
+```bash
+relay queue -o json
+```
+```json
+{
+  "queue_depth": 14,
+  "pending": 10,
+  "in_flight": 4,
+  "status": "HEALTHY"
+}
+```
+
+> [!NOTE] Backlog Alerting
+> If total queue depth (`pending + in_flight`) reaches or exceeds **1,000 requests**, `relay queue` marks status as `BACKLOG` and exits with **code 2**. This enables automated autoscaling or alert triggering in monitoring pipelines without custom parsing scripts.
+
+---
+
+### 3.3 Dead Letter Queue Inspection (`dlq`)
+
+Inspect and triage dead-lettered requests that have exhausted all configured retry attempts.
+
+#### List DLQ Records
+
+```bash
+relay dlq list
+relay dlq list --limit 100
+```
+
+Example Output:
+```
+REQUEST ID                    ROUTE           ATTEMPTS   FAILED AT             LAST ERROR
+01j9x0m1p00000000000000001   stripe-inbound  5          2026-10-15 01:12:04   upstream returned HTTP 500 Internal Server...
+01j9x0z87q00000000000000002   github-webhook  5          2026-10-15 01:14:22   connection reset by peer
+```
+
+#### Inspect Detailed Record & Attempt Audit Trail
+
+```bash
+relay dlq inspect 01j9x0m1p00000000000000001
+```
+
+Example Output:
+```
+Request ID:    01j9x0m1p00000000000000001
+Route ID:      stripe-inbound
+Method:        POST
+Destination:   http://internal-backend:8000/webhooks/stripe
+Status:        FAILED
+Created At:    2026-10-15T01:10:00Z
+Last Error:    upstream returned HTTP 500 Internal Server Error
+
+Attempt History:
+#   ATTEMPTED AT          STATUS CODE   DURATION   ERROR
+1   2026-10-15 01:10:01   500           23ms       upstream returned HTTP 500
+2   2026-10-15 01:10:03   500           19ms       upstream returned HTTP 500
+3   2026-10-15 01:10:07   500           21ms       upstream returned HTTP 500
+4   2026-10-15 01:10:15   500           25ms       upstream returned HTTP 500
+5   2026-10-15 01:10:31   500           20ms       upstream returned HTTP 500
+```
+
+---
+
+### 3.4 Replaying DLQ Messages (`dlq replay`)
+
+#### Replay Single Request
+
+Requeues a specific dead-lettered request for immediate retry:
+
+```bash
+relay dlq replay 01j9x0m1p00000000000000001
+```
+
+```
+Successfully requeued request 01j9x0m1p00000000000000001 for delivery.
+```
+
+#### Replay All Failed Requests (Bulk Replay)
+
+Requeues all messages currently in the DLQ. When run in an interactive terminal, `relay` prompts for confirmation:
+
+```bash
+relay dlq replay-all
+# Found 42 items in DLQ. Requeue all for delivery? [y/N]: y
+# Successfully requeued 42 DLQ requests for delivery.
+```
+
+In CI/CD, cron jobs, or headless deployment scripts, pass `--yes` (`-y`) to bypass confirmation:
+
+```bash
+relay dlq replay-all -y
+```
+
+---
+
+### 3.4 Request Replay for Local Debugging & Triage (`request replay`)
+
+While `relay dlq replay` is intentionally restricted to exhausted messages in the Dead Letter Queue, `relay request replay` allows operators and developers to requeue **any historical request** regardless of its lifecycle status (`success`, `failed`, or `dlq`):
+
+```bash
+relay request replay <request_id>
+# Or alias
+relay requests replay <request_id>
+```
+
+#### Example Usage:
+```bash
+relay request replay 01j9y9success001
+# Output:
+# Successfully requeued request 01j9y9success001 for delivery.
+```
+
+#### Scripting with JSON Output:
+```bash
+relay request replay 01j9y9success001 -o json
+```
+```json
+{
+  "request_id": "01j9y9success001",
+  "status": "requeued"
+}
+```
+
+> [!TIP] Local Webhook Debugging
+> Replaying `success` requests is particularly useful during local webhook development alongside Cloudflare Tunnel. When testing code modifications in your backend, you can re-run a previous webhook delivery with one CLI command without re-triggering new events from external SaaS dashboards. See the **[Cloudflare Tunnel Inspection Recipe](/docs/local-webhook-inspection)** for complete setup instructions.
+
+---
+
+## 4. Headless & Container Probe Recipes
+
+Because Simple Relay compiles into a single, static CGO-free binary, container images only need the `relay` binary for both serving traffic and executing health/readiness probes (no `curl`, `wget`, or `jq` needed).
+
+### Docker Container Health Check
+
+Add to your `Dockerfile`:
+
+```dockerfile
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+  CMD ["/usr/local/bin/relay", "health"]
+```
+
+### Kubernetes Probes
+
+Configure Kubernetes `livenessProbe` and `readinessProbe` directly in your Pod manifest:
+
+```yaml
+spec:
+  containers:
+    - name: relay
+      image: ghcr.io/simple-relay/simple-relay:latest
+      livenessProbe:
+        exec:
+          command:
+            - /usr/local/bin/relay
+            - health
+        initialDelaySeconds: 3
+        periodSeconds: 10
+        timeoutSeconds: 2
+        failureThreshold: 3
+      readinessProbe:
+        exec:
+          command:
+            - /usr/local/bin/relay
+            - queue
+        initialDelaySeconds: 2
+        periodSeconds: 5
+        timeoutSeconds: 2
+        failureThreshold: 2
+```
+
+> [!TIP] Zero-Downtime Backlog Protection
+> The `readinessProbe` using `relay queue` automatically fails (exit code 2) if queue depth exceeds 1,000 jobs, prompting Kubernetes Service routing to temporarily stop sending new inbound requests to an overloaded replica until its queue drains.
+
+----------------------------------------
+
+## Benchmarks & Performance
+Source: https://simplerelay.dev/docs/benchmarks
+
+Simple Relay is engineered in pure Go to deliver maximum reliability with a near-zero memory footprint.
+
+Unlike in-memory queues that acknowledge receipt before committing to disk, Simple Relay enforces the **Durability Golden Rule**: an inbound webhook is never acknowledged with HTTP `200 OK` until its raw byte payload is safely flushed to persistent storage.
+
+Below are the official benchmark measurements conducted against Release `v0.3.0`.
+
+These are Simple Relay measurements, not a head-to-head comparison with another webhook product. They show request acknowledgement and durable ingestion performance under the listed test conditions. Results depend on hardware, storage, network, configuration, and workload. Use the reproduction steps below to run the same workload in your own environment before comparing systems.
+
+---
+
+## 1. Concurrency & Ingestion Throughput
+
+Tests were executed using [`bombardier`](https://github.com/codesenberg/bombardier) using realistic 1.5 KB JSON webhook payloads (containing customer IDs, line items, timestamps, and nested metadata).
+
+### Ingestion Performance Matrix (1,000 Requests / Tier)
+
+| Concurrency | Ingest Throughput | Avg Latency | p50 Latency | p90 Latency | p95 Latency | p99 Latency | Error Rate |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **10** | **848 req/s** | 11.4 ms | 10.1 ms | 10.8 ms | 37.8 ms | 38.8 ms | **0.00%** |
+| **50** | **6,280 req/s** | 7.4 ms | **4.1 ms** | 8.5 ms | 33.8 ms | 43.0 ms | **0.00%** |
+| **100** | **8,708 req/s** | 12.2 ms | **5.8 ms** | 36.4 ms | 41.8 ms | **42.8 ms** | **0.00%** |
+
+---
+
+## 2. Sustained 10-Second Saturation Run
+
+To test memory stability, garbage collection pauses, and CPU efficiency under sustained saturation, Simple Relay was bombarded for 10 seconds continuously at 100 concurrent connections:
+
+- **Total Requests Handled:** **100,622 requests**
+- **Average Ingest Throughput:** **10,058 req/s**
+- **Median Latency (p50):** **5.65 ms**
+- **p95 Latency:** **35.81 ms**
+- **p99 Latency:** **39.73 ms**
+- **Failed Requests:** **0** (100% durable persistence confirmed)
+
+---
+
+## 3. Resource Footprint & RAM Profile
+
+Measurements sampled directly via `docker stats` during idle, peak load, and post-load background drain phases:
+
+| State | CPU Usage | RAM Usage | RAM % of Host | Description |
+| :--- | :---: | :---: | :---: | :--- |
+| **Idle** | `< 0.5%` | **4.2 MiB** | `~0.01%` | Baseline idle memory |
+| **Peak Load (10,000 RPS)** | `~145%` | **24.0 – 26.1 MiB** | `~0.04%` | Sustained 10k req/s using ~1.45 CPU cores |
+| **Post-Load (Drain Phase)** | `~2.5%` | **21.1 MiB** | `~0.03%` | Asynchronous worker pool processing |
+
+> **Key Takeaway:** Even under a sustained bombardment of 10,000 requests per second, Simple Relay stays well under **26 MB of RAM**, making it viable to deploy on the smallest $5/month cloud instances without memory pressure.
+
+---
+
+## 4. How to Reproduce
+
+You can reproduce these benchmarks on your own machine using the test runner in the Simple Relay repository:
+
+```bash
+git clone https://github.com/simple-relay/simple-relay.git
+cd simple-relay
+
+# Run automated container benchmark
+./scripts/benchmark.sh
+
+# Run custom volume test (5,000 requests, 100 concurrency)
+NUM_REQUESTS=5000 CONCURRENCY_LIST="10 50 100" ./scripts/benchmark.sh
+```
+
+----------------------------------------
+

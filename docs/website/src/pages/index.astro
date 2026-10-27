@@ -1,0 +1,836 @@
+---
+import Layout from '../layouts/Layout.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+
+// GitHub stats placeholder — replace with real API call if desired
+const GITHUB_URL = "https://github.com/simple-relay/simple-relay";
+const DOCS_URL = "/docs";
+const GITHUB_STARS = "⭐ Star";
+
+// Verified official brand SVG paths (Simple Icons & Lucide)
+const socialProofLogos = [
+  {
+    name: "Stripe",
+    svg: `<svg class="w-8 h-8 sm:w-9 sm:h-9" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.594-7.305h.003z"/></svg>`,
+  },
+  {
+    name: "Shopify",
+    svg: `<svg class="w-8 h-8 sm:w-9 sm:h-9" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M15.337 23.979l7.216-1.561s-2.604-17.613-2.625-17.73c-.018-.116-.114-.192-.211-.192s-1.929-.136-1.929-.136-1.275-1.274-1.439-1.411c-.045-.037-.075-.057-.121-.074l-.914 21.104h.023zM11.71 11.305s-.81-.424-1.774-.424c-1.447 0-1.504.906-1.504 1.141 0 1.232 3.24 1.715 3.24 4.629 0 2.295-1.44 3.76-3.406 3.76-2.354 0-3.54-1.465-3.54-1.465l.646-2.086s1.245 1.066 2.28 1.066c.675 0 .975-.545.975-.932 0-1.619-2.654-1.694-2.654-4.359-.034-2.237 1.571-4.416 4.827-4.416 1.257 0 1.875.361 1.875.361l-.945 2.715-.02.01zM11.17.83c.136 0 .271.038.405.135-.984.465-2.064 1.639-2.508 3.992-.656.213-1.293.405-1.889.578C7.697 3.75 8.951.84 11.17.84V.83zm1.235 2.949v.135c-.754.232-1.583.484-2.394.736.466-1.777 1.333-2.645 2.085-2.971.193.501.309 1.176.309 2.1zm.539-2.234c.694.074 1.141.867 1.429 1.755-.349.114-.735.231-1.158.366v-.252c0-.752-.096-1.371-.271-1.871v.002zm2.992 1.289c-.02 0-.06.021-.078.021s-.289.075-.714.21c-.423-1.233-1.176-2.37-2.508-2.37h-.115C12.135.209 11.669 0 11.265 0 8.159 0 6.675 3.877 6.21 5.846c-1.194.365-2.063.636-2.16.674-.675.213-.694.232-.772.87-.075.462-1.83 14.063-1.83 14.063L15.009 24l.927-21.166z"/></svg>`,
+  },
+  {
+    name: "GitHub",
+    svg: `<svg class="w-8 h-8 sm:w-9 sm:h-9" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943"/></svg>`,
+  },
+  {
+    name: "Slack",
+    svg: `<svg class="w-8 h-8 sm:w-9 sm:h-9" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg>`,
+  },
+  {
+    name: "LINE",
+    svg: `<svg class="w-8 h-8 sm:w-9 sm:h-9" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>`,
+  },
+  {
+    name: "Messenger",
+    svg: `<svg class="w-8 h-8 sm:w-9 sm:h-9" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.24 0 0 4.952 0 11.64c0 3.499 1.434 6.521 3.769 8.61a.96.96 0 0 1 .323.683l.065 2.135a.96.96 0 0 0 1.347.85l2.381-1.053a.96.96 0 0 1 .641-.046A13 13 0 0 0 12 23.28c6.76 0 12-4.952 12-11.64S18.76 0 12 0m6.806 7.44c.522-.03.971.567.63 1.094l-4.178 6.457a.707.707 0 0 1-.977.208l-3.87-2.504a.44.44 0 0 0-.49.007l-4.363 3.01c-.637.438-1.415-.317-.995-.966l4.179-6.457a.706.706 0 0 1 .977-.21l3.87 2.505c.15.097.344.094.491-.007l4.362-3.008a.7.7 0 0 1 .364-.13"/></svg>`,
+  },
+  {
+    name: "PayPal",
+    svg: `<svg class="w-8 h-8 sm:w-9 sm:h-9" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M15.607 4.653H8.941L6.645 19.251H1.82L4.862 0h7.995c3.754 0 6.375 2.294 6.473 5.513-.648-.478-2.105-.86-3.722-.86m6.57 5.546c0 3.41-3.01 6.853-6.958 6.853h-2.493L11.595 24H6.74l1.845-11.538h3.592c4.208 0 7.346-3.634 7.153-6.949a5.24 5.24 0 0 1 2.848 4.686M9.653 5.546h6.408c.907 0 1.942.222 2.363.541-.195 2.741-2.655 5.483-6.441 5.483H8.714Z"/></svg>`,
+  },
+  {
+    name: "Webhooks",
+    svg: `<svg class="w-8 h-8 sm:w-9 sm:h-9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M18 16.98h-5.99c-1.1 0-1.95.94-2.48 1.9A4 4 0 0 1 2 17c.01-.7.2-1.4.57-2"/><path d="m6 17 3.13-5.78c.53-.97.1-2.18-.5-3.1a4 4 0 1 1 6.89-4.06"/><path d="m12 6 3.13 5.73C15.66 12.7 16.9 13 18 13a4 4 0 0 1 0 8"/></svg>`,
+  },
+];
+---
+
+<Layout includeSoftwareSchema={true}>
+  <!-- ═══════════════════════════════════════════════
+       GLOBAL NAV — 64px, Apple-style
+  ═══════════════════════════════════════════════ -->
+  <SiteHeader isHome={true} />
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 1 — HERO (Light tile / canvas white)
+  ═══════════════════════════════════════════════ -->
+  <section class="w-full bg-canvas py-[80px] px-5">
+    <div class="max-w-[680px] mx-auto text-center">
+      <!-- Badge -->
+      <div class="inline-flex items-center gap-2 mb-8 px-3.5 py-1.5 rounded-pill bg-[#e8f0fb] text-primary text-[13px] font-medium tracking-[-0.01em]">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true"></span>
+        Open Source
+      </div>
+
+      <!-- H1 -->
+      <h1 class="text-[clamp(36px,7vw,56px)] font-semibold leading-[1.07] tracking-[-0.028em] text-ink mb-5">
+        One binary.<br/>No infrastructure.<br/>
+        <span class="text-primary">Reliable HTTP delivery.</span>
+      </h1>
+
+      <!-- H2 Subhead -->
+      <p class="text-[clamp(17px,2.5vw,21px)] font-light text-[#6e6e73] leading-[1.5] mb-10 max-w-[520px] mx-auto">
+        A tiny self-hosted HTTP relay. Receive HTTP. Forward HTTP.<br class="hidden sm:block"/>
+        Make delivery reliable.
+      </p>
+
+      <!-- CTAs -->
+      <div class="flex flex-wrap items-center justify-center gap-4 mb-12">
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 bg-primary text-white text-[17px] font-normal px-[22px] py-[11px] rounded-pill hover:bg-[#0077ed] active:scale-95 transition-all duration-150"
+        >
+          <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943"/>
+          </svg>
+          View on GitHub
+        </a>
+        <a
+          href={DOCS_URL}
+          class="inline-flex items-center gap-1.5 text-primary text-[17px] font-normal px-[22px] py-[11px] rounded-pill border border-primary hover:bg-[#f0f6ff] active:scale-95 transition-all duration-150"
+        >
+          Read the Docs
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </a>
+      </div>
+
+      <!-- Quick Start Terminal with Copy & Tabs -->
+      <div class="w-full max-w-[580px] mx-auto rounded-[14px] bg-[#1d1d1f] text-left overflow-hidden shadow-product border border-white/10" id="quickstart-box">
+        <!-- Terminal title bar with Tabs -->
+        <div class="flex items-center justify-between px-4 py-2.5 border-b border-white/10 bg-[#141416]">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-[#ff5f57]" aria-hidden="true"></span>
+            <span class="w-3 h-3 rounded-full bg-[#ffbd2e]" aria-hidden="true"></span>
+            <span class="w-3 h-3 rounded-full bg-[#28c840]" aria-hidden="true"></span>
+            <!-- Tabs -->
+            <div class="flex items-center ml-2 bg-black/40 p-0.5 rounded-[6px] border border-white/5">
+              <button
+                type="button"
+                id="tab-btn-docker"
+                class="px-2.5 py-1 text-[11px] font-medium rounded-[4px] bg-white/15 text-white transition-colors cursor-pointer"
+                onclick="switchQuickstart('docker')"
+              >
+                Docker
+              </button>
+              <button
+                type="button"
+                id="tab-btn-binary"
+                class="px-2.5 py-1 text-[11px] font-medium rounded-[4px] text-[#a1a1a6] hover:text-white transition-colors cursor-pointer"
+                onclick="switchQuickstart('binary')"
+              >
+                Standalone Binary
+              </button>
+            </div>
+          </div>
+
+          <!-- Copy Button -->
+          <button
+            type="button"
+            id="copy-quickstart-btn"
+            class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-[#a1a1a6] hover:text-white bg-white/5 hover:bg-white/10 rounded-[6px] transition-colors cursor-pointer"
+            onclick="copyQuickstartCommand()"
+            aria-label="Copy command to clipboard"
+          >
+            <i data-lucide="copy" class="w-3.5 h-3.5" id="copy-icon"></i>
+            <span id="copy-text">Copy</span>
+          </button>
+        </div>
+
+        <!-- Terminal content: Docker tab -->
+        <div id="content-docker" class="px-5 py-4 font-mono text-[13px] leading-6">
+          <div class="flex items-start gap-2">
+            <span class="text-[#0066cc] select-none">$</span>
+            <div class="text-white select-all">
+              <span>docker run -d --name simple-relay \</span><br/>
+              <span class="pl-2">-p 8080:8080 -v relay-data:/data \</span><br/>
+              <span class="pl-2">-e RELAY_DB_PATH=/data/relay.db \</span><br/>
+              <span class="pl-2">ghcr.io/simple-relay/simple-relay:latest</span>
+            </div>
+          </div>
+          <div class="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-[11px] text-[#6e6e73]">
+            <span class="flex items-center gap-1.5 text-emerald-400">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              Listening on :8080
+            </span>
+            <span>Dashboard at <code class="text-[#a1a1a6] bg-white/10 px-1 py-0.5 rounded">http://localhost:8080/ui/</code></span>
+          </div>
+        </div>
+
+        <!-- Terminal content: Binary tab -->
+        <div id="content-binary" class="hidden px-5 py-4 font-mono text-[13px] leading-6">
+          <div class="flex items-start gap-2">
+            <span class="text-[#0066cc] select-none">$</span>
+            <div class="text-white select-all">
+              <span>curl -fsSL https://raw.githubusercontent.com/simple-relay/simple-relay/main/install.sh | sh</span><br/>
+              <span>relay</span>
+            </div>
+          </div>
+          <div class="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-[11px] text-[#6e6e73]">
+            <span class="flex items-center gap-1.5 text-emerald-400">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              Linux &amp; macOS (amd64 / arm64)
+            </span>
+            <span>Windows: <a href="https://github.com/simple-relay/simple-relay/releases" target="_blank" rel="noopener noreferrer" class="text-[#a1a1a6] hover:text-white underline">GitHub Releases &rarr;</a></span>
+          </div>
+        </div>
+      </div>
+
+      <script is:inline>
+        let currentTab = 'docker';
+        const commands = {
+          docker: "docker run -d --name simple-relay -p 8080:8080 -v relay-data:/data -e RELAY_DB_PATH=/data/relay.db ghcr.io/simple-relay/simple-relay:latest",
+          binary: "curl -fsSL https://raw.githubusercontent.com/simple-relay/simple-relay/main/install.sh | sh && relay"
+        };
+
+        function switchQuickstart(tab) {
+          currentTab = tab;
+          const dockerContent = document.getElementById('content-docker');
+          const binaryContent = document.getElementById('content-binary');
+          const dockerBtn = document.getElementById('tab-btn-docker');
+          const binaryBtn = document.getElementById('tab-btn-binary');
+
+          if (tab === 'docker') {
+            dockerContent?.classList.remove('hidden');
+            binaryContent?.classList.add('hidden');
+            dockerBtn?.classList.add('bg-white/15', 'text-white');
+            dockerBtn?.classList.remove('text-[#a1a1a6]');
+            binaryBtn?.classList.remove('bg-white/15', 'text-white');
+            binaryBtn?.classList.add('text-[#a1a1a6]');
+          } else {
+            binaryContent?.classList.remove('hidden');
+            dockerContent?.classList.add('hidden');
+            binaryBtn?.classList.add('bg-white/15', 'text-white');
+            binaryBtn?.classList.remove('text-[#a1a1a6]');
+            dockerBtn?.classList.remove('bg-white/15', 'text-white');
+            dockerBtn?.classList.add('text-[#a1a1a6]');
+          }
+        }
+
+        function copyQuickstartCommand() {
+          const text = commands[currentTab];
+          navigator.clipboard.writeText(text).then(() => {
+            const copyText = document.getElementById('copy-text');
+            if (copyText) {
+              copyText.innerText = 'Copied!';
+              setTimeout(() => {
+                copyText.innerText = 'Copy';
+              }, 2000);
+            }
+          });
+        }
+      </script>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 2 — SOCIAL PROOF (Parchment tile)
+  ═══════════════════════════════════════════════ -->
+  <section class="w-full bg-parchment py-16 px-5" aria-label="Trusted integrations">
+    <div class="max-w-[680px] mx-auto text-center mb-10">
+      <p class="text-[#6e6e73] text-[17px] leading-[1.47] tracking-[-0.022em]">
+        Designed to reliably handle webhooks and APIs from:
+      </p>
+    </div>
+
+    <!-- Static logo strip -->
+    <div class="w-full max-w-6xl mx-auto px-4 flex flex-wrap items-center justify-center gap-x-10 sm:gap-x-14 md:gap-x-16 gap-y-10" aria-hidden="true">
+      {socialProofLogos.map((logo) => (
+        <div class="flex flex-col items-center gap-2.5 opacity-50 hover:opacity-100 transition-opacity duration-200 group">
+          <div class="w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center text-[#1d1d1f] group-hover:text-primary transition-colors duration-200" set:html={logo.svg} />
+          <span class="text-[12px] text-[#6e6e73] group-hover:text-ink font-medium tracking-[0.04em] uppercase transition-colors duration-200">{logo.name}</span>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 3 — "AHA" MOMENT (Dark tile)
+       Old Way vs Simple Relay
+  ═══════════════════════════════════════════════ -->
+  <section class="w-full bg-tile-1 py-[80px] px-5" id="comparison" aria-labelledby="comparison-heading">
+    <div class="max-w-[980px] mx-auto">
+      <!-- Section heading -->
+      <div class="text-center mb-16">
+        <p class="text-[#2997ff] text-[14px] font-semibold tracking-[0.08em] uppercase mb-3">The Problem</p>
+        <h2 id="comparison-heading" class="text-[clamp(28px,5vw,40px)] font-semibold text-white leading-[1.1] tracking-[-0.022em]">
+          Stop overengineering reliability.
+        </h2>
+        <p class="mt-4 text-[#a1a1a6] text-[17px] leading-[1.47] tracking-[-0.022em] max-w-[480px] mx-auto">
+          Durable delivery shouldn't require a distributed systems degree.
+        </p>
+      </div>
+
+      <!-- Comparison diagram: CSS-only animated -->
+      <div class="grid md:grid-cols-2 gap-6 max-w-[860px] mx-auto">
+
+        <!-- LEFT: Old Way -->
+        <div class="bg-[#2a2a2c] rounded-[18px] p-8 border border-white/10">
+          <div class="flex items-center gap-2 mb-6">
+            <span class="px-2.5 py-1 bg-red-500/20 text-red-400 text-[11px] font-semibold rounded-pill uppercase tracking-wider">
+              Overkill &amp; Expensive
+            </span>
+          </div>
+          <p class="text-[#a1a1a6] text-[14px] mb-6 tracking-[-0.01em]">The typical "reliable delivery" stack:</p>
+
+          <!-- Old flow diagram -->
+          <div class="space-y-2">
+            {[
+              { icon: "globe", label: "Your App", color: "text-white" },
+              null,
+              { icon: "layers", label: "Message Queue / Redis", color: "text-[#a1a1a6]", note: "operational overhead" },
+              null,
+              { icon: "cpu", label: "Worker Service", color: "text-[#a1a1a6]", note: "separate deployment" },
+              null,
+              { icon: "database", label: "Postgres / DB", color: "text-[#a1a1a6]", note: "another dependency" },
+              null,
+              { icon: "server", label: "Destination API", color: "text-white" },
+            ].map((item) =>
+              item === null ? (
+                <div class="flex justify-center py-0.5">
+                  <i data-lucide="arrow-down" class="w-4 h-4 text-[#6e6e73]"></i>
+                </div>
+              ) : (
+                <div class="flex items-center gap-3 px-3 py-2 rounded-[8px] bg-[#1d1d1f]/60">
+                  <i data-lucide={item.icon} class={`w-4 h-4 shrink-0 ${item.color}`}></i>
+                  <div>
+                    <span class={`text-[14px] font-medium ${item.color}`}>{item.label}</span>
+                    {item.note && <p class="text-[#6e6e73] text-[11px] mt-0.5">{item.note}</p>}
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+
+        <!-- RIGHT: Simple Relay -->
+        <div class="bg-[#2a2a2c] rounded-[18px] p-8 border border-[#0066cc]/40 relative overflow-hidden">
+          <!-- Blue glow accent -->
+          <div class="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-full blur-3xl pointer-events-none" aria-hidden="true"></div>
+
+          <div class="flex items-center gap-2 mb-6">
+            <span class="px-2.5 py-1 bg-[#0066cc]/20 text-[#2997ff] text-[11px] font-semibold rounded-pill uppercase tracking-wider">
+              Lightweight &amp; Free
+            </span>
+          </div>
+          <p class="text-[#a1a1a6] text-[14px] mb-6 tracking-[-0.01em]">Everything in one binary:</p>
+
+          <!-- Simple Relay flow -->
+          <div class="space-y-2">
+            {[
+              { icon: "globe", label: "Your App", color: "text-white" },
+              null,
+              { icon: "zap", label: "Simple Relay", color: "text-white", note: "one binary · embedded storage", highlight: true },
+              null,
+              { icon: "server", label: "Destination API", color: "text-white" },
+            ].map((item) =>
+              item === null ? (
+                <div class="flex justify-center py-0.5">
+                  <i data-lucide="arrow-down" class="w-4 h-4 text-[#2997ff]"></i>
+                </div>
+              ) : (
+                <div class={`flex items-center gap-3 px-3 py-2 rounded-[8px] ${item.highlight ? 'bg-[#0066cc]/10 border border-[#0066cc]/30' : 'bg-[#1d1d1f]/60'}`}>
+                  <i data-lucide={item.icon} class={`w-4 h-4 shrink-0 ${item.highlight ? 'text-[#2997ff]' : item.color}`}></i>
+                  <div>
+                    <span class={`text-[14px] font-medium ${item.color}`}>{item.label}</span>
+                    {item.note && <p class="text-[#2997ff] text-[11px] mt-0.5">{item.note}</p>}
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+
+
+        </div>
+      </div>
+
+      <!-- Simple Relay explainer video -->
+      <div class="relative mt-12 max-w-[880px] mx-auto rounded-[18px] border border-white/10 bg-black overflow-hidden aspect-video">
+        <iframe
+          class="w-full h-full"
+          src="https://play.gumlet.io/embed/6ad0e55fd14399f2365463ed"
+          title="Gumlet video player"
+          loading="lazy"
+          referrerpolicy="origin"
+          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write"
+        ></iframe>
+      </div>
+      <p class="mt-5 text-center text-[14px] text-[#cccccc]">
+        Ready to try it? <a href="/docs/quickstart" class="text-[#2997ff] hover:underline font-medium">Get started in about 2 minutes</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 4 — CORE FEATURES (Light/canvas tile)
+  ═══════════════════════════════════════════════ -->
+  <section class="w-full bg-canvas py-[80px] px-5" id="features" aria-labelledby="features-heading">
+    <div class="max-w-[980px] mx-auto">
+      <div class="text-center mb-16">
+        <p class="text-primary text-[14px] font-semibold tracking-[0.08em] uppercase mb-3">Core Features</p>
+        <h2 id="features-heading" class="text-[clamp(28px,5vw,40px)] font-semibold text-ink leading-[1.1] tracking-[-0.022em]">
+          Reliability primitives,<br/>not an entire platform.
+        </h2>
+      </div>
+
+      <!-- 2x2 Feature grid -->
+      <div class="grid sm:grid-cols-2 gap-5">
+
+        <!-- Feature 1: Persist before ACK -->
+        <article class="bg-parchment rounded-card p-8 border border-divider">
+          <div class="w-10 h-10 bg-[#e8f0fb] rounded-[10px] flex items-center justify-center mb-5">
+            <i data-lucide="shield-check" class="w-5 h-5 text-primary"></i>
+          </div>
+          <h3 class="text-ink text-[21px] font-semibold leading-[1.19] tracking-[-0.022em] mb-3">
+            Persist before ACK
+          </h3>
+          <p class="text-[#6e6e73] text-[17px] leading-[1.47] tracking-[-0.022em]">
+            Never returns HTTP 200 until the payload is safely committed to durable storage. Zero data loss, even if the process crashes immediately after.
+          </p>
+        </article>
+
+        <!-- Feature 2: Smart Delivery Engine -->
+        <article class="bg-parchment rounded-card p-8 border border-divider">
+          <div class="w-10 h-10 bg-[#e8f0fb] rounded-[10px] flex items-center justify-center mb-5">
+            <i data-lucide="zap" class="w-5 h-5 text-primary"></i>
+          </div>
+          <h3 class="text-ink text-[21px] font-semibold leading-[1.19] tracking-[-0.022em] mb-3">
+            Smart Delivery Engine
+          </h3>
+          <p class="text-[#6e6e73] text-[17px] leading-[1.47] tracking-[-0.022em]">
+            Automatic retry with exponential backoff and full jitter. Handles 429 <code class="text-[14px] bg-hairline px-1.5 py-0.5 rounded-[4px] font-mono text-ink">Retry-After</code> headers. Prevents thundering herd against your destination.
+          </p>
+        </article>
+
+        <!-- Feature 3: Dead Letter Queue -->
+        <article class="bg-parchment rounded-card p-8 border border-divider">
+          <div class="w-10 h-10 bg-[#e8f0fb] rounded-[10px] flex items-center justify-center mb-5">
+            <i data-lucide="archive" class="w-5 h-5 text-primary"></i>
+          </div>
+          <h3 class="text-ink text-[21px] font-semibold leading-[1.19] tracking-[-0.022em] mb-3">
+            Dead Letter Queue
+          </h3>
+          <p class="text-[#6e6e73] text-[17px] leading-[1.47] tracking-[-0.022em]">
+            Bounded retries — never retry forever. Failed requests move to DLQ automatically. Replay individual or bulk deliveries anytime via Web UI, REST API, or <code class="text-[14px] bg-hairline px-1.5 py-0.5 rounded-[4px] font-mono text-ink">relay dlq</code>.
+          </p>
+        </article>
+
+        <!-- Feature 4: Embedded Web UI -->
+        <article class="bg-parchment rounded-card p-8 border border-divider">
+          <div class="w-10 h-10 bg-[#e8f0fb] rounded-[10px] flex items-center justify-center mb-5">
+            <i data-lucide="layout-dashboard" class="w-5 h-5 text-primary"></i>
+          </div>
+          <h3 class="text-ink text-[21px] font-semibold leading-[1.19] tracking-[-0.022em] mb-3">
+            Embedded Web UI
+          </h3>
+          <p class="text-[#6e6e73] text-[17px] leading-[1.47] tracking-[-0.022em]">
+            A full admin dashboard compiled directly into the binary via <code class="text-[14px] bg-hairline px-1.5 py-0.5 rounded-[4px] font-mono text-ink">go:embed</code>. Inspect payloads, view attempt logs, replay DLQ — no Node.js, no build pipeline.
+          </p>
+        </article>
+      </div>
+
+      <!-- Dashboard Mockup Showcase -->
+      <div class="mt-12 bg-[#1d1d1f] rounded-[18px] border border-[#333336] p-4 sm:p-6 shadow-product overflow-hidden">
+        <div class="flex items-center justify-between pb-4 border-b border-white/10">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-[#ff5f57]" aria-hidden="true"></span>
+            <span class="w-3 h-3 rounded-full bg-[#ffbd2e]" aria-hidden="true"></span>
+            <span class="w-3 h-3 rounded-full bg-[#28c840]" aria-hidden="true"></span>
+            <span class="ml-2 text-white/50 text-[12px] font-mono hidden sm:inline">Simple Relay Dashboard &bull; http://localhost:8080/ui/</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Live In-Memory Hot Reload</span>
+            <span class="text-xs text-[#a1a1a6] font-mono">v1.0.0</span>
+          </div>
+        </div>
+
+        <!-- Dashboard UI Mockup Frame -->
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-mono">
+          <!-- Sidebar -->
+          <div class="bg-black/30 rounded-[10px] p-3 border border-white/5 space-y-2 hidden md:block">
+            <div class="text-[#a1a1a6] text-[11px] font-semibold uppercase tracking-wider mb-2">Navigation</div>
+            <div class="px-2.5 py-1.5 rounded-md bg-primary text-white font-medium flex items-center justify-between">
+              <span>Overview</span>
+              <span class="text-[10px] bg-white/20 px-1.5 py-0.2 rounded">Live</span>
+            </div>
+            <div class="px-2.5 py-1.5 rounded-md text-[#a1a1a6] hover:bg-white/5 hover:text-white transition-colors cursor-pointer flex items-center justify-between">
+              <span>Requests Log</span>
+              <span class="text-[10px] text-white/40">1,420</span>
+            </div>
+            <div class="px-2.5 py-1.5 rounded-md text-[#a1a1a6] hover:bg-white/5 hover:text-white transition-colors cursor-pointer flex items-center justify-between">
+              <span>Dead Letter (DLQ)</span>
+              <span class="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.2 rounded">3</span>
+            </div>
+            <div class="px-2.5 py-1.5 rounded-md text-[#a1a1a6] hover:bg-white/5 hover:text-white transition-colors cursor-pointer">
+              <span>Routes Config</span>
+            </div>
+          </div>
+
+          <!-- Main Dashboard Content -->
+          <div class="md:col-span-3 space-y-3">
+            <!-- Stats Row -->
+            <div class="grid grid-cols-3 gap-2.5">
+              <div class="bg-black/30 p-3 rounded-[10px] border border-white/5">
+                <div class="text-[#6e6e73] text-[10px] uppercase">Total Ingested</div>
+                <div class="text-white text-base font-semibold mt-0.5">148,290</div>
+                <div class="text-emerald-400 text-[10px] mt-0.5">99.98% Delivered</div>
+              </div>
+              <div class="bg-black/30 p-3 rounded-[10px] border border-white/5">
+                <div class="text-[#6e6e73] text-[10px] uppercase">Active Workers</div>
+                <div class="text-white text-base font-semibold mt-0.5">16 / 16</div>
+                <div class="text-[#2997ff] text-[10px] mt-0.5">0 Backlog</div>
+              </div>
+              <div class="bg-black/30 p-3 rounded-[10px] border border-white/5">
+                <div class="text-[#6e6e73] text-[10px] uppercase">DLQ Entries</div>
+                <div class="text-white text-base font-semibold mt-0.5 text-amber-400">3 Pending</div>
+                <div class="text-[#a1a1a6] text-[10px] mt-0.5 cursor-pointer hover:underline">Replay All &rarr;</div>
+              </div>
+            </div>
+
+            <!-- Table mock -->
+            <div class="bg-black/40 rounded-[10px] border border-white/5 p-3 overflow-x-auto">
+              <div class="flex items-center justify-between pb-2 mb-2 border-b border-white/5 text-[11px] text-[#6e6e73]">
+                <span>RECENT DELIVERIES</span>
+                <span>AUTO-REFRESH (1s)</span>
+              </div>
+              <div class="space-y-2 text-[11px]">
+                <div class="flex items-center justify-between p-2 rounded bg-white/[0.02] border border-white/5">
+                  <div class="flex items-center gap-2">
+                    <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px]">200 OK</span>
+                    <span class="text-white font-mono">POST /webhook/stripe</span>
+                  </div>
+                  <div class="flex items-center gap-3 text-[#6e6e73]">
+                    <span>12ms</span>
+                    <span class="text-emerald-400">Attempt 1/3</span>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded bg-white/[0.02] border border-white/5">
+                  <div class="flex items-center gap-2">
+                    <span class="px-1.5 py-0.5 rounded bg-blue-500/20 text-[#2997ff] text-[10px]">RETRYING</span>
+                    <span class="text-white font-mono">POST /api/v1/jobs/shopify</span>
+                  </div>
+                  <div class="flex items-center gap-3 text-[#6e6e73]">
+                    <span class="text-amber-400">Backoff 2.4s</span>
+                    <span>Attempt 2/5</span>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded bg-red-500/10 border border-red-500/20">
+                  <div class="flex items-center gap-2">
+                    <span class="px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 text-[10px]">DLQ</span>
+                    <span class="text-white font-mono">POST /webhook/github</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-red-400 text-[10px]">Timeout Exceeded</span>
+                    <button type="button" class="px-2 py-0.5 bg-primary/80 hover:bg-primary text-white rounded text-[10px] cursor-pointer">Replay</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-2 text-[12px] text-[#a1a1a6]">
+          <span class="flex items-center gap-1.5"><i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i> Zero Node.js build pipeline &bull; Compiled directly into binary via <code class="text-white">go:embed</code></span>
+          <span class="text-primary-dark">Password-protected admin session &amp; CSRF safe</span>
+        </div>
+        <div class="mt-2.5 pt-2.5 border-t border-white/5 flex items-center justify-center text-[12px] text-[#a1a1a6]">
+          <span>Prefer headless automation? Script health checks and DLQ replays with <a href="/docs/cli-reference" class="text-[#2997ff] hover:underline font-mono">relay CLI</a>.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 4.5 — COMPARISON MATRIX (Parchment tile)
+  ═══════════════════════════════════════════════ -->
+  <section class="w-full bg-parchment py-[80px] px-5 border-t border-divider" id="alternatives" aria-labelledby="comparison-matrix-heading">
+    <div class="max-w-[980px] mx-auto">
+      <div class="text-center mb-14">
+        <p class="text-primary text-[14px] font-semibold tracking-[0.08em] uppercase mb-3">Architectural Comparison</p>
+        <h2 id="comparison-matrix-heading" class="text-[clamp(28px,5vw,40px)] font-semibold text-ink leading-[1.1] tracking-[-0.022em]">
+          Why not just write retries in code?
+        </h2>
+        <p class="mt-4 text-[#6e6e73] text-[17px] leading-[1.47] max-w-[560px] mx-auto">
+          In-memory SDK retries die when your app restarts. Message queues add massive operational burden. Simple Relay hits the sweet spot.
+        </p>
+      </div>
+
+      <!-- Table Frame -->
+      <div class="w-full overflow-x-auto bg-canvas rounded-card border border-divider shadow-sm">
+        <table class="w-full text-left border-collapse min-w-[620px]">
+          <thead>
+            <tr class="border-b border-divider bg-parchment/60">
+              <th class="py-4 px-6 text-[13px] font-semibold text-ink tracking-tight">Capabilities</th>
+              <th class="py-4 px-6 text-[13px] font-medium text-[#6e6e73]">In-App SDK Retries<br/><span class="text-[11px] text-[#7a7a7a]">(Axios/Tenacity)</span></th>
+              <th class="py-4 px-6 text-[13px] font-medium text-[#6e6e73]">Redis + Celery/BullMQ<br/><span class="text-[11px] text-[#7a7a7a]">(Heavy Queues)</span></th>
+              <th class="py-4 px-6 text-[13px] font-semibold text-primary bg-primary/5 border-l border-r border-primary/20">
+                Simple Relay<br/><span class="text-[11px] font-normal text-primary flex items-center gap-1"><i data-lucide="check-circle-2" class="w-3 h-3 text-primary shrink-0"></i> Single Binary</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-divider text-[14px]">
+            <tr>
+              <td class="py-3.5 px-6 font-medium text-ink">Survives Crash / Deploy</td>
+              <td class="py-3.5 px-6 text-red-500 font-medium">Lost in memory</td>
+              <td class="py-3.5 px-6 text-emerald-600 font-medium">Durable</td>
+              <td class="py-3.5 px-6 text-primary font-semibold bg-primary/5 border-l border-r border-primary/20">Commits to disk before ACK</td>
+            </tr>
+            <tr>
+              <td class="py-3.5 px-6 font-medium text-ink">External Infra Required</td>
+              <td class="py-3.5 px-6 text-emerald-600 font-medium">None</td>
+              <td class="py-3.5 px-6 text-red-500 font-medium">Redis + Workers + DB</td>
+              <td class="py-3.5 px-6 text-primary font-semibold bg-primary/5 border-l border-r border-primary/20">Zero</td>
+            </tr>
+            <tr>
+              <td class="py-3.5 px-6 font-medium text-ink">Inbound Webhook Persist</td>
+              <td class="py-3.5 px-6 text-red-500 font-medium">No</td>
+              <td class="py-3.5 px-6 text-red-500 font-medium">Custom code required</td>
+              <td class="py-3.5 px-6 text-primary font-semibold bg-primary/5 border-l border-r border-primary/20">HMAC verify or custom verify</td>
+            </tr>
+            <tr>
+              <td class="py-3.5 px-6 font-medium text-ink">Ultra-Fast Webhook ACK</td>
+              <td class="py-3.5 px-6 text-red-500 font-medium">Risk timeouts</td>
+              <td class="py-3.5 px-6 text-emerald-600 font-medium">Fast ACK</td>
+              <td class="py-3.5 px-6 text-primary font-semibold bg-primary/5 border-l border-r border-primary/20">Low-latency ACK after persistence · <a href="/docs/benchmarks" class="underline underline-offset-2 hover:text-ink">Benchmarks</a></td>
+            </tr>
+            <tr>
+              <td class="py-3.5 px-6 font-medium text-ink">Dead Letter Queue &amp; Replay</td>
+              <td class="py-3.5 px-6 text-red-500 font-medium">No</td>
+              <td class="py-3.5 px-6 text-red-500 font-medium">Requires setup</td>
+              <td class="py-3.5 px-6 text-primary font-semibold bg-primary/5 border-l border-r border-primary/20">Built-in UI &amp; Replay API</td>
+            </tr>
+            <tr>
+              <td class="py-3.5 px-6 font-medium text-ink">Client Abort Awareness</td>
+              <td class="py-3.5 px-6 text-red-500 font-medium">Hard to coordinate</td>
+              <td class="py-3.5 px-6 text-red-500 font-medium">Async disconnect blind</td>
+              <td class="py-3.5 px-6 text-primary font-semibold bg-primary/5 border-l border-r border-primary/20">Immediate upstream cancel</td>
+            </tr>
+            <tr>
+              <td class="py-3.5 px-6 font-medium text-ink">Embedded Dashboard</td>
+              <td class="py-3.5 px-6 text-red-500 font-medium">No</td>
+              <td class="py-3.5 px-6 text-red-500 font-medium">Extra web container</td>
+              <td class="py-3.5 px-6 text-primary font-semibold bg-primary/5 border-l border-r border-primary/20">Built-in UI</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 5 — DUAL USE CASES (Dark tile)
+  ═══════════════════════════════════════════════ -->
+  <section class="w-full bg-tile-1 py-[80px] px-5" id="use-cases" aria-labelledby="usecases-heading">
+    <div class="max-w-[980px] mx-auto">
+      <div class="text-center mb-16">
+        <p class="text-[#2997ff] text-[14px] font-semibold tracking-[0.08em] uppercase mb-3">Use Cases</p>
+        <h2 id="usecases-heading" class="text-[clamp(28px,5vw,40px)] font-semibold text-white leading-[1.1] tracking-[-0.022em]">
+          Two problems. One binary.
+        </h2>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Use Case 1: Inbound Webhooks -->
+        <article class="bg-[#2a2a2c] rounded-card p-8 border border-white/10">
+          <div class="inline-flex items-center gap-2 mb-6 px-3 py-1.5 bg-[#2997ff]/10 rounded-pill">
+            <i data-lucide="globe" class="w-3.5 h-3.5 text-[#2997ff]"></i>
+            <span class="text-[#2997ff] text-[13px] font-semibold">Inbound Webhooks</span>
+          </div>
+          <h3 class="text-white text-[21px] font-semibold leading-[1.19] tracking-[-0.022em] mb-3">
+            Async webhook ingestion
+          </h3>
+          <p class="text-[#a1a1a6] text-[17px] leading-[1.47] tracking-[-0.022em] mb-6">
+            Receive webhooks from Stripe, GitHub, Shopify — verify HMAC signatures, persist raw bytes, return <code class="text-[13px] bg-white/10 px-1.5 py-0.5 rounded font-mono text-white">200 OK</code> immediately. Deliver asynchronously via Worker Pool.
+          </p>
+          <ul class="space-y-2.5" role="list">
+            {[
+              "Raw HMAC signature verification (Stripe, GitHub, Generic)",
+              "Persist to SQLite WAL before acknowledging",
+              "Return 200 immediately — never make webhooks wait",
+              "Background worker delivery with retry",
+            ].map((item) => (
+              <li class="flex items-start gap-3 text-[14px] text-[#a1a1a6]">
+                <i data-lucide="check" class="w-4 h-4 text-[#2997ff] mt-0.5 shrink-0"></i>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </article>
+
+        <!-- Use Case 2: Outbound API -->
+        <article class="bg-[#2a2a2c] rounded-card p-8 border border-white/10">
+          <div class="inline-flex items-center gap-2 mb-6 px-3 py-1.5 bg-[#2997ff]/10 rounded-pill">
+            <i data-lucide="arrow-right-left" class="w-3.5 h-3.5 text-[#2997ff]"></i>
+            <span class="text-[#2997ff] text-[13px] font-semibold">Outbound API Relay</span>
+          </div>
+          <h3 class="text-white text-[21px] font-semibold leading-[1.19] tracking-[-0.022em] mb-3">
+            Reliable API proxy
+          </h3>
+          <p class="text-[#a1a1a6] text-[17px] leading-[1.47] tracking-[-0.022em] mb-6">
+            Proxy outbound calls to external APIs. Relay handles timeouts, 429 rate limits, and 5xx retries transparently. Sync and async modes — no retry code in your application.
+          </p>
+          <ul class="space-y-2.5" role="list">
+            {[
+              "Sync proxy: transparent forwarding with retry",
+              "Async jobs: fire-and-forget, durable 202 Accepted",
+              "Client abort-aware — cancels upstream on disconnect",
+              "Idempotency key propagation",
+            ].map((item) => (
+              <li class="flex items-start gap-3 text-[14px] text-[#a1a1a6]">
+                <i data-lucide="check" class="w-4 h-4 text-[#2997ff] mt-0.5 shrink-0"></i>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </article>
+      </div>
+
+      <!-- Live Integration Snippet (Mental Model) -->
+      <div class="mt-12 bg-[#2a2a2c] rounded-card p-6 md:p-8 border border-white/10">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-white/10 gap-2">
+          <div>
+            <h4 class="text-white font-semibold text-[16px] tracking-tight">How simple is integration?</h4>
+            <p class="text-[#a1a1a6] text-[13px] mt-0.5">Two HTTP calls. That's the entire learning curve.</p>
+          </div>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono text-[#2997ff] bg-[#2997ff]/10 self-start sm:self-auto">
+            Standard HTTP REST
+          </span>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6 mt-6 font-mono text-[12px]">
+          <!-- Inbound Example -->
+          <div class="bg-[#1d1d1f] rounded-[12px] p-4 border border-white/5 space-y-2">
+            <div class="flex items-center justify-between text-[#6e6e73] text-[11px] pb-2 border-b border-white/5">
+              <span>1. SEND INBOUND WEBHOOK</span>
+              <span class="text-emerald-400">&larr; 200 OK (Instant ACK)</span>
+            </div>
+            <pre class="text-[#a1a1a6] overflow-x-auto leading-relaxed"><code><span class="text-white">curl -X POST</span> \
+  http://localhost:8080/api/v1/webhook/stripe \
+  -H <span class="text-[#2997ff]">"Stripe-Signature: t=123,v1=abc..."</span> \
+  -d <span class="text-emerald-300">&#39;&#123;"event": "payment.succeeded"&#125;&#39;</span></code></pre>
+            <p class="text-[#6e6e73] text-[11px] pt-1 border-t border-white/5">
+              Verified &amp; committed to SQLite WAL before return. Delivered to internal app in background.
+            </p>
+          </div>
+
+          <!-- Outbound Example -->
+          <div class="bg-[#1d1d1f] rounded-[12px] p-4 border border-white/5 space-y-2">
+            <div class="flex items-center justify-between text-[#6e6e73] text-[11px] pb-2 border-b border-white/5">
+              <span>2. RELAY OUTBOUND API CALL</span>
+              <span class="text-emerald-400">&larr; Auto-Retry 429/5xx</span>
+            </div>
+            <pre class="text-[#a1a1a6] overflow-x-auto leading-relaxed"><code><span class="text-white">curl -X POST</span> \
+  http://localhost:8080/api/v1/proxy/line-notify \
+  -H <span class="text-[#2997ff]">"X-Relay-Max-Retries: 5"</span> \
+  -H <span class="text-[#2997ff]">"Idempotency-Key: req_98234"</span> \
+  -d <span class="text-emerald-300">&#39;&#123;"message": "Order #4092 shipped"&#125;&#39;</span></code></pre>
+            <p class="text-[#6e6e73] text-[11px] pt-1 border-t border-white/5">
+              Transparent proxy with exponential backoff and jitter. Aborts upstream if client drops.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 6 — SECURITY & OPEN SOURCE (Light tile)
+  ═══════════════════════════════════════════════ -->
+  <section class="w-full bg-canvas py-[80px] px-5" aria-labelledby="security-heading">
+    <div class="max-w-[680px] mx-auto text-center">
+      <!-- Shield icon -->
+      <div class="w-16 h-16 bg-[#e8f0fb] rounded-full flex items-center justify-center mx-auto mb-6">
+        <i data-lucide="shield-check" class="w-8 h-8 text-primary"></i>
+      </div>
+
+      <h2 id="security-heading" class="text-[clamp(28px,5vw,40px)] font-semibold text-ink leading-[1.1] tracking-[-0.022em] mb-5">
+        Your data never leaves your server.
+      </h2>
+      <p class="text-[#6e6e73] text-[17px] leading-[1.47] tracking-[-0.022em] mb-10 max-w-[520px] mx-auto">
+        Simple Relay is fully self-hosted. Every payload, every retry log, every DLQ entry lives in <em>your</em> database on <em>your</em> infrastructure. Free and open source.
+      </p>
+
+      <!-- Trust badges -->
+      <div class="flex flex-wrap justify-center gap-4 mb-10">
+        {[
+          { icon: "server", label: "Self-hosted", desc: "Your infrastructure" },
+          { icon: "package", label: "Open Source", desc: "Always free" },
+          { icon: "eye-off", label: "No telemetry", desc: "Zero data collection" },
+          { icon: "cpu", label: "CGO_ENABLED=0", desc: "Pure static binary" },
+        ].map((badge) => (
+          <div class="flex flex-col items-center gap-1.5 px-5 py-4 bg-parchment rounded-card border border-divider min-w-[130px]">
+            <div class="w-8 h-8 flex items-center justify-center text-primary mb-0.5">
+              <i data-lucide={badge.icon} class="w-5 h-5"></i>
+            </div>
+            <span class="text-ink font-semibold text-[14px]">{badge.label}</span>
+            <span class="text-[#6e6e73] text-[12px]">{badge.desc}</span>
+          </div>
+        ))}
+      </div>
+
+      <div class="flex flex-wrap items-center justify-center gap-4">
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 bg-primary text-white text-[17px] font-normal px-[22px] py-[11px] rounded-pill hover:bg-[#0077ed] active:scale-95 transition-all duration-150"
+        >
+          View on GitHub
+          <i data-lucide="external-link" class="w-4 h-4"></i>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       FOOTER (Parchment — dense link columns for SEO)
+  ═══════════════════════════════════════════════ -->
+  <SiteFooter />
+
+  <!-- Floating Sticky Action Pill (Apple-style sub-nav/floating bar) -->
+  <aside
+    id="floating-cta"
+    class="fixed bottom-6 right-6 z-40 transition-all duration-300 opacity-0 translate-y-4 pointer-events-none"
+    aria-label="Quick action bar"
+  >
+    <div class="flex items-center gap-2 p-1.5 pl-3.5 bg-black/85 backdrop-blur-md rounded-full border border-white/15 shadow-product text-xs">
+      <span class="text-white font-medium flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        Simple Relay
+      </span>
+      <a
+        href={GITHUB_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center gap-1 bg-primary text-white font-medium px-3 py-1.5 rounded-full hover:bg-[#0077ed] active:scale-95 transition-all"
+      >
+        <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943"/>
+        </svg>
+        <span>Star</span>
+      </a>
+      <a
+        href="#quickstart-box"
+        class="inline-flex items-center text-white/80 hover:text-white px-2 py-1 rounded-full text-[11px] font-mono hover:bg-white/10 transition-colors"
+      >
+        Run
+      </a>
+    </div>
+  </aside>
+
+  <script is:inline>
+    // Show floating bar after scrolling 400px past Hero
+    window.addEventListener('scroll', () => {
+      const bar = document.getElementById('floating-cta');
+      if (!bar) return;
+      if (window.scrollY > 400) {
+        bar.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+        bar.classList.add('opacity-100', 'translate-y-0', 'pointer-events-auto');
+      } else {
+        bar.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+        bar.classList.remove('opacity-100', 'translate-y-0', 'pointer-events-auto');
+      }
+    });
+  </script>
+</Layout>

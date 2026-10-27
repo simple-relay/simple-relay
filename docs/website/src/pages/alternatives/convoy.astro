@@ -1,0 +1,108 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+
+const title = 'Convoy Alternative: Simple Relay vs Convoy Webhook Gateway';
+const description = 'Compare Simple Relay and Convoy for webhook delivery. Explore a single-binary HTTP relay versus a full webhook gateway for self-hosted ingestion, fanout, retries, and operations.';
+const canonicalUrl = 'https://simplerelay.dev/alternatives/convoy/';
+const articleClass = 'max-w-[760px] mx-auto text-[17px] leading-[1.75] text-[#333336] [&_p]:mt-0 [&_p]:mb-6 [&_h2]:mt-14 [&_h2]:mb-5 [&_h2]:text-3xl [&_h2]:font-semibold [&_h2]:leading-tight [&_h2]:tracking-tight [&_h2]:text-ink [&_h2:first-child]:mt-0 [&_h3]:mt-10 [&_h3]:mb-3 [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:leading-snug [&_h3]:text-ink [&_ol]:my-6 [&_ol]:list-decimal [&_ol]:space-y-3 [&_ol]:pl-6 [&_ul]:my-6 [&_ul]:list-disc [&_ul]:space-y-3 [&_ul]:pl-6 [&_li]:pl-1 [&_strong]:font-semibold [&_strong]:text-ink [&_a]:font-medium [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2';
+---
+
+<Layout title={title} description={description} canonicalUrl={canonicalUrl}>
+  <SiteHeader />
+
+  <main>
+    <section class="bg-canvas px-5 py-20 sm:py-24">
+      <div class="max-w-[760px] mx-auto">
+        <p class="text-sm font-medium text-primary mb-4">Webhook gateway comparison</p>
+        <h1 class="text-[clamp(38px,7vw,58px)] font-semibold leading-[1.08] tracking-[-0.03em] text-ink mb-6">Simple Relay vs Convoy</h1>
+        <p class="text-xl sm:text-2xl font-light leading-relaxed text-[#515154] mb-8">Looking for a <strong class="font-semibold text-ink">Convoy alternative</strong> for reliable webhook delivery? The choice comes down to whether you need a compact HTTP relay or a full webhook gateway.</p>
+        <p class="text-[17px] leading-relaxed text-[#515154] mb-9">Both products can receive and send webhooks. Convoy is an open-source webhook gateway with broader gateway features such as event fanout, endpoint rate limits, filters, transformations, circuit breaking, and customer dashboards. Simple Relay focuses on a small self-hosted footprint: one binary, durable ingestion before ACK, retries, a DLQ, and HTTP proxying.</p>
+        <div class="flex flex-wrap gap-3">
+          <a href="/docs/quickstart" class="inline-flex items-center rounded-full bg-primary px-5 py-3 text-white font-medium hover:opacity-90">Try Simple Relay</a>
+          <a href="/docs/benchmarks" class="inline-flex items-center rounded-full border border-[#d2d2d7] px-5 py-3 text-ink font-medium hover:bg-[#f5f5f7]">Review benchmarks</a>
+        </div>
+        <p class="text-sm text-[#6e6e73] mt-8 pt-6 border-t border-[#e8e8ed]">
+          Other comparisons: <a href="/alternatives/hookdeck/" class="text-primary hover:underline">Simple Relay vs Hookdeck</a> · <a href="/alternatives/svix/" class="text-primary hover:underline">Simple Relay vs Svix</a> · <a href="/alternatives/temporal/" class="text-primary hover:underline">Simple Relay vs Temporal</a>
+        </p>
+      </div>
+    </section>
+
+    <section class="bg-[#f5f5f7] px-5 py-16 sm:py-20">
+      <div class="max-w-[980px] mx-auto">
+        <h2 class="text-3xl font-semibold tracking-tight text-ink mb-3">Simple Relay and Convoy at a glance</h2>
+        <p class="text-[#6e6e73] mb-8 max-w-2xl">A side-by-side look at deployment, routing scope, and delivery operations.</p>
+        <p class="text-xs text-[#6e6e73] mb-3 sm:hidden">Swipe horizontally to compare all columns.</p>
+        <div class="overflow-x-auto rounded-xl border border-[#e0e0e0] bg-white" role="region" aria-label="Product comparison table" tabindex="0">
+          <table class="w-full min-w-[720px] text-left text-sm">
+            <thead class="bg-[#fafafc] text-ink">
+              <tr>
+                <th scope="col" class="px-5 py-4 font-semibold">What matters</th>
+                <th scope="col" class="px-5 py-4 font-semibold">Simple Relay</th>
+                <th scope="col" class="px-5 py-4 font-semibold">Convoy</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[#e8e8ed] text-[#515154]">
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Primary fit</th><td class="px-5 py-4">Lightweight self-hosted HTTP relay and reliable forwarding</td><td class="px-5 py-4">Full webhook gateway for sending and receiving events</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Deployment</th><td class="px-5 py-4">One binary or container with embedded persistence and UI</td><td class="px-5 py-4">Convoy Cloud or self-hosted gateway deployment</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Inbound webhook ACK</th><td class="px-5 py-4">Low-latency ACK after the request has been durably persisted</td><td class="px-5 py-4">Receive, persist, and route incoming provider webhooks</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Routing and fanout</th><td class="px-5 py-4">Route-based delivery to configured destinations</td><td class="px-5 py-4">Fanout, subscriptions, filters, and transformations; availability can vary by Community, Premium, and Enterprise edition</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Delivery controls</th><td class="px-5 py-4">Retries, DLQ inspection, and replay</td><td class="px-5 py-4">Retries, rate limiting, circuit breaking, and batch retry workflows</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">Customer-facing tools</th><td class="px-5 py-4">Embedded operator UI for the relay instance</td><td class="px-5 py-4">Customer portal features are available in paid editions; check the current feature matrix</td></tr>
+              <tr><th scope="row" class="px-5 py-4 font-medium text-ink">External infrastructure</th><td class="px-5 py-4">No separate broker or database required by default</td><td class="px-5 py-4">Gateway deployment can be configured with supporting infrastructure for your scale and setup</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-xs leading-relaxed text-[#6e6e73] mt-4">Product details reviewed October 15, 2026. Convoy details are based on its <a class="text-primary hover:underline" href="https://github.com/frain-dev/convoy" target="_blank" rel="noopener noreferrer">official repository</a>, <a class="text-primary hover:underline" href="https://www.getconvoy.io/pricing" target="_blank" rel="noopener noreferrer">deployment and pricing information</a>, and <a class="text-primary hover:underline" href="https://www.getconvoy.io/private-network" target="_blank" rel="noopener noreferrer">private network guide</a>. Check current documentation for plan-specific details.</p>
+      </div>
+    </section>
+
+    <section class="bg-white px-5 py-16 sm:py-20">
+      <div class={articleClass}>
+        <h2>Choosing a webhook gateway or a lightweight HTTP relay</h2>
+        <p>Convoy and Simple Relay overlap in webhook ingestion and delivery, but they are designed around different operational scopes.</p>
+        <p>Convoy is a <strong>webhook gateway</strong> for teams managing webhook flows end to end. Its feature set includes sending events to customers, receiving provider webhooks, routing and fanout, rate controls, filters and transformations, circuit breaking, and customer-facing dashboards.</p>
+        <p>Simple Relay is a <strong>self-hosted HTTP relay</strong> for applications that want to durably accept requests, acknowledge them quickly, and forward them with retries. It aims to be straightforward to run as a single service without a separate broker or database.</p>
+
+        <h2>Example: one destination or a customer event platform?</h2>
+        <p>Suppose an application receives a payment provider webhook and forwards it to one internal service. A focused HTTP relay may cover the receive, persist, ACK, and retry path. If the product instead publishes events to many customer-managed endpoints with subscriptions, transformation, and a customer portal, Convoy’s gateway model is designed for that broader workflow. Convoy features are edition-specific, so use its current plan matrix when evaluating a deployment.</p>
+
+        <h2>When Simple Relay may be a good Convoy alternative</h2>
+        <p>Simple Relay may be a good fit if you want to add reliable HTTP delivery without adopting a broader gateway platform:</p>
+        <ul>
+          <li>Run the relay as one binary or container on your own infrastructure.</li>
+          <li>Persist inbound webhooks before ACK and process delivery asynchronously.</li>
+          <li>Retry transient failures and replay failed requests from the DLQ.</li>
+          <li>Use an embedded UI, REST API, or CLI to inspect and operate the relay.</li>
+          <li>Keep the deployment focused when you do not need multi-tenant webhook management or event fanout.</li>
+        </ul>
+        <p>If low-latency ACK is important to your integration, review the <a href="/docs/benchmarks">benchmark results and reproduction steps</a>. Measurements vary by environment, so compare with your own workload.</p>
+        <p>See the <a href="/docs/quickstart">quickstart</a>, <a href="/docs/inbound-webhooks">inbound webhook guide</a>, <a href="/docs/retries-and-dlq">retries and DLQ replay</a>, and <a href="/docs/production-deploy">production deployment guide</a>.</p>
+
+        <h2>When Convoy may be a better fit</h2>
+        <p>Convoy may be the better fit when you need a comprehensive <strong>self-hosted webhook gateway</strong> or managed cloud service. Its wider gateway capabilities can be useful for platform teams that publish events to many customers, need event fanout and endpoint subscriptions, or want customer-facing tools for managing and debugging deliveries.</p>
+        <p>Convoy offers both cloud and self-hosted deployment options. Its own deployment guide describes a fuller gateway setup, while Simple Relay keeps its default footprint to one service. Choose based on the features you need and the operational model you prefer.</p>
+
+        <h2>Frequently asked questions</h2>
+        <h3>Is Simple Relay an open-source Convoy alternative?</h3>
+        <p>Yes. Simple Relay is an open-source HTTP relay that can be an alternative when you need self-hosted webhook ingestion and reliable request forwarding. Convoy is also open source and provides a broader gateway feature set.</p>
+        <h3>Can Convoy receive incoming webhooks?</h3>
+        <p>Yes. Convoy supports both incoming provider webhooks and outgoing webhook delivery. Check its current product documentation for the routing, persistence, and deployment details that apply to your workflow.</p>
+        <h3>Does Simple Relay support webhook fanout?</h3>
+        <p>Simple Relay forwards requests through configured routes. If your requirement is event-based fanout to many customer endpoints with subscriptions and tenant dashboards, Convoy is more purpose-built for that model.</p>
+        <h3>Which product has lower ACK latency?</h3>
+        <p>We do not make a direct latency comparison here. Review the <a href="/docs/benchmarks">Simple Relay benchmarks</a>; they are not a head-to-head Convoy test. Measure both products under comparable infrastructure, storage, and workload conditions.</p>
+
+        <h2>Try Simple Relay</h2>
+        <p>If you need a lightweight <strong>HTTP relay</strong> for durable webhook intake and forwarding, start Simple Relay and test it with your own event flow.</p>
+        <p><a href="/docs/quickstart">Start the quickstart</a> · <a href="https://github.com/simple-relay/simple-relay" target="_blank" rel="noopener noreferrer">View the source on GitHub</a></p>
+
+        <h2>Other comparisons</h2>
+        <p>Explore other webhook infrastructure comparisons: <a href="/alternatives/hookdeck/">Simple Relay vs Hookdeck</a> · <a href="/alternatives/svix/">Simple Relay vs Svix</a> · <a href="/alternatives/temporal/">Simple Relay vs Temporal</a>.</p>
+      </div>
+    </section>
+  </main>
+
+  <SiteFooter />
+</Layout>
