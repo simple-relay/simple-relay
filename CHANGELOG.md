@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.12.0](https://github.com/simple-relay/simple-relay/compare/v0.11.0...v0.12.0) (2026-10-27)
+
+
+### Features
+
+* **docs:** integrate website into docs/website and configure release deployment ([4bf8119](https://github.com/simple-relay/simple-relay/commit/4bf811922ca9921401cd6e0c60e1602bbdf7cf72))
+* **docs:** merge simplerelay.dev documentation into docs/website ([e24996b](https://github.com/simple-relay/simple-relay/commit/e24996b04d04e048884f2b17183e9fb43234e268))
+* **docs:** merge website documentation into monorepo and configure release deployment ([#99](https://github.com/simple-relay/simple-relay/issues/99)) ([36d515b](https://github.com/simple-relay/simple-relay/commit/36d515be04e4431e94813950e9076adfe936ddbf))
+* **landing:** wire favicon suite and unify icons with lucide and primer svgs ([36d515b](https://github.com/simple-relay/simple-relay/commit/36d515be04e4431e94813950e9076adfe936ddbf))
+
+
+### Documentation
+
+* **quickstart:** add one-line installation script to landing page and docs ([#20](https://github.com/simple-relay/simple-relay/issues/20)) ([7532010](https://github.com/simple-relay/simple-relay/commit/7532010a620d9a422322ec24f2383e6eccd117c1))
+
 ## [0.11.0](https://github.com/simple-relay/simple-relay/compare/v0.10.0...v0.11.0) (2026-10-24)
 
 
