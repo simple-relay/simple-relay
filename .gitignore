@@ -28,5 +28,11 @@ coverage.html
 Thumbs.db
 *.loc.*
 .superpowers/
+docs/superpowers/
 .local/
+
+# Website & Node artifacts
+node_modules/
+dist/
+.astro/
 

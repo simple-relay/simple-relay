@@ -20,7 +20,8 @@
         { "type": "chore", "section": "Maintenance & Dependencies" }
       ],
       "extra-files": [
-        "ui/index.html"
+        "ui/index.html",
+        "docs/website/package.json"
       ]
     }
   }
