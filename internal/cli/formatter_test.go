@@ -59,6 +59,32 @@ func TestTruncate(t *testing.T) {
 	if got := Truncate(unicodeStr, 8); got != "xin chào..." {
 		t.Fatalf("expected rune-safe truncated string, got %q", got)
 	}
+
+	if got := Truncate("hello", 0); got != "" {
+		t.Fatalf("expected empty string for maxLen <= 0, got %q", got)
+	}
+	if got := Truncate("hello", -1); got != "" {
+		t.Fatalf("expected empty string for negative maxLen, got %q", got)
+	}
+}
+
+func TestIsTerminal(t *testing.T) {
+	buf := &bytes.Buffer{}
+	if IsTerminal(buf) {
+		t.Fatal("expected IsTerminal false for bytes.Buffer")
+	}
+}
+
+func TestFormatStatus_EdgeCases(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	if got := FormatStatus("ok", true); got != "ok" {
+		t.Fatalf("expected plain status with NO_COLOR, got %q", got)
+	}
+
+	t.Setenv("NO_COLOR", "")
+	if got := FormatStatus("custom_unknown_status", true); got != "custom_unknown_status" {
+		t.Fatalf("expected plain status for unknown status, got %q", got)
+	}
 }
 
 func TestSanitizeTerminal(t *testing.T) {

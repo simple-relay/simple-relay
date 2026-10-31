@@ -123,4 +123,26 @@ func TestEvaluateBodyJSONRules(t *testing.T) {
 			t.Fatalf("expected ErrValidationRuleFailed, got: %v", err)
 		}
 	})
+
+	t.Run("Format and extract various JSON types", func(t *testing.T) {
+		extendedJSON := []byte(`{
+			"rate": 12.34,
+			"null_val": null,
+			"tags": ["prod", "us-east"],
+			"nested_scalar": "simple string"
+		}`)
+		rules := []model.ValidationRule{
+			{Source: model.RuleSourceBodyJSON, Key: "rate", Operator: model.RuleOperatorEquals, Value: "12.34"},
+			{Source: model.RuleSourceBodyJSON, Key: "null_val", Operator: model.RuleOperatorEquals, Value: ""},
+			{Source: model.RuleSourceBodyJSON, Key: "tags", Operator: model.RuleOperatorEquals, Value: `["prod","us-east"]`},
+			{Source: model.RuleSourceBodyJSON, Key: "nested_scalar.invalid_child", Operator: model.RuleOperatorExists},
+		}
+		// The first 3 should pass, the 4th should fail because nested_scalar is not a map
+		if err := EvaluateBodyJSONRules(extendedJSON, rules[:3]); err != nil {
+			t.Fatalf("expected pass for types, got: %v", err)
+		}
+		if err := EvaluateBodyJSONRules(extendedJSON, rules[3:]); err != ErrValidationRuleFailed {
+			t.Fatalf("expected ErrValidationRuleFailed when navigating child of scalar, got: %v", err)
+		}
+	})
 }

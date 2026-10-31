@@ -173,6 +173,76 @@ func TestRequest_Validate(t *testing.T) {
 	if err := invalidStatusReq.Validate(); err != ErrRequestInvalidStatus {
 		t.Fatalf("expected ErrRequestInvalidStatus, got: %v", err)
 	}
+
+	emptyIDReq := validReq
+	emptyIDReq.ID = ""
+	if err := emptyIDReq.Validate(); err != ErrRequestIDRequired {
+		t.Fatalf("expected ErrRequestIDRequired, got: %v", err)
+	}
+
+	emptyRouteIDReq := validReq
+	emptyRouteIDReq.RouteID = "   "
+	if err := emptyRouteIDReq.Validate(); err != ErrRequestRouteIDRequired {
+		t.Fatalf("expected ErrRequestRouteIDRequired, got: %v", err)
+	}
+
+	emptyMethodReq := validReq
+	emptyMethodReq.Method = ""
+	if err := emptyMethodReq.Validate(); err != ErrRequestMethodRequired {
+		t.Fatalf("expected ErrRequestMethodRequired, got: %v", err)
+	}
+
+	emptyURLReq := validReq
+	emptyURLReq.URL = " "
+	if err := emptyURLReq.Validate(); err != ErrRequestURLRequired {
+		t.Fatalf("expected ErrRequestURLRequired, got: %v", err)
+	}
+
+	for _, st := range []RequestStatus{
+		RequestStatusPending,
+		RequestStatusProcessing,
+		RequestStatusSuccess,
+		RequestStatusFailed,
+		RequestStatusDLQ,
+	} {
+		r := validReq
+		r.Status = st
+		if err := r.Validate(); err != nil {
+			t.Fatalf("expected status %s to be valid, got: %v", st, err)
+		}
+	}
+}
+
+func TestAttempt_Validate(t *testing.T) {
+	validAttempt := Attempt{
+		ID:            NewULID(),
+		RequestID:     NewULID(),
+		AttemptNumber: 1,
+		ExecutedAt:    time.Now(),
+		DurationMS:    120,
+	}
+
+	if err := validAttempt.Validate(); err != nil {
+		t.Fatalf("expected valid attempt, got: %v", err)
+	}
+
+	emptyIDAttempt := validAttempt
+	emptyIDAttempt.ID = "  "
+	if err := emptyIDAttempt.Validate(); err != ErrAttemptIDRequired {
+		t.Fatalf("expected ErrAttemptIDRequired, got: %v", err)
+	}
+
+	emptyReqIDAttempt := validAttempt
+	emptyReqIDAttempt.RequestID = ""
+	if err := emptyReqIDAttempt.Validate(); err != ErrAttemptRequestIDRequired {
+		t.Fatalf("expected ErrAttemptRequestIDRequired, got: %v", err)
+	}
+
+	zeroAttemptNum := validAttempt
+	zeroAttemptNum.AttemptNumber = 0
+	if err := zeroAttemptNum.Validate(); err != ErrAttemptNumberInvalid {
+		t.Fatalf("expected ErrAttemptNumberInvalid, got: %v", err)
+	}
 }
 
 func TestTruncateResponseBody(t *testing.T) {
