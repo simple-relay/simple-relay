@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.0](https://github.com/simple-relay/simple-relay/compare/v0.12.0...v0.13.0) (2026-10-31)
+
+
+### Features
+
+* **ci:** add codecov integration and improve test coverage ([#103](https://github.com/simple-relay/simple-relay/issues/103)) ([d816300](https://github.com/simple-relay/simple-relay/commit/d816300aefbfc451d10c4303437562610c60af09))
+
+
+### Maintenance & Dependencies
+
+* **deps:** bump astro from 5.18.2 to 7.3.3 in /docs/website ([#106](https://github.com/simple-relay/simple-relay/issues/106)) ([dcfc245](https://github.com/simple-relay/simple-relay/commit/dcfc245500dc99218134b5ce8f08182868dda173))
+
 ## [0.12.0](https://github.com/simple-relay/simple-relay/compare/v0.11.0...v0.12.0) (2026-10-27)
 
 
