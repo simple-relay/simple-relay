@@ -9,7 +9,9 @@
 
 <p align="center">
   <a href="https://golang.org"><img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat-square&logo=go" alt="Go Version"></a>
+  <a href="https://pkg.go.dev/github.com/simple-relay/simple-relay"><img src="https://pkg.go.dev/badge/github.com/simple-relay/simple-relay.svg" alt="Go Reference"></a>
   <a href="https://github.com/simple-relay/simple-relay/actions"><img src="https://img.shields.io/badge/Build-Passing-brightgreen?style=flat-square" alt="Build Status"></a>
+  <a href="https://codecov.io/gh/simple-relay/simple-relay"><img src="https://codecov.io/gh/simple-relay/simple-relay/branch/main/graph/badge.svg" alt="Coverage Status"></a>
   <a href="docs/architecture.md"><img src="https://img.shields.io/badge/Docs-Architecture-orange?style=flat-square" alt="Architecture Docs"></a>
 </p>
 

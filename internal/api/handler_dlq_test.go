@@ -379,3 +379,29 @@ func TestDLQHandler_ReplayAll(t *testing.T) {
 		t.Errorf("expected wakeCalls >= 3, got %d", atomic.LoadInt32(wakeCalls))
 	}
 }
+
+func TestDLQHandler_ReplaySingle_MissingID(t *testing.T) {
+	db, _, _, _, _, _ := setupTestDLQServer(t)
+	defer db.Close()
+
+	h := NewDLQHandler(db.RequestRepo, nil, nil, nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/dlq//replay", nil)
+	rec := httptest.NewRecorder()
+	h.ReplaySingle(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing request_id, got %d", rec.Code)
+	}
+}
+
+func TestDLQHandler_ReplayAll_InvalidJSON(t *testing.T) {
+	db, _, _, _, _, _ := setupTestDLQServer(t)
+	defer db.Close()
+
+	h := NewDLQHandler(db.RequestRepo, nil, nil, nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/dlq/replay-all", bytes.NewReader([]byte("{invalid-json")))
+	rec := httptest.NewRecorder()
+	h.ReplayAll(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid JSON body, got %d", rec.Code)
+	}
+}

@@ -422,3 +422,53 @@ func TestRoutesHandler_BackoffOverridesAndRetryNonIdempotent(t *testing.T) {
 		t.Fatalf("expected registry to hold updated backoff fields, got %+v", cached)
 	}
 }
+
+func TestRoutesHandler_UpdateAndDeleteErrors(t *testing.T) {
+	_, db, registry := setupTestRoutesRouter(t)
+	defer db.Close()
+
+	handler := NewRoutesHandler(db.RouteRepo, registry, nil)
+
+	// Update with empty ID
+	reqEmptyID := httptest.NewRequest(http.MethodPut, "/api/v1/routes/", bytes.NewReader([]byte("{}")))
+	recEmptyID := httptest.NewRecorder()
+	handler.UpdateRoute(recEmptyID, reqEmptyID)
+	if recEmptyID.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty ID on update, got %d", recEmptyID.Code)
+	}
+
+	// Update with invalid JSON
+	reqBadJSON := httptest.NewRequest(http.MethodPut, "/api/v1/routes/01ARZ3NDEKTSV4RRFFQ69G5FAV", bytes.NewReader([]byte("{invalid-json")))
+	reqBadJSON.SetPathValue("id", "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+	recBadJSON := httptest.NewRecorder()
+	handler.UpdateRoute(recBadJSON, reqBadJSON)
+	if recBadJSON.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid JSON on update, got %d", recBadJSON.Code)
+	}
+
+	// Update non-existent route
+	reqNotFound := httptest.NewRequest(http.MethodPut, "/api/v1/routes/01ARZ3NDEKTSV4RRFFQ69G5FAV", bytes.NewReader([]byte(`{"name":"foo"}`)))
+	reqNotFound.SetPathValue("id", "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+	recNotFound := httptest.NewRecorder()
+	handler.UpdateRoute(recNotFound, reqNotFound)
+	if recNotFound.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for non-existent route on update, got %d", recNotFound.Code)
+	}
+
+	// Delete with empty ID
+	delEmptyID := httptest.NewRequest(http.MethodDelete, "/api/v1/routes/", nil)
+	delRecEmpty := httptest.NewRecorder()
+	handler.DeleteRoute(delRecEmpty, delEmptyID)
+	if delRecEmpty.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty ID on delete, got %d", delRecEmpty.Code)
+	}
+
+	// Delete non-existent route
+	delNotFound := httptest.NewRequest(http.MethodDelete, "/api/v1/routes/01ARZ3NDEKTSV4RRFFQ69G5FAV", nil)
+	delNotFound.SetPathValue("id", "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+	delRecNotFound := httptest.NewRecorder()
+	handler.DeleteRoute(delRecNotFound, delNotFound)
+	if delRecNotFound.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for non-existent route on delete, got %d", delRecNotFound.Code)
+	}
+}

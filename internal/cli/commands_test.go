@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -376,4 +377,39 @@ func TestCommands_ParallelExecution_ZeroRaces(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+func TestStatusError_And_Helpers(t *testing.T) {
+	innerErr := errors.New("underlying error")
+	se := &statusError{code: 42, err: innerErr}
+	if se.ExitCode() != 42 {
+		t.Errorf("expected 42, got %d", se.ExitCode())
+	}
+	if se.Error() != "underlying error" {
+		t.Errorf("expected underlying error, got %s", se.Error())
+	}
+	if se.Unwrap() != innerErr {
+		t.Errorf("expected innerErr from Unwrap()")
+	}
+
+	seNil := &statusError{code: 10, err: nil}
+	if seNil.Error() != "exit code 10" {
+		t.Errorf("expected exit code 10, got %s", seNil.Error())
+	}
+
+	var target ExitCodeError
+	if !errorsAsExitCode(se, &target) || target.ExitCode() != 42 {
+		t.Errorf("expected errorsAsExitCode to succeed")
+	}
+	if errorsAsExitCode(errors.New("generic error"), &target) {
+		t.Errorf("expected errorsAsExitCode false for generic error")
+	}
+
+	if got := getEnvOrDefault("NON_EXISTENT_VAR_12345", "fallback_val"); got != "fallback_val" {
+		t.Errorf("expected fallback_val, got %s", got)
+	}
+	t.Setenv("EXISTENT_VAR_12345", "real_val")
+	if got := getEnvOrDefault("EXISTENT_VAR_12345", "fallback_val"); got != "real_val" {
+		t.Errorf("expected real_val, got %s", got)
+	}
 }
