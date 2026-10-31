@@ -18,10 +18,10 @@ var (
 	lastTime  atomic.Int64
 )
 
-func main() {
-	flag.Parse()
+func setupHandler() http.Handler {
+	mux := http.NewServeMux()
 
-	http.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now().UnixNano()
 		received.Add(1)
 		firstTime.CompareAndSwap(0, now)
@@ -36,7 +36,7 @@ func main() {
 		_, _ = w.Write([]byte(`{"received":true}`))
 	})
 
-	http.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
 		count := received.Load()
 		first := firstTime.Load()
 		last := lastTime.Load()
@@ -58,7 +58,7 @@ func main() {
 		})
 	})
 
-	http.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
 		received.Store(0)
 		firstTime.Store(0)
 		lastTime.Store(0)
@@ -66,14 +66,21 @@ func main() {
 		_, _ = w.Write([]byte(`{"reset":true}`))
 	})
 
-	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`ok`))
 	})
 
+	return mux
+}
+
+func main() {
+	flag.Parse()
+
+	handler := setupHandler()
 	addr := fmt.Sprintf("0.0.0.0:%d", *port)
 	log.Printf("[mock-upstream] listening on %s", addr)
-	if err := http.ListenAndServe(addr, nil); err != nil && err != http.ErrServerClosed {
+	if err := http.ListenAndServe(addr, handler); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)
 	}
 }

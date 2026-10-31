@@ -309,3 +309,70 @@ func TestRouteRepo_BackoffOverridesAndRetryNonIdempotent(t *testing.T) {
 		t.Fatalf("unexpected updated fields: %+v", updated)
 	}
 }
+
+func TestRouteRepo_UpdateAndDelete_Errors(t *testing.T) {
+	db, repo := setupTestDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	// 1. UpdateRoute with validation failure
+	invalidRoute := &model.Route{
+		ID:   model.NewULID(),
+		Name: "", // invalid empty name
+	}
+	if err := repo.UpdateRoute(ctx, invalidRoute); err == nil {
+		t.Fatal("expected validation error on empty route name")
+	}
+
+	// 2. UpdateRoute non-existent ID
+	nonExistent := &model.Route{
+		ID:                model.NewULID(),
+		Name:              "ghost-route",
+		Type:              model.RouteTypeInbound,
+		Mode:              model.RouteModeAsync,
+		Path:              "/api/v1/webhook/ghost",
+		DestinationURL:    "https://example.com/ghost",
+		SignatureProvider: model.SignatureProviderNone,
+		MaxAttempts:       3,
+		TimeoutMS:         1000,
+	}
+	if err := repo.UpdateRoute(ctx, nonExistent); err != storage.ErrNotFound {
+		t.Fatalf("expected ErrNotFound for non-existent route update, got: %v", err)
+	}
+
+	// 3. DeleteRoute non-existent ID
+	if err := repo.DeleteRoute(ctx, "non-existent-id"); err != storage.ErrNotFound {
+		t.Fatalf("expected ErrNotFound for non-existent route delete, got: %v", err)
+	}
+
+	// 4. UpdateRoute duplicate conflict
+	r1 := &model.Route{
+		Name:              "route-one",
+		Type:              model.RouteTypeInbound,
+		Mode:              model.RouteModeAsync,
+		Path:              "/api/v1/webhook/route-1",
+		DestinationURL:    "https://example.com/1",
+		SignatureProvider: model.SignatureProviderNone,
+		MaxAttempts:       3,
+		TimeoutMS:         1000,
+	}
+	r2 := &model.Route{
+		Name:              "route-two",
+		Type:              model.RouteTypeInbound,
+		Mode:              model.RouteModeAsync,
+		Path:              "/api/v1/webhook/route-2",
+		DestinationURL:    "https://example.com/2",
+		SignatureProvider: model.SignatureProviderNone,
+		MaxAttempts:       3,
+		TimeoutMS:         1000,
+	}
+	_ = repo.CreateRoute(ctx, r1)
+	_ = repo.CreateRoute(ctx, r2)
+
+	// Try to update r2's name to r1's name (unique constraint violation)
+	r2.Name = "route-one"
+	if err := repo.UpdateRoute(ctx, r2); err != storage.ErrConflict {
+		t.Fatalf("expected ErrConflict on duplicate route name update, got: %v", err)
+	}
+}

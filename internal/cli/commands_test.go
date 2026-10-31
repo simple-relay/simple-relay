@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -411,5 +412,109 @@ func TestStatusError_And_Helpers(t *testing.T) {
 	t.Setenv("EXISTENT_VAR_12345", "real_val")
 	if got := getEnvOrDefault("EXISTENT_VAR_12345", "fallback_val"); got != "real_val" {
 		t.Errorf("expected real_val, got %s", got)
+	}
+}
+
+func TestCommands_Queue_BacklogAndErrors(t *testing.T) {
+	t.Run("queue backlog table output", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"pending":   800,
+				"in_flight": 300,
+			})
+		}))
+		defer ts.Close()
+
+		var outBuf, errBuf bytes.Buffer
+		err := ExecuteCommand([]string{"queue", "--server", ts.URL}, &outBuf, &errBuf)
+		if err == nil {
+			t.Fatalf("expected exit code 2 error on backlog")
+		}
+		var exitErr ExitCodeError
+		if !errorsAsExitCode(err, &exitErr) || exitErr.ExitCode() != 2 {
+			t.Fatalf("expected exit code 2, got %v", err)
+		}
+		if !strings.Contains(outBuf.String(), "BACKLOG") {
+			t.Fatalf("expected BACKLOG in output, got: %s", outBuf.String())
+		}
+	})
+
+	t.Run("queue backlog json output returns exit code 2", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"pending":   600,
+				"in_flight": 500,
+			})
+		}))
+		defer ts.Close()
+
+		var outBuf, errBuf bytes.Buffer
+		err := ExecuteCommand([]string{"queue", "--server", ts.URL, "-o", "json"}, &outBuf, &errBuf)
+		if err == nil {
+			t.Fatalf("expected exit code 2 error on backlog")
+		}
+		var exitErr ExitCodeError
+		if !errorsAsExitCode(err, &exitErr) || exitErr.ExitCode() != 2 {
+			t.Fatalf("expected exit code 2, got %v", err)
+		}
+	})
+
+	t.Run("queue error from server", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer ts.Close()
+
+		var outBuf, errBuf bytes.Buffer
+		err := ExecuteCommand([]string{"queue", "--server", ts.URL}, &outBuf, &errBuf)
+		if err == nil {
+			t.Fatalf("expected error on server 500")
+		}
+	})
+}
+
+func TestCommands_DLQReplayAll_Variants(t *testing.T) {
+	t.Run("dlq replay-all json output with yes flag", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"replayed_count": 5,
+			})
+		}))
+		defer ts.Close()
+
+		var outBuf, errBuf bytes.Buffer
+		err := ExecuteCommand([]string{"dlq", "replay-all", "--server", ts.URL, "-y", "-o", "json"}, &outBuf, &errBuf)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(outBuf.String(), `"replayed_count": 5`) {
+			t.Fatalf("expected replayed_count in json, got: %s", outBuf.String())
+		}
+	})
+
+	t.Run("dlq replay-all server error", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer ts.Close()
+
+		var outBuf, errBuf bytes.Buffer
+		err := ExecuteCommand([]string{"dlq", "replay-all", "--server", ts.URL, "-y"}, &outBuf, &errBuf)
+		if err == nil {
+			t.Fatalf("expected error on replay-all failure")
+		}
+	})
+}
+
+func TestCommands_ExecuteRoot(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"relay", "--help"}
+	if err := Execute(); err != nil {
+		t.Fatalf("unexpected error from Execute(): %v", err)
 	}
 }
