@@ -20,6 +20,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -744,6 +745,94 @@ func TestCertCache_Hardening(t *testing.T) {
 		_, err := cache.GetOrFetch(redirectURL)
 		if err == nil {
 			t.Fatal("expected error on HTTP 302 redirect, got nil")
+		}
+	})
+
+	t.Run("SNS canonical string variants", func(t *testing.T) {
+		subMsg := &snsMessage{
+			Type:         "SubscriptionConfirmation",
+			Message:      "Sub msg",
+			MessageId:    "mid-123",
+			SubscribeURL: "https://example.com/sub",
+			Timestamp:    "2026-10-31T00:00:00Z",
+			Token:        "tok-456",
+			TopicArn:     "arn:aws:sns:topic",
+		}
+		s := buildSNSCanonicalString(subMsg)
+		if !strings.Contains(s, "SubscribeURL\nhttps://example.com/sub\n") || !strings.Contains(s, "Token\ntok-456\n") {
+			t.Fatalf("unexpected canonical string for SubscriptionConfirmation: %s", s)
+		}
+
+		unsubMsg := &snsMessage{
+			Type:         "UnsubscribeConfirmation",
+			Message:      "Unsub msg",
+			MessageId:    "mid-789",
+			SubscribeURL: "https://example.com/unsub",
+			Timestamp:    "2026-10-31T00:00:00Z",
+			Token:        "tok-789",
+			TopicArn:     "arn:aws:sns:topic",
+		}
+		s = buildSNSCanonicalString(unsubMsg)
+		if !strings.Contains(s, "UnsubscribeConfirmation") {
+			t.Fatalf("unexpected canonical string for UnsubscribeConfirmation: %s", s)
+		}
+
+		notifWithSub := &snsMessage{
+			Type:      "Notification",
+			Message:   "Notif",
+			MessageId: "mid-1",
+			Subject:   "Alert",
+			Timestamp: "2026-10-31T00:00:00Z",
+			TopicArn:  "arn:aws:sns:topic",
+		}
+		s = buildSNSCanonicalString(notifWithSub)
+		if !strings.Contains(s, "Subject\nAlert\n") {
+			t.Fatalf("unexpected canonical string for Notification with Subject: %s", s)
+		}
+
+		unknownMsg := &snsMessage{
+			Type: "Unknown",
+		}
+		if s = buildSNSCanonicalString(unknownMsg); s != "" {
+			t.Fatalf("expected empty canonical string for unknown type, got: %s", s)
+		}
+	})
+
+	t.Run("RSA public key parsing formats", func(t *testing.T) {
+		// 1. PKCS#1 PEM
+		pkcs1Der := x509.MarshalPKCS1PublicKey(&privKey.PublicKey)
+		pkcs1Pem := pem.EncodeToMemory(&pem.Block{
+			Type:  "RSA PUBLIC KEY",
+			Bytes: pkcs1Der,
+		})
+		pub1, err := parseRSAPublicKey(string(pkcs1Pem))
+		if err != nil || pub1.N.Cmp(privKey.N) != 0 {
+			t.Fatalf("failed to parse PKCS#1 PEM: %v", err)
+		}
+
+		// 2. Raw base64 DER PKIX
+		pkixDer, _ := x509.MarshalPKIXPublicKey(&privKey.PublicKey)
+		rawB64PKIX := base64.StdEncoding.EncodeToString(pkixDer)
+		pub2, err := parseRSAPublicKey(rawB64PKIX)
+		if err != nil || pub2.N.Cmp(privKey.N) != 0 {
+			t.Fatalf("failed to parse raw base64 PKIX: %v", err)
+		}
+
+		// 3. Raw base64 DER PKCS#1
+		rawB64PKCS1 := base64.StdEncoding.EncodeToString(pkcs1Der)
+		pub3, err := parseRSAPublicKey(rawB64PKCS1)
+		if err != nil || pub3.N.Cmp(privKey.N) != 0 {
+			t.Fatalf("failed to parse raw base64 PKCS#1: %v", err)
+		}
+
+		// 4. Invalid base64
+		if _, err := parseRSAPublicKey("not valid base64 @@@@"); err != ErrInvalidRSAPublicKey {
+			t.Fatalf("expected ErrInvalidRSAPublicKey for bad base64, got: %v", err)
+		}
+
+		// 5. Invalid DER (valid base64 but corrupt DER)
+		if _, err := parseRSAPublicKey(base64.StdEncoding.EncodeToString([]byte("corrupt-bytes"))); err != ErrInvalidRSAPublicKey {
+			t.Fatalf("expected ErrInvalidRSAPublicKey for corrupt DER, got: %v", err)
 		}
 	})
 }

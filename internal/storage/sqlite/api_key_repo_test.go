@@ -135,3 +135,36 @@ func TestAPIKeyRepo_CacheInvalidationOnRevocation(t *testing.T) {
 		t.Fatalf("expected ErrNotFound after revocation, got: %v", err)
 	}
 }
+
+func TestAPIKeyRepo_EdgeCases(t *testing.T) {
+	db, _ := setupTestDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	repo := db.APIKeys()
+
+	// 1. Revoke non-existent key
+	if err := repo.RevokeAPIKey(ctx, "non-existent-id"); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for non-existent key revocation, got: %v", err)
+	}
+
+	// 2. Insert with standard sqlite datetime format
+	id := model.NewULID()
+	hash := "sqldatehash1234567890abcdef1234567890abcdef1234567890abcdef123456"
+	_, err := db.Writer().ExecContext(ctx, `
+		INSERT INTO api_keys (id, name, key_hash, masked_key, created_at, revoked_at)
+		VALUES (?, ?, ?, ?, '2026-01-01 12:00:00', '2026-01-02 12:00:00');
+	`, id, "legacy-date-key", hash, "sr_live_lega*****abcd")
+	if err != nil {
+		t.Fatalf("failed to insert raw legacy datetime key: %v", err)
+	}
+
+	// ListAPIKeys parses both created_at and revoked_at in legacy format
+	keys, err := repo.ListAPIKeys(ctx)
+	if err != nil || len(keys) != 1 {
+		t.Fatalf("expected 1 key from ListAPIKeys, got %d, err: %v", len(keys), err)
+	}
+	if keys[0].CreatedAt.Year() != 2026 || keys[0].RevokedAt == nil || keys[0].RevokedAt.Year() != 2026 {
+		t.Fatalf("unexpected parsed legacy dates: %+v", keys[0])
+	}
+}

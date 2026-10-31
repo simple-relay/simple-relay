@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -459,5 +460,55 @@ func TestRouter_QueueStats_PayloadBreakdown(t *testing.T) {
 	}
 	if resp["status"] != "HEALTHY" {
 		t.Errorf("expected status=HEALTHY, got %v", resp["status"])
+	}
+}
+
+func TestRecoveryMiddleware_Panic(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	panickingHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("simulated disaster")
+	})
+	h := recoveryMiddleware(logger, panickingHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/panic-route", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for recovered panic, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "internal server error") {
+		t.Fatalf("expected internal server error message, got: %s", rr.Body.String())
+	}
+}
+
+func TestExtractAPIKey_Variants(t *testing.T) {
+	// 1. X-API-Key takes priority
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	req.Header.Set("X-API-Key", "my-x-key")
+	req.Header.Set("Authorization", "Bearer sr_live_other")
+	if key := extractAPIKey(req); key != "my-x-key" {
+		t.Fatalf("expected my-x-key, got %s", key)
+	}
+
+	// 2. Authorization Bearer sr_live_...
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	req.Header.Set("Authorization", "Bearer sr_live_token123")
+	if key := extractAPIKey(req); key != "sr_live_token123" {
+		t.Fatalf("expected sr_live_token123, got %s", key)
+	}
+
+	// 3. Authorization Bearer non-sr_live on /api/v1/jobs returns empty (for destination upstream auth)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/jobs", nil)
+	req.Header.Set("Authorization", "Bearer destination-token-xyz")
+	if key := extractAPIKey(req); key != "" {
+		t.Fatalf("expected empty for destination token on /api/v1/jobs, got %s", key)
+	}
+
+	// 4. Authorization Bearer non-sr_live on other endpoints returns fallback token
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/routes", nil)
+	req.Header.Set("Authorization", "Bearer generic-bearer-token")
+	if key := extractAPIKey(req); key != "generic-bearer-token" {
+		t.Fatalf("expected generic-bearer-token, got %s", key)
 	}
 }

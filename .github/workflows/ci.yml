@@ -13,6 +13,7 @@ concurrency:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   quality-gate:
@@ -53,6 +54,7 @@ jobs:
         with:
           files: ./coverage.out
           fail_ci_if_error: false
+          use_oidc: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Verify static compilation (no CGO)

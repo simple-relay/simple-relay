@@ -184,3 +184,8 @@ func TestUpgradeManager_StartSignalListener(t *testing.T) {
 		}
 	})
 }
+
+func TestUpgradeManager_SetExecutable(t *testing.T) {
+	mgr := upgrade.NewUpgradeManager(nil, nil, nil)
+	mgr.SetExecutable("/usr/bin/custom-relay")
+}
